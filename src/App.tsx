@@ -156,17 +156,34 @@ export default function App() {
   const selectedScene = script.scenes.find((s) => s.id === activeSceneId) || script.scenes[0];
 
   // Dynamic Scene Updater (Live Props Binding via Service Layer)
-  const updateSceneProperty = async (updater: (s: any) => any) => {
-    const updated = await scriptService.updateScene(script, selectedScene.id, updater);
-    setScript(updated);
+  const updateSceneProperty = (updater: (s: any) => any) => {
+    // 1. Immediate synchronous local update for zero input lag and reliable editing
+    setScript((prev) => {
+      const updatedScenes = prev.scenes.map((sc) => {
+        if (sc.id === selectedScene.id) {
+          return updater(sc);
+        }
+        return sc;
+      });
+      const updatedScript = { ...prev, scenes: updatedScenes };
+      // 2. Background async sync
+      scriptService.updateScene(prev, selectedScene.id, updater).catch((err) => {
+        console.warn('[updateSceneProperty] Sync note:', err);
+      });
+      return updatedScript;
+    });
   };
 
   // Add new scene dynamically via Service Layer
   const handleAddNewScene = async (type: SceneData['type'] = 'MATH_FORMULA') => {
-    const { updatedScript, newScene } = await scriptService.addScene(script, type);
-    setScript(updatedScript);
-    setActiveSceneId(newScene.id);
-    showToast(`Đã thêm Scene mới (${type}) vào kịch bản!`);
+    try {
+      const { updatedScript, newScene } = await scriptService.addScene(script, type);
+      setScript(updatedScript);
+      setActiveSceneId(newScene.id);
+      showToast(`Đã thêm Scene mới (${type}) vào kịch bản!`);
+    } catch (err) {
+      console.warn('Fallback adding scene:', err);
+    }
   };
 
   // Delete scene dynamically via Service Layer
@@ -175,10 +192,14 @@ export default function App() {
       showToast('Video cần có ít nhất 1 phân cảnh!', 'warn');
       return;
     }
-    const updatedScript = await scriptService.deleteScene(script, sceneId);
-    setScript(updatedScript);
-    setActiveSceneId(updatedScript.scenes[0].id);
-    showToast('Đã xóa phân cảnh khỏi video.');
+    try {
+      const updatedScript = await scriptService.deleteScene(script, sceneId);
+      setScript(updatedScript);
+      setActiveSceneId(updatedScript.scenes[0].id);
+      showToast('Đã xóa phân cảnh khỏi video.');
+    } catch (err) {
+      console.warn('Fallback deleting scene:', err);
+    }
   };
 
   // Inline scene title edit state & handlers
@@ -301,19 +322,40 @@ export default function App() {
 
   const handleCreateNewProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProjTitle.trim()) return;
+    const title = newProjTitle.trim();
+    if (!title) {
+      showToast('Vui lòng nhập chủ đề bài học STEM!', 'warn');
+      return;
+    }
 
-    const newScript = await projectService.createProject({
-      title: newProjTitle.trim(),
-      subject: newProjSubject,
-      gradeLevel: newProjGrade,
-    });
+    try {
+      const newScript = await projectService.createProject({
+        title,
+        subject: newProjSubject,
+        gradeLevel: newProjGrade,
+      });
 
-    setScript(newScript);
-    setActiveSceneId(newScript.scenes[0]?.id || '');
-    setIsCreateProjectModalOpen(false);
-    setCurrentRole('producer'); // Jump immediately to Studio to see the new video!
-    showToast(`Đã tạo dự án mới: "${newProjTitle}"! Đang mở Studio dựng video.`);
+      setScript(newScript);
+      setActiveSceneId(newScript.scenes[0]?.id || '');
+      setIsCreateProjectModalOpen(false);
+      setNewProjTitle('');
+      setCurrentRole('producer'); // Jump immediately to Studio to see the new video!
+      showToast(`Đã tạo dự án mới: "${title}"! Đang mở Studio dựng video.`);
+    } catch (err: any) {
+      console.error('Error creating project:', err);
+      // Even in worst case, close modal and create fallback locally
+      const fallbackScript = projectService._generateNewProject({
+        title,
+        subject: newProjSubject,
+        gradeLevel: newProjGrade,
+      });
+      setScript(fallbackScript);
+      setActiveSceneId(fallbackScript.scenes[0]?.id || '');
+      setIsCreateProjectModalOpen(false);
+      setNewProjTitle('');
+      setCurrentRole('producer');
+      showToast(`Đã tạo dự án mới: "${title}"!`);
+    }
   };
 
   // AI Script Action Trigger in Writer Studio

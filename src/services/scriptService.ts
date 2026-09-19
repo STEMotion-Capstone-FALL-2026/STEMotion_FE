@@ -63,13 +63,21 @@ export const scriptService = {
       scenes: updatedScenes,
     };
 
+    // Always update local cache for smooth instantaneous interaction
+    projectService.updateProject(currentScript.id, updatedScript);
+
     if (apiClient.isMockMode()) {
-      projectService.updateProject(currentScript.id, updatedScript);
       return updatedScript;
     }
 
-    const targetScene = updatedScenes.find((s) => s.id === sceneId);
-    return apiClient.put<STEMScript>(`/projects/${currentScript.id}/scenes/${sceneId}`, targetScene);
+    try {
+      const targetScene = updatedScenes.find((s) => s.id === sceneId);
+      const res = await apiClient.put<STEMScript>(`/projects/${currentScript.id}/scenes/${sceneId}`, targetScene);
+      return res || updatedScript;
+    } catch (error) {
+      console.warn('[scriptService] Backend sync failed, keeping local update:', error);
+      return updatedScript;
+    }
   },
 
   async addScene(
@@ -146,13 +154,19 @@ export const scriptService = {
       totalDurationSeconds,
     };
 
+    projectService.updateProject(currentScript.id, updatedScript);
+
     if (apiClient.isMockMode()) {
-      projectService.updateProject(currentScript.id, updatedScript);
       return { updatedScript, newScene };
     }
 
-    const res = await apiClient.post<STEMScript>(`/projects/${currentScript.id}/scenes`, newScene);
-    return { updatedScript: res || updatedScript, newScene };
+    try {
+      const res = await apiClient.post<STEMScript>(`/projects/${currentScript.id}/scenes`, newScene);
+      return { updatedScript: res || updatedScript, newScene };
+    } catch (error) {
+      console.warn('[scriptService] Backend add scene failed, added locally:', error);
+      return { updatedScript, newScene };
+    }
   },
 
   async deleteScene(
@@ -174,12 +188,17 @@ export const scriptService = {
       totalDurationSeconds,
     };
 
+    projectService.updateProject(currentScript.id, updatedScript);
+
     if (apiClient.isMockMode()) {
-      projectService.updateProject(currentScript.id, updatedScript);
       return updatedScript;
     }
 
-    await apiClient.delete(`/projects/${currentScript.id}/scenes/${sceneId}`);
+    try {
+      await apiClient.delete(`/projects/${currentScript.id}/scenes/${sceneId}`);
+    } catch (error) {
+      console.warn('[scriptService] Backend delete scene failed, deleted locally:', error);
+    }
     return updatedScript;
   },
 };

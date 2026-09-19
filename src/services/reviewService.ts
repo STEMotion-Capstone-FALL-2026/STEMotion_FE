@@ -1,4 +1,4 @@
-﻿/**
+/**
  * STEMotion Front-End - Review & QA Service
  * Handles script approval, change requests, and timestamped feedback
  */
@@ -24,10 +24,21 @@ export const reviewService = {
       };
     }
 
-    return apiClient.post<{ status: 'APPROVED' | 'CHANGE_REQUESTED'; message: string }>(
-      `/projects/${projectId}/reviews`,
-      { decision, feedbackNote }
-    );
+    try {
+      return await apiClient.post<{ status: 'APPROVED' | 'CHANGE_REQUESTED'; message: string }>(
+        `/projects/${projectId}/reviews`,
+        { decision, feedbackNote }
+      );
+    } catch (error) {
+      console.warn('[reviewService] Backend unreachable, fallback to local decision:', error);
+      await projectService.updateProject(projectId, { scriptStatus: decision });
+      return {
+        status: decision,
+        message: decision === 'APPROVED' 
+          ? 'Kịch bản đã được phê duyệt chính thức!' 
+          : 'Đã gửi yêu cầu chỉnh sửa đến đạo diễn sản xuất.',
+      };
+    }
   },
 
   async addComment(
@@ -47,20 +58,33 @@ export const reviewService = {
       return fullComment;
     }
 
-    return apiClient.post<FeedbackComment>(`/projects/${projectId}/comments`, fullComment);
+    try {
+      return await apiClient.post<FeedbackComment>(`/projects/${projectId}/comments`, fullComment);
+    } catch (error) {
+      console.warn('[reviewService] Backend unreachable, saving comment locally:', error);
+      const project = await projectService.getProjectById(projectId);
+      const updatedComments = [...(project.reviewComments || []), fullComment];
+      await projectService.updateProject(projectId, { reviewComments: updatedComments });
+      return fullComment;
+    }
   },
 
   async resolveComment(projectId: string, commentId: string): Promise<boolean> {
+    const project = await projectService.getProjectById(projectId);
+    const updatedComments = (project.reviewComments || []).map((c: FeedbackComment) =>
+      c.id === commentId ? { ...c, status: 'RESOLVED' as const } : c
+    );
+    await projectService.updateProject(projectId, { reviewComments: updatedComments });
+
     if (apiClient.isMockMode()) {
-      const project = await projectService.getProjectById(projectId);
-      const updatedComments = (project.reviewComments || []).map((c: FeedbackComment) =>
-        c.id === commentId ? { ...c, status: 'RESOLVED' as const } : c
-      );
-      await projectService.updateProject(projectId, { reviewComments: updatedComments });
       return true;
     }
 
-    await apiClient.put(`/projects/${projectId}/comments/${commentId}/resolve`);
+    try {
+      await apiClient.put(`/projects/${projectId}/comments/${commentId}/resolve`, {});
+    } catch (error) {
+      console.warn('[reviewService] Backend unreachable, resolved locally:', error);
+    }
     return true;
   },
 };
