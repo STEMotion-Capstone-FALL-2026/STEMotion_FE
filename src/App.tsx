@@ -19,10 +19,12 @@ import {
   Send,
   AlertCircle,
   Plus,
+  Trash2,
   Mic,
   Split,
   BarChart2,
   Tags,
+  ShieldAlert,
   Play,
   RotateCcw,
   Maximize,
@@ -39,14 +41,15 @@ import {
   CheckCircle2,
   Sparkles,
   Sliders,
-  FileText
+  FileText,
+  Volume2
 } from 'lucide-react';
 import { RemotionPlayerWrapper } from './components/RemotionPlayerWrapper';
 import { DEFAULT_SAMPLE_SCRIPT, SAMPLE_WORKSPACES, SAMPLE_MEMBERS, SAMPLE_COMMENTS } from './lib/sampleData';
-import { STEMScript, WorkspaceMember, FeedbackComment, Workspace, SceneData } from './types/stem';
+import { STEMScript, WorkspaceMember, FeedbackComment, Workspace, SceneData, STEMSubject } from './types/stem';
 
 export default function App() {
-  // Current active role: 'writer' | 'reviewer' | 'producer' | 'admin' | 'library'
+  // Navigation Role: 'producer' | 'writer' | 'reviewer' | 'admin' | 'library'
   const [currentRole, setCurrentRole] = useState<'writer' | 'reviewer' | 'producer' | 'admin' | 'library'>('producer');
 
   // Multi-workspace state
@@ -54,13 +57,30 @@ export default function App() {
   const [activeGroup, setActiveGroup] = useState({ name: 'Nhóm STEM THCS Tân Bình', code: 'Gr-01' });
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
 
-  // Script & Video state
+  // Central Dynamic Script State (Single Source of Truth)
   const [script, setScript] = useState<STEMScript>(DEFAULT_SAMPLE_SCRIPT);
   const [activeSceneId, setActiveSceneId] = useState<string>(script.scenes[0]?.id || 'scene_1');
   const [comments, setComments] = useState<FeedbackComment[]>(SAMPLE_COMMENTS);
   const [seekTimestampSec, setSeekTimestampSec] = useState<number | null>(null);
+  const [currentSec, setCurrentSec] = useState(0);
 
-  // Producer Render Hub State
+  // AI Assistant Output State in Writer Studio
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<{
+    type: 'resegment' | 'grade' | 'extract' | 'terms' | null;
+    title: string;
+    details: string[];
+  }>({
+    type: 'grade',
+    title: 'Độ khó sư phạm (Readability Analysis)',
+    details: [
+      'Chỉ số Flesch-Kincaid: 7.8 (Phù hợp học sinh lớp 9 THCS)',
+      'Tốc độ đọc trung bình: 130 từ/phút (Chuẩn bài giảng video ngắn)',
+      'Thuật ngữ chuyên ngành: 8 từ (Định lý, Biệt thức Delta, Hệ thức Vi-ét, Parabol...)',
+      'Đánh giá: ĐẠT TIÊU CHUẨN SƯ PHẠM GDPT MỚI'
+    ]
+  });
+
+  // Render Hub state
   const [isRendering, setIsRendering] = useState<boolean>(false);
   const [renderProgress, setRenderProgress] = useState<number>(0);
   const [renderStageText, setRenderStageText] = useState<string>('Khởi động BullMQ Worker...');
@@ -88,7 +108,7 @@ export default function App() {
   // Active scene pointer
   const selectedScene = script.scenes.find((s) => s.id === activeSceneId) || script.scenes[0];
 
-  // Helper to update current scene dynamically
+  // Dynamic Scene Updater (Live Props Binding)
   const updateSceneProperty = (updater: (s: any) => any) => {
     setScript((prev) => ({
       ...prev,
@@ -96,23 +116,109 @@ export default function App() {
     }));
   };
 
-  // Trigger Render Simulation
+  // Add new scene dynamically
+  const handleAddNewScene = (type: SceneData['type'] = 'MATH_FORMULA') => {
+    const sceneNum = script.scenes.length + 1;
+    let newScene: SceneData;
+
+    if (type === 'MATH_FORMULA') {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'MATH_FORMULA',
+        title: `Scene ${sceneNum}: Công thức mở rộng`,
+        latex: 'y = a x^2 + b x + c',
+        narration: 'Chúng ta khảo sát tọa độ đỉnh và trục đối xứng của hàm số bậc hai.',
+        durationInFrames: 150,
+        steps: [
+          { label: 'Tọa độ đỉnh I', latexSnippet: 'I\\left(-\\frac{b}{2a}, -\\frac{\\Delta}{4a}\\right)', explanation: 'Điểm cực trị của đồ thị parabol' }
+        ]
+      };
+    } else if (type === 'DATA_CHART') {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'DATA_CHART',
+        title: `Scene ${sceneNum}: Biểu đồ thống kê số liệu`,
+        xAxisLabel: 'Thời gian t (s)',
+        yAxisLabel: 'Vận tốc v (m/s)',
+        durationInFrames: 150,
+        chartType: 'bar',
+        narration: 'Dữ liệu thực nghiệm biểu diễn sự biến thiên của vận tốc theo thời gian.',
+        dataPoints: [
+          { label: 't=1s', value: 3.5 },
+          { label: 't=2s', value: 7.0 },
+          { label: 't=3s', value: 10.5 },
+          { label: 't=4s', value: 14.0 },
+        ]
+      };
+    } else if (type === 'STEM_QUIZ') {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'STEM_QUIZ',
+        title: `Scene ${sceneNum}: Câu hỏi trắc nghiệm kiểm tra nhanh`,
+        question: 'Biệt thức Delta của phương trình bậc 2 có công thức là gì?',
+        options: ['Δ = b² - 4ac', 'Δ = b² + 4ac', 'Δ = 2b - 4ac', 'Δ = b - 4ac'],
+        correctIndex: 0,
+        hint: 'Nhớ lại định lý cơ bản.',
+        explanation: 'Delta bằng b bình phương trừ 4 nhân a nhân c.',
+        narration: 'Hãy chọn đáp án đúng trong 5 giây.',
+        durationInFrames: 180
+      };
+    } else {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'TITLE_HERO',
+        title: `Scene ${sceneNum}: Phân cảnh kiến thức`,
+        subtitle: 'Khái niệm STEM trọng tâm',
+        subject: script.subject,
+        gradeLevel: script.gradeLevel,
+        badgeText: 'STEMotion 4.0',
+        narration: 'Chào mừng các bạn đến với phần tiếp theo của bài học.',
+        durationInFrames: 150
+      };
+    }
+
+    setScript((prev) => ({
+      ...prev,
+      scenes: [...prev.scenes, newScene],
+      totalDurationSeconds: Math.round((prev.scenes.reduce((sum, s) => sum + (s.durationInFrames || 150), 0) + 150) / 30)
+    }));
+    setActiveSceneId(newScene.id);
+    showToast(`Đã thêm Scene ${sceneNum} (${type}) vào kịch bản!`);
+  };
+
+  // Delete scene dynamically
+  const handleDeleteScene = (sceneId: string) => {
+    if (script.scenes.length <= 1) {
+      showToast('Video cần có ít nhất 1 phân cảnh!', 'warn');
+      return;
+    }
+    const filtered = script.scenes.filter((s) => s.id !== sceneId);
+    setScript((prev) => ({
+      ...prev,
+      scenes: filtered,
+      totalDurationSeconds: Math.round(filtered.reduce((sum, s) => sum + (s.durationInFrames || 150), 0) / 30)
+    }));
+    setActiveSceneId(filtered[0].id);
+    showToast('Đã xóa phân cảnh khỏi video.');
+  };
+
+  // Render Simulation with Real Stages
   const startRenderMock = () => {
     setIsRendering(true);
     setRenderProgress(0);
     setRenderPercentageText('0%');
-    setRenderStageText('BullMQ: Đang phân bổ task render trên GPU Node...');
-    showToast('Đã gửi job kết xuất Remotion lên BullMQ Queue!', 'info');
+    setRenderStageText('BullMQ: Đang gửi job render lên GPU Node...');
+    showToast('Đã bắt đầu kết xuất Remotion Video MP4!', 'info');
 
     let current = 0;
     const interval = setInterval(() => {
       current += 10;
-      if (current === 30) {
-        setRenderStageText('Remotion: Đang render khung hình & KaTeX SVG...');
-      } else if (current === 60) {
-        setRenderStageText('FPT.AI & Whisper: Đang ghép âm thanh và phụ đề Karaoke...');
-      } else if (current === 90) {
-        setRenderStageText('FFmpeg: Đang đóng gói file MP4 1080p60...');
+      if (current === 20) {
+        setRenderStageText('Remotion: Đang render các khung hình KaTeX SVG...');
+      } else if (current === 50) {
+        setRenderStageText('FPT.AI TTS: Đang tổng hợp giọng thuyết minh tiếng Việt...');
+      } else if (current === 80) {
+        setRenderStageText('Whisper: Đang đồng bộ Karaoke Subtitles & FFmpeg...');
       }
 
       if (current >= 100) {
@@ -120,19 +226,18 @@ export default function App() {
         setIsRendering(false);
         setRenderProgress(100);
         setRenderPercentageText('100%');
-        setRenderStageText('Hoàn tất kết xuất! Clip đã sẵn sàng duyệt QA.');
+        setRenderStageText('Kết xuất hoàn tất 1080p60!');
         setScript((prev) => ({ ...prev, videoStatus: 'IN_QA' }));
-        showToast('Kết xuất video MP4 thành công! Đã chuyển sang Reviewer QA.', 'success');
+        showToast('Kết xuất video MP4 thành công! Clip đã chuyển sang Reviewer QA.', 'success');
       } else {
         setRenderProgress(current);
         setRenderPercentageText(`${current}%`);
       }
-    }, 400);
+    }, 350);
   };
 
-  // Reviewer add comment
+  // Reviewer add comment dynamically
   const [newCommentInput, setNewCommentInput] = useState('');
-  const [currentSec, setCurrentSec] = useState(0);
 
   const handleAddComment = (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,6 +255,156 @@ export default function App() {
     setComments([newC, ...comments]);
     setNewCommentInput('');
     showToast(`Đã ghim nhận xét tại giây thứ ${Math.round(currentSec)}!`);
+  };
+
+  // Create Project Form State
+  const [newProjTitle, setNewProjTitle] = useState('');
+  const [newProjSubject, setNewProjSubject] = useState<STEMSubject>('Physics');
+  const [newProjGrade, setNewProjGrade] = useState('Lớp 11');
+
+  const handleCreateNewProject = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjTitle.trim()) return;
+
+    // Dynamically generate script for this new topic
+    const newScript: STEMScript = {
+      id: `SCR-${newProjSubject.toUpperCase().slice(0, 4)}-${Date.now().toString().slice(-3)}`,
+      title: newProjTitle.trim(),
+      subject: newProjSubject,
+      gradeLevel: newProjGrade,
+      totalDurationSeconds: 75,
+      scriptStatus: 'DRAFT',
+      videoStatus: 'NOT_RENDERED',
+      fps: 30,
+      createdAt: 'Hôm nay',
+      scenes: [
+        {
+          id: `sc_${Date.now()}_1`,
+          type: 'TITLE_HERO',
+          title: newProjTitle.trim(),
+          subtitle: `Tìm hiểu các định luật và mô hình khoa học trọng tâm ${newProjGrade}`,
+          subject: newProjSubject,
+          gradeLevel: newProjGrade,
+          badgeText: 'Chương trình mới',
+          narration: `Chào mừng các bạn đến với bài học ${newProjTitle}. Hôm nay chúng ta sẽ tìm hiểu khái niệm cốt lõi này.`,
+          durationInFrames: 150
+        },
+        {
+          id: `sc_${Date.now()}_2`,
+          type: 'MATH_FORMULA',
+          title: 'Công thức toán học định lượng',
+          latex: newProjSubject === 'Math' ? 'f\'(x) = \\lim_{\\Delta x \\to 0} \\frac{f(x+\\Delta x) - f(x)}{\\Delta x}' : 'T = 2\\pi \\sqrt{\\frac{l}{g}}',
+          narration: 'Công thức này biểu diễn mối quan hệ phụ thuộc giữa các đại lượng đo lường.',
+          durationInFrames: 180,
+          steps: [
+            { label: 'Bước 1', latexSnippet: 'l \\text{ (mét)}', explanation: 'Đại lượng độc lập' },
+            { label: 'Bước 2', latexSnippet: 'g = 9.8 \\text{ m/s}^2', explanation: 'Hằng số trọng trường' }
+          ]
+        },
+        {
+          id: `sc_${Date.now()}_3`,
+          type: 'DATA_CHART',
+          title: 'Đồ thị thực nghiệm và số liệu',
+          xAxisLabel: 'Đại lượng X',
+          yAxisLabel: 'Đại lượng Y',
+          durationInFrames: 150,
+          chartType: 'bar',
+          narration: 'Thực nghiệm chứng minh sự tương quan tỉ lệ giữa các tham số.',
+          dataPoints: [
+            { label: 'Mẫu 1', value: 1.2 },
+            { label: 'Mẫu 2', value: 2.4 },
+            { label: 'Mẫu 3', value: 4.8 }
+          ]
+        },
+        {
+          id: `sc_${Date.now()}_4`,
+          type: 'STEM_QUIZ',
+          title: 'Câu hỏi kiểm tra nhận thức',
+          question: `Ý nghĩa quan trọng nhất của ${newProjTitle} là gì?`,
+          options: ['Giải thích hiện tượng tự nhiên', 'Tính toán sai số', 'Chứng minh hình học', 'Không có ý nghĩa'],
+          correctIndex: 0,
+          hint: 'Liên quan trực tiếp đến ứng dụng thực tiễn.',
+          explanation: 'Khái niệm giúp chúng ta hiểu rõ quy luật vận động của tự nhiên.',
+          narration: 'Hãy cùng suy nghĩ và chọn đáp án chính xác.',
+          durationInFrames: 180
+        },
+        {
+          id: `sc_${Date.now()}_5`,
+          type: 'OUTRO',
+          title: 'Tổng kết và bài học kế tiếp',
+          instructorName: 'Thầy Nguyễn Văn Đức',
+          nextLessonSuggestion: 'Bài tập thực hành nâng cao',
+          narration: 'Cảm ơn các em đã theo dõi bài giảng. Hẹn gặp lại trong bài học tiếp theo.',
+          durationInFrames: 150,
+          summaryPoints: [
+            'Nắm vững công thức định lượng',
+            'Kiểm chứng qua đồ thị và số liệu',
+            'Làm bài tập trắc nghiệm trên LMS'
+          ]
+        }
+      ]
+    };
+
+    setScript(newScript);
+    setActiveSceneId(newScript.scenes[0].id);
+    setIsCreateProjectModalOpen(false);
+    setCurrentRole('producer'); // Jump immediately to Studio to see the new video!
+    showToast(`Đã tạo dự án mới: "${newProjTitle}"! Đang mở Studio dựng video.`);
+  };
+
+  // AI Script Action Trigger in Writer Studio
+  const handleTriggerAiAction = (action: 'resegment' | 'grade' | 'extract' | 'terms') => {
+    if (action === 'resegment') {
+      setAiAnalysisResult({
+        type: 'resegment',
+        title: 'Phân Cảnh Tự Động (AI Segment Optimization)',
+        details: [
+          'Gợi ý cấu trúc: 5 phân cảnh (Tối ưu cho video dưới 90 giây)',
+          'Scene 1: Hook & Đặt vấn đề (15s)',
+          'Scene 2: Khai triển công thức KaTeX trọng tâm (20s)',
+          'Scene 3: Đồ thị / Sơ đồ tương tác thực tế (20s)',
+          'Scene 4: Checkpoint Quiz phản xạ 3 giây (15s)',
+          'Scene 5: Tóm tắt & Bài tập về nhà LMS (15s)'
+        ]
+      });
+      showToast('AI: Đã tối ưu hóa lại phân cảnh và thời lượng từng Scene!');
+    } else if (action === 'grade') {
+      setAiAnalysisResult({
+        type: 'grade',
+        title: 'Chấm Điểm Độ Khó Sư Phạm (Readability)',
+        details: [
+          `Độ khó: Phù hợp chuẩn ${script.gradeLevel}`,
+          'Chỉ số dễ hiểu: 82/100 (Học sinh tiếp thu nhanh)',
+          'Độ dài câu trung bình: 14 từ (Tránh câu phức tạp gây khó hiểu)',
+          'Khuyến nghị: Lời thoại rất trôi chảy, giọng đọc AI sẽ đọc tự nhiên.'
+        ]
+      });
+      showToast('AI: Đã phân tích chỉ số đọc dễ hiểu cho học sinh!');
+    } else if (action === 'extract') {
+      setAiAnalysisResult({
+        type: 'extract',
+        title: 'Trích Xuất Khái Niệm STEM (Concept Tags)',
+        details: [
+          '#DinhLyViet',
+          '#PhuongTrinhBacHai',
+          '#BietThucDelta',
+          '#ParabolOx',
+          '#ToanHoc9_GDPT2018'
+        ]
+      });
+      showToast('AI: Đã trích xuất các từ khóa khái niệm STEM cốt lõi!');
+    } else if (action === 'terms') {
+      setAiAnalysisResult({
+        type: 'terms',
+        title: 'Kiểm Tra Tính Nhất Quán Thuật Ngữ (Term Audit)',
+        details: [
+          'Thuật ngữ "Biệt thức Delta": Đồng nhất 100% giữa kịch bản và đồ họa.',
+          'Ký hiệu nghiệm x1, x2: Chuẩn định dạng chỉ số dưới (Subscript).',
+          'Không phát hiện mâu thuẫn ký hiệu toán học.'
+        ]
+      });
+      showToast('AI: Đã quét tính nhất quán thuật ngữ khoa học!');
+    }
   };
 
   return (
@@ -198,7 +453,7 @@ export default function App() {
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </button>
 
-            {/* Nút Mời Thành Viên Nhanh */}
+            {/* Nút Mời Thành Viên */}
             <button
               onClick={() => setIsInviteWorkspaceModalOpen(true)}
               title="Mời thành viên vào nhóm này"
@@ -251,12 +506,12 @@ export default function App() {
                   <button
                     onClick={() => {
                       setIsGroupDropdownOpen(false);
-                      setIsCreateWorkspaceModalOpen(true);
+                      setIsCreateProjectModalOpen(true);
                     }}
                     className="w-full p-2 rounded-lg hover:bg-blue-50 text-left flex items-center space-x-2 text-brand-600 font-bold"
                   >
-                    <FolderPlus className="w-4 h-4" />
-                    <span>+ Tạo Nhóm / Workspace Mới</span>
+                    <PlusCircle className="w-4 h-4" />
+                    <span>+ Tạo Dự Án Kịch Bản Mới</span>
                   </button>
                   <button
                     onClick={() => {
@@ -284,7 +539,7 @@ export default function App() {
               }}
               className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
                 currentRole === 'writer'
-                  ? 'bg-white text-brand-600 shadow-xs'
+                  ? 'bg-white text-brand-600 shadow-xs ring-2 ring-blue-500/20'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -329,7 +584,7 @@ export default function App() {
               }}
               className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
                 currentRole === 'admin'
-                  ? 'bg-white text-rose-600 shadow-xs'
+                  ? 'bg-white text-rose-600 shadow-xs ring-2 ring-rose-500/20'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -355,7 +610,7 @@ export default function App() {
         {/* User Profile */}
         <div className="flex items-center space-x-3">
           <div className="text-xs px-2.5 py-1 rounded-full font-medium bg-blue-50 text-brand-700 border border-blue-200 flex items-center space-x-1.5">
-            <span>Vai trò: {currentRole === 'producer' ? 'Producer (Dựng Video)' : currentRole === 'writer' ? 'Writer (Biên kịch)' : currentRole === 'reviewer' ? 'Reviewer (Thẩm định)' : 'Admin'}</span>
+            <span>Vai trò: {currentRole === 'producer' ? 'Producer (Dựng Video)' : currentRole === 'writer' ? 'Writer (Biên kịch)' : currentRole === 'reviewer' ? 'Reviewer (Thẩm định)' : currentRole === 'admin' ? 'Admin (Quản trị)' : 'Khách xem'}</span>
           </div>
 
           <div className="flex items-center space-x-2 pl-2 border-l border-slate-200">
@@ -371,11 +626,11 @@ export default function App() {
       </header>
 
       {/* ========================================================================= */}
-      {/* 🎬 MÀN HÌNH 1: REMOTION PRODUCTION STUDIO (PRODUCER - TẠO & DỰNG VIDEO THẬT) */}
+      {/* 🎬 MÀN HÌNH 1: PRODUCER REMOTION STUDIO (TẠO & DỰNG VIDEO THẬT ĐỘNG 100%) */}
       {/* ========================================================================= */}
       {currentRole === 'producer' && (
         <section className="flex-1 flex flex-col">
-          {/* Top Bar */}
+          {/* Top Bar Studio */}
           <div className="bg-white border-b px-6 py-2.5 flex justify-between items-center text-xs">
             <div className="flex items-center space-x-3">
               <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
@@ -383,22 +638,23 @@ export default function App() {
               </span>
               <span className="text-slate-300">/</span>
               <span className="font-bold text-sm text-slate-900">{script.title}</span>
-              <span className="text-slate-500 font-mono text-[11px]">• {script.scenes.length} Scenes Remotion 4.0</span>
+              <span className="text-slate-500 font-mono text-[11px]">• {script.scenes.length} Scenes (Tổng: {script.totalDurationSeconds}s)</span>
             </div>
+
             <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setIsCreateProjectModalOpen(true)}
+                className="px-3 py-1.5 bg-blue-50 text-brand-700 hover:bg-blue-100 font-bold rounded-lg border border-blue-200 flex items-center space-x-1 shadow-xs"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>+ Đề Tài Mới</span>
+              </button>
               <button
                 onClick={() => setIsSwapAssetModalOpen(true)}
                 className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-lg flex items-center space-x-1 shadow-xs"
               >
                 <Image className="w-3.5 h-3.5 text-indigo-600" />
                 <span>Đổi Tài Nguyên STEM</span>
-              </button>
-              <button
-                onClick={() => showToast('Đã đồng bộ giọng đọc AI FPT.AI và tạo phụ đề Whisper!')}
-                className="px-3 py-1.5 bg-blue-50 text-brand-700 hover:bg-blue-100 font-bold rounded-lg border border-blue-200 flex items-center space-x-1"
-              >
-                <Mic className="w-3.5 h-3.5" />
-                <span>Tạo Giọng FPT.AI & Whisper</span>
               </button>
               <button
                 onClick={startRenderMock}
@@ -410,15 +666,20 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3 Cột: Cột Trái (Scenes list) - Cột Giữa (Remotion Player Thật) - Cột Phải (Live Props Inspector) */}
+          {/* 3 CỘT ĐỘNG: Cột Trái (Scenes list) - Cột Giữa (Remotion Player Live) - Cột Phải (Live Props Inspector) */}
           <div className="flex-1 flex overflow-hidden">
-            {/* Cột 1: Danh sách cảnh */}
+            {/* Cột 1: Danh sách cảnh (Cho phép Click, Thêm mới, Xóa) */}
             <aside className="w-72 bg-white border-r border-slate-200 flex flex-col p-4">
               <div className="flex items-center justify-between mb-3 text-xs">
                 <span className="font-bold uppercase tracking-wider text-slate-500">
-                  Cấu trúc phân cảnh ({script.scenes.length})
+                  Phân cảnh ({script.scenes.length})
                 </span>
-                <span className="text-[11px] font-semibold text-indigo-600 font-mono">Remotion 4.0</span>
+                <button
+                  onClick={() => handleAddNewScene('MATH_FORMULA')}
+                  className="text-brand-600 hover:text-brand-700 font-bold flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Thêm Cảnh
+                </button>
               </div>
 
               <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
@@ -430,7 +691,7 @@ export default function App() {
                       onClick={() => setActiveSceneId(sc.id)}
                       className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
                         isActive
-                          ? 'bg-indigo-50/80 border-indigo-500 shadow-xs ring-2 ring-indigo-500/20'
+                          ? 'bg-indigo-50/90 border-indigo-500 shadow-xs ring-2 ring-indigo-500/20'
                           : 'bg-white border-slate-200 hover:border-slate-300'
                       }`}
                     >
@@ -440,9 +701,21 @@ export default function App() {
                         }`}>
                           0{idx + 1}
                         </span>
-                        <span className="text-[10px] font-mono text-slate-400">
-                          {Math.round((sc.durationInFrames || 150) / 30)}s
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {Math.round((sc.durationInFrames || 150) / 30)}s
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteScene(sc.id);
+                            }}
+                            className="text-slate-300 hover:text-rose-600 transition-colors ml-1"
+                            title="Xóa phân cảnh này"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                       <h4 className="text-xs font-bold text-slate-800 line-clamp-1">{sc.title}</h4>
                       <span className="text-[10px] font-mono text-indigo-600 font-medium block mt-1">
@@ -452,9 +725,30 @@ export default function App() {
                   );
                 })}
               </div>
+
+              <div className="pt-3 border-t border-slate-100 flex gap-1.5">
+                <button
+                  onClick={() => handleAddNewScene('MATH_FORMULA')}
+                  className="flex-1 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
+                >
+                  + Công Thức
+                </button>
+                <button
+                  onClick={() => handleAddNewScene('DATA_CHART')}
+                  className="flex-1 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
+                >
+                  + Biểu Đồ
+                </button>
+                <button
+                  onClick={() => handleAddNewScene('STEM_QUIZ')}
+                  className="flex-1 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
+                >
+                  + Quiz
+                </button>
+              </div>
             </aside>
 
-            {/* Cột 2: LIVE REMOTION PLAYER CANVAS (Không hardcode text, chạy player thật!) */}
+            {/* Cột 2: LIVE REMOTION PLAYER (Chạy Animation, KaTeX thật) */}
             <main className="flex-1 bg-slate-900 p-6 flex flex-col justify-between overflow-y-auto">
               <div className="w-full max-w-3xl mx-auto space-y-4">
                 <RemotionPlayerWrapper
@@ -481,20 +775,20 @@ export default function App() {
                     </div>
                     <div className="flex justify-between text-[10px] text-slate-400 mt-1.5 font-mono">
                       <span>Job ID: #BULL-RENDER-9812</span>
-                      <span>Node Worker: GPU NVIDIA A10G (1080p60)</span>
+                      <span>GPU Server: NVIDIA A10G (1080p60)</span>
                     </div>
                   </div>
                 )}
               </div>
             </main>
 
-            {/* Cột 3: LIVE PROPS INSPECTOR (Sửa công thức KaTeX, tiêu đề, voiceover là canvas bên trái đổi theo thời gian thực!) */}
+            {/* Cột 3: LIVE PROPS INSPECTOR (Sửa công thức KaTeX, tiêu đề, số liệu là video bên trái đổi theo tức thì!) */}
             <aside className="w-80 bg-white border-l border-slate-200 p-5 flex flex-col justify-between overflow-y-auto custom-scrollbar text-xs">
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div>
-                    <h3 className="font-bold text-slate-900">Thuộc Tính Cảnh (Live Inspector)</h3>
-                    <span className="text-[10px] text-slate-400 font-mono">ID: {selectedScene.id}</span>
+                    <h3 className="font-bold text-slate-900">Thuộc Tính Cảnh (Live Props)</h3>
+                    <span className="text-[10px] text-slate-400 font-mono">Scene ID: {selectedScene.id}</span>
                   </div>
                   <span className="font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
                     {selectedScene.type}
@@ -526,11 +820,11 @@ export default function App() {
                   />
                 </div>
 
-                {/* DYNAMIC SCENE PROPERTIES BINDING THEO TỪNG TYPE */}
+                {/* Sửa công thức KaTeX nếu là MATH_FORMULA */}
                 {selectedScene.type === 'MATH_FORMULA' && (
-                  <div className="p-3 bg-blue-50/50 border border-blue-200 rounded-xl space-y-2">
+                  <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-xl space-y-2">
                     <span className="font-bold text-blue-900 block text-[11px]">
-                      Mã KaTeX / LaTeX chính:
+                      Mã KaTeX / LaTeX công thức:
                     </span>
                     <textarea
                       rows={2}
@@ -539,15 +833,16 @@ export default function App() {
                       className="w-full p-2 border border-blue-300 rounded-lg font-mono text-xs text-blue-800 bg-white"
                     />
                     <p className="text-[10px] text-blue-600">
-                      * Công thức KaTeX hiển thị trực tiếp trên khung video bên cạnh!
+                      * Nhập mã LaTeX (VD: <code>\sqrt&#123;...&#125;</code>, <code>x_1 + x_2 = -b/a</code>). Video bên cạnh hiển thị chuẩn xác ngay!
                     </p>
                   </div>
                 )}
 
+                {/* Sửa biểu đồ nếu là DATA_CHART */}
                 {selectedScene.type === 'DATA_CHART' && (
-                  <div className="p-3 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-2">
+                  <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-2">
                     <span className="font-bold text-emerald-900 block text-[11px]">
-                      Điểm dữ liệu Biểu đồ (Data Points):
+                      Số liệu các cột biểu đồ (Data Points):
                     </span>
                     {(selectedScene as any).dataPoints?.map((dp: any, i: number) => (
                       <div key={i} className="flex items-center gap-2">
@@ -577,16 +872,30 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Sửa Code nếu là ALGORITHM */}
                 {selectedScene.type === 'ALGORITHM_WALKTHROUGH' && (
                   <div className="p-3 bg-slate-900 text-white rounded-xl space-y-2">
                     <span className="font-bold text-emerald-400 block text-[11px] font-mono">
-                      Mã nguồn thuật toán ({ (selectedScene as any).language }):
+                      Mã nguồn thuật toán:
                     </span>
                     <textarea
                       rows={4}
                       value={(selectedScene as any).codeSnippet}
                       onChange={(e) => updateSceneProperty((s) => ({ ...s, codeSnippet: e.target.value }))}
                       className="w-full p-2 bg-slate-950 border border-slate-800 rounded font-mono text-[11px] text-emerald-300"
+                    />
+                  </div>
+                )}
+
+                {/* Sửa Subtitle nếu là TITLE_HERO */}
+                {selectedScene.type === 'TITLE_HERO' && (
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Mô tả phụ (Subtitle):</label>
+                    <input
+                      type="text"
+                      value={(selectedScene as any).subtitle || ''}
+                      onChange={(e) => updateSceneProperty((s) => ({ ...s, subtitle: e.target.value }))}
+                      className="w-full p-2 border border-slate-200 rounded-lg text-xs"
                     />
                   </div>
                 )}
@@ -603,14 +912,6 @@ export default function App() {
                     <option>ElevenLabs Multilingual v2</option>
                   </select>
                 </div>
-
-                <button
-                  onClick={() => setIsSwapAssetModalOpen(true)}
-                  className="w-full py-2 border border-dashed border-indigo-300 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-xs"
-                >
-                  <Layers className="w-4 h-4" />
-                  <span>Chọn Tài Nguyên Đồ Họa STEM</span>
-                </button>
               </div>
 
               <div className="pt-3 border-t border-slate-100">
@@ -628,7 +929,7 @@ export default function App() {
       )}
 
       {/* ========================================================================= */}
-      {/* 🔍 MÀN HÌNH 2: REVIEWER QA WORKSPACE (CẢ THẨM ĐỊNH VIDEO LẪN KỊCH BẢN) */}
+      {/* 🔍 MÀN HÌNH 2: REVIEWER QA WORKSPACE (TIMELINE GHIM BÌNH LUẬN ĐỘNG) */}
       {/* ========================================================================= */}
       {currentRole === 'reviewer' && (
         <section className="flex-1 flex flex-col">
@@ -677,7 +978,7 @@ export default function App() {
               </div>
             </main>
 
-            {/* Cột Phải: Ghi chú phản biện theo mốc thời gian */}
+            {/* Cột Phải: Ghi chú phản biện theo mốc thời gian (Thêm mới, Nhảy tới giây) */}
             <aside className="w-80 bg-white border-l border-slate-200 p-5 flex flex-col justify-between overflow-y-auto custom-scrollbar text-xs">
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -690,7 +991,7 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Danh sách bình luận */}
+                {/* Danh sách bình luận động */}
                 <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
                   {comments.map((cm) => (
                     <div
@@ -722,7 +1023,7 @@ export default function App() {
                     rows={2}
                     value={newCommentInput}
                     onChange={(e) => setNewCommentInput(e.target.value)}
-                    placeholder="Nhập lỗi sai hoặc điểm cần lưu ý..."
+                    placeholder="Nhập góp ý sư phạm hoặc đồ họa..."
                     className="w-full p-2 border border-purple-300 rounded-lg text-xs bg-white focus:outline-none"
                   />
                   <button
@@ -740,7 +1041,7 @@ export default function App() {
       )}
 
       {/* ========================================================================= */}
-      {/* ✍️ MÀN HÌNH 3: WRITER STUDIO */}
+      {/* ✍️ MÀN HÌNH 3: WRITER SCRIPT STUDIO (TÍCH HỢP AI INTELLIGENCE TƯƠNG TÁC THẬT) */}
       {/* ========================================================================= */}
       {currentRole === 'writer' && (
         <section className="flex-1 flex flex-col">
@@ -754,6 +1055,13 @@ export default function App() {
               <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">{script.gradeLevel}</span>
             </div>
             <div className="flex items-center space-x-2 text-xs">
+              <button
+                onClick={() => setIsCreateProjectModalOpen(true)}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold flex items-center space-x-1"
+              >
+                <PlusCircle className="w-3.5 h-3.5 text-brand-600" />
+                <span>+ Đề Tài Mới</span>
+              </button>
               <button
                 onClick={() => setIsVersionDiffModalOpen(true)}
                 className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold flex items-center space-x-1"
@@ -820,14 +1128,90 @@ export default function App() {
                     className="w-full text-sm text-slate-800 p-3 border border-slate-200 rounded-lg focus:border-brand-500 focus:outline-none leading-relaxed"
                   />
                 </div>
+
+                {/* Kết quả AI hiển thị ngay dưới form */}
+                {aiAnalysisResult.type && (
+                  <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 space-y-2 animate-fade-in">
+                    <div className="flex items-center gap-2 font-bold text-xs text-blue-900">
+                      <Sparkles className="w-4 h-4 text-brand-600" />
+                      <span>{aiAnalysisResult.title}</span>
+                    </div>
+                    <ul className="text-xs text-blue-800 space-y-1 pl-4 list-disc">
+                      {aiAnalysisResult.details.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </main>
+
+            {/* Cột 3: AI Script Intelligence (Bấm nút nào phản hồi phân tích thật nút đó) */}
+            <aside className="w-80 bg-white border-l border-slate-200 p-5 flex flex-col justify-between overflow-y-auto custom-scrollbar text-xs">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 pb-3 border-b border-slate-100">
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-xs">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900">AI Script Intelligence</h3>
+                    <p className="text-[10px] text-slate-400">Gemini 1.5 Flash (Human-in-the-loop)</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    onClick={() => handleTriggerAiAction('resegment')}
+                    className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 text-left transition-all"
+                  >
+                    <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
+                      <Split className="w-4 h-4 text-emerald-600" />
+                      <span>1. Phân Cảnh Tự Động</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Tối ưu thời lượng các scenes</p>
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerAiAction('grade')}
+                    className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-brand-400 hover:bg-blue-50/50 text-left transition-all"
+                  >
+                    <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
+                      <BarChart2 className="w-4 h-4 text-brand-600" />
+                      <span>2. Chấm Độ Khó (Readability)</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Đánh giá theo khối lớp</p>
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerAiAction('extract')}
+                    className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-left transition-all"
+                  >
+                    <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
+                      <Tags className="w-4 h-4 text-indigo-600" />
+                      <span>3. Trích Xuất Khái Niệm</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Lấy các STEM concept tags</p>
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerAiAction('terms')}
+                    className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-amber-400 hover:bg-amber-50/50 text-left transition-all"
+                  >
+                    <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
+                      <ShieldAlert className="w-4 h-4 text-amber-500" />
+                      <span>4. Bắt Lỗi Thuật Ngữ</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Quét tính nhất quán khoa học</p>
+                  </button>
+                </div>
+              </div>
+            </aside>
           </div>
         </section>
       )}
 
       {/* ========================================================================= */}
-      {/* 🛡️ MÀN HÌNH 4: ADMIN PORTAL */}
+      {/* 🛡️ MÀN HÌNH 4: ADMIN PORTAL (QUẢN TRỊ VIÊN & TỔ BỘ MÔN) */}
       {/* ========================================================================= */}
       {currentRole === 'admin' && (
         <main className="flex-1 bg-slate-50 p-6 flex flex-col">
@@ -912,7 +1296,86 @@ export default function App() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODALS PHỤ TRỢ */}
+      {/* 📌 MODAL TẠO DỰ ÁN KỊCH BẢN MỚI (TẠO CHỦ ĐỀ MỚI ĐỘNG 100%) */}
+      {/* ========================================================================= */}
+      {isCreateProjectModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-1.5">
+                <PlusCircle className="w-4 h-4 text-brand-600" />
+                <span>Tạo Dự Án Kịch Bản Video Mới</span>
+              </h3>
+              <button onClick={() => setIsCreateProjectModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNewProject} className="space-y-3">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Chủ đề bài học STEM:</label>
+                <input
+                  type="text"
+                  required
+                  value={newProjTitle}
+                  onChange={(e) => setNewProjTitle(e.target.value)}
+                  placeholder="VD: Cân bằng phản ứng Oxi hóa khử, Định luật khúc xạ..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:border-brand-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Môn Học:</label>
+                  <select
+                    value={newProjSubject}
+                    onChange={(e) => setNewProjSubject(e.target.value as STEMSubject)}
+                    className="w-full p-2 border border-slate-200 rounded-lg bg-white"
+                  >
+                    <option value="Physics">Vật Lý (Physics)</option>
+                    <option value="Math">Toán Học (Math)</option>
+                    <option value="Chemistry">Hóa Học (Chemistry)</option>
+                    <option value="Biology">Sinh Học (Biology)</option>
+                    <option value="ComputerScience">Tin Học (Computer Science)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Khối Lớp:</label>
+                  <select
+                    value={newProjGrade}
+                    onChange={(e) => setNewProjGrade(e.target.value)}
+                    className="w-full p-2 border border-slate-200 rounded-lg bg-white"
+                  >
+                    <option value="Lớp 9">Lớp 9</option>
+                    <option value="Lớp 10">Lớp 10</option>
+                    <option value="Lớp 11">Lớp 11</option>
+                    <option value="Lớp 12">Lớp 12</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateProjectModalOpen(false)}
+                  className="px-3.5 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold shadow-xs flex items-center space-x-1"
+                >
+                  <span>Khởi Tạo & Mở Studio</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: MỜI THÀNH VIÊN VÀO WORKSPACE */}
       {/* ========================================================================= */}
       {isInviteWorkspaceModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
@@ -967,7 +1430,9 @@ export default function App() {
         </div>
       )}
 
+      {/* ========================================================================= */}
       {/* MODAL: MÃ NHÚNG LMS */}
+      {/* ========================================================================= */}
       {isPublishModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
@@ -1007,7 +1472,9 @@ export default function App() {
         </div>
       )}
 
+      {/* ========================================================================= */}
       {/* MODAL: ĐỔI TÀI NGUYÊN ĐỒ HỌA STEM */}
+      {/* ========================================================================= */}
       {isSwapAssetModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
@@ -1024,48 +1491,53 @@ export default function App() {
             <div className="grid grid-cols-3 gap-3">
               <div
                 onClick={() => {
+                  handleAddNewScene('MATH_FORMULA');
                   setIsSwapAssetModalOpen(false);
-                  showToast('Đã áp dụng Sơ đồ Parabol Tương Tác!');
+                  showToast('Đã chèn sơ đồ Toán học mới vào Scene!');
                 }}
                 className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
               >
                 <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-brand-600 font-bold">
-                  SVG Parabol
+                  KaTeX Formula
                 </div>
-                <div className="font-bold text-slate-800 text-[11px]">Đồ thị Parabol</div>
+                <div className="font-bold text-slate-800 text-[11px]">Công Thức KaTeX</div>
               </div>
 
               <div
                 onClick={() => {
+                  handleAddNewScene('DATA_CHART');
                   setIsSwapAssetModalOpen(false);
-                  showToast('Đã áp dụng Mô hình Nguyên tử vào Scene!');
-                }}
-                className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
-              >
-                <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-purple-600 font-bold">
-                  Atom 3D
-                </div>
-                <div className="font-bold text-slate-800 text-[11px]">Mô hình Hóa Học</div>
-              </div>
-
-              <div
-                onClick={() => {
-                  setIsSwapAssetModalOpen(false);
-                  showToast('Đã áp dụng Biểu đồ Cột Số liệu vào Scene!');
+                  showToast('Đã chèn Biểu đồ dữ liệu vào Scene!');
                 }}
                 className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
               >
                 <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-emerald-600 font-bold">
                   Bar Chart
                 </div>
-                <div className="font-bold text-slate-800 text-[11px]">Biểu đồ Dữ liệu</div>
+                <div className="font-bold text-slate-800 text-[11px]">Biểu Đồ Cột Động</div>
+              </div>
+
+              <div
+                onClick={() => {
+                  handleAddNewScene('STEM_QUIZ');
+                  setIsSwapAssetModalOpen(false);
+                  showToast('Đã chèn Câu hỏi trắc nghiệm vào Scene!');
+                }}
+                className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
+              >
+                <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-amber-600 font-bold">
+                  STEM Quiz
+                </div>
+                <div className="font-bold text-slate-800 text-[11px]">Thẻ Trắc Nghiệm</div>
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* ========================================================================= */}
       {/* MODAL: SO SÁNH DIFF PHIÊN BẢN */}
+      {/* ========================================================================= */}
       {isVersionDiffModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
