@@ -47,10 +47,24 @@ import {
 import { RemotionPlayerWrapper } from './components/RemotionPlayerWrapper';
 import { DEFAULT_SAMPLE_SCRIPT, SAMPLE_WORKSPACES, SAMPLE_MEMBERS, SAMPLE_COMMENTS } from './lib/sampleData';
 import { STEMScript, WorkspaceMember, FeedbackComment, Workspace, SceneData, STEMSubject } from './types/stem';
+import {
+  authService,
+  projectService,
+  scriptService,
+  renderService,
+  reviewService,
+  adminService,
+  UserRole
+} from './services';
 
 export default function App() {
   // Navigation Role: 'producer' | 'writer' | 'reviewer' | 'admin' | 'library'
-  const [currentRole, setCurrentRole] = useState<'writer' | 'reviewer' | 'producer' | 'admin' | 'library'>('producer');
+  const [currentRole, setCurrentRole] = useState<UserRole>(() => authService.getCurrentUser().role);
+
+  const handleRoleChange = (role: UserRole) => {
+    authService.switchRole(role);
+    setCurrentRole(role);
+  };
 
   // Multi-workspace state
   const [workspaces, setWorkspaces] = useState<Workspace[]>(SAMPLE_WORKSPACES);
@@ -108,97 +122,29 @@ export default function App() {
   // Active scene pointer
   const selectedScene = script.scenes.find((s) => s.id === activeSceneId) || script.scenes[0];
 
-  // Dynamic Scene Updater (Live Props Binding)
-  const updateSceneProperty = (updater: (s: any) => any) => {
-    setScript((prev) => ({
-      ...prev,
-      scenes: prev.scenes.map((sc) => (sc.id === selectedScene.id ? updater(sc) : sc)),
-    }));
+  // Dynamic Scene Updater (Live Props Binding via Service Layer)
+  const updateSceneProperty = async (updater: (s: any) => any) => {
+    const updated = await scriptService.updateScene(script, selectedScene.id, updater);
+    setScript(updated);
   };
 
-  // Add new scene dynamically
-  const handleAddNewScene = (type: SceneData['type'] = 'MATH_FORMULA') => {
-    const sceneNum = script.scenes.length + 1;
-    let newScene: SceneData;
-
-    if (type === 'MATH_FORMULA') {
-      newScene = {
-        id: `scene_${Date.now()}`,
-        type: 'MATH_FORMULA',
-        title: `Scene ${sceneNum}: Công thức mở rộng`,
-        latex: 'y = a x^2 + b x + c',
-        narration: 'Chúng ta khảo sát tọa độ đỉnh và trục đối xứng của hàm số bậc hai.',
-        durationInFrames: 150,
-        steps: [
-          { label: 'Tọa độ đỉnh I', latexSnippet: 'I\\left(-\\frac{b}{2a}, -\\frac{\\Delta}{4a}\\right)', explanation: 'Điểm cực trị của đồ thị parabol' }
-        ]
-      };
-    } else if (type === 'DATA_CHART') {
-      newScene = {
-        id: `scene_${Date.now()}`,
-        type: 'DATA_CHART',
-        title: `Scene ${sceneNum}: Biểu đồ thống kê số liệu`,
-        xAxisLabel: 'Thời gian t (s)',
-        yAxisLabel: 'Vận tốc v (m/s)',
-        durationInFrames: 150,
-        chartType: 'bar',
-        narration: 'Dữ liệu thực nghiệm biểu diễn sự biến thiên của vận tốc theo thời gian.',
-        dataPoints: [
-          { label: 't=1s', value: 3.5 },
-          { label: 't=2s', value: 7.0 },
-          { label: 't=3s', value: 10.5 },
-          { label: 't=4s', value: 14.0 },
-        ]
-      };
-    } else if (type === 'STEM_QUIZ') {
-      newScene = {
-        id: `scene_${Date.now()}`,
-        type: 'STEM_QUIZ',
-        title: `Scene ${sceneNum}: Câu hỏi trắc nghiệm kiểm tra nhanh`,
-        question: 'Biệt thức Delta của phương trình bậc 2 có công thức là gì?',
-        options: ['Δ = b² - 4ac', 'Δ = b² + 4ac', 'Δ = 2b - 4ac', 'Δ = b - 4ac'],
-        correctIndex: 0,
-        hint: 'Nhớ lại định lý cơ bản.',
-        explanation: 'Delta bằng b bình phương trừ 4 nhân a nhân c.',
-        narration: 'Hãy chọn đáp án đúng trong 5 giây.',
-        durationInFrames: 180
-      };
-    } else {
-      newScene = {
-        id: `scene_${Date.now()}`,
-        type: 'TITLE_HERO',
-        title: `Scene ${sceneNum}: Phân cảnh kiến thức`,
-        subtitle: 'Khái niệm STEM trọng tâm',
-        subject: script.subject,
-        gradeLevel: script.gradeLevel,
-        badgeText: 'STEMotion 4.0',
-        narration: 'Chào mừng các bạn đến với phần tiếp theo của bài học.',
-        durationInFrames: 150
-      };
-    }
-
-    setScript((prev) => ({
-      ...prev,
-      scenes: [...prev.scenes, newScene],
-      totalDurationSeconds: Math.round((prev.scenes.reduce((sum, s) => sum + (s.durationInFrames || 150), 0) + 150) / 30)
-    }));
+  // Add new scene dynamically via Service Layer
+  const handleAddNewScene = async (type: SceneData['type'] = 'MATH_FORMULA') => {
+    const { updatedScript, newScene } = await scriptService.addScene(script, type);
+    setScript(updatedScript);
     setActiveSceneId(newScene.id);
-    showToast(`Đã thêm Scene ${sceneNum} (${type}) vào kịch bản!`);
+    showToast(`Đã thêm Scene mới (${type}) vào kịch bản!`);
   };
 
-  // Delete scene dynamically
-  const handleDeleteScene = (sceneId: string) => {
+  // Delete scene dynamically via Service Layer
+  const handleDeleteScene = async (sceneId: string) => {
     if (script.scenes.length <= 1) {
       showToast('Video cần có ít nhất 1 phân cảnh!', 'warn');
       return;
     }
-    const filtered = script.scenes.filter((s) => s.id !== sceneId);
-    setScript((prev) => ({
-      ...prev,
-      scenes: filtered,
-      totalDurationSeconds: Math.round(filtered.reduce((sum, s) => sum + (s.durationInFrames || 150), 0) / 30)
-    }));
-    setActiveSceneId(filtered[0].id);
+    const updatedScript = await scriptService.deleteScene(script, sceneId);
+    setScript(updatedScript);
+    setActiveSceneId(updatedScript.scenes[0].id);
     showToast('Đã xóa phân cảnh khỏi video.');
   };
 
@@ -239,11 +185,10 @@ export default function App() {
   // Reviewer add comment dynamically
   const [newCommentInput, setNewCommentInput] = useState('');
 
-  const handleAddComment = (e: React.FormEvent) => {
+  const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCommentInput.trim()) return;
-    const newC: FeedbackComment = {
-      id: `c_${Date.now()}`,
+    const newC = await reviewService.addComment(script.id, {
       author: 'ThS. Trần Thị B (Reviewer)',
       avatar: '👩‍🏫',
       role: 'Reviewer',
@@ -251,7 +196,7 @@ export default function App() {
       content: newCommentInput.trim(),
       status: 'OPEN',
       createdAt: 'Vừa xong',
-    };
+    });
     setComments([newC, ...comments]);
     setNewCommentInput('');
     showToast(`Đã ghim nhận xét tại giây thứ ${Math.round(currentSec)}!`);
@@ -262,91 +207,18 @@ export default function App() {
   const [newProjSubject, setNewProjSubject] = useState<STEMSubject>('Physics');
   const [newProjGrade, setNewProjGrade] = useState('Lớp 11');
 
-  const handleCreateNewProject = (e: React.FormEvent) => {
+  const handleCreateNewProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjTitle.trim()) return;
 
-    // Dynamically generate script for this new topic
-    const newScript: STEMScript = {
-      id: `SCR-${newProjSubject.toUpperCase().slice(0, 4)}-${Date.now().toString().slice(-3)}`,
+    const newScript = await projectService.createProject({
       title: newProjTitle.trim(),
       subject: newProjSubject,
       gradeLevel: newProjGrade,
-      totalDurationSeconds: 75,
-      scriptStatus: 'DRAFT',
-      videoStatus: 'NOT_RENDERED',
-      fps: 30,
-      createdAt: 'Hôm nay',
-      scenes: [
-        {
-          id: `sc_${Date.now()}_1`,
-          type: 'TITLE_HERO',
-          title: newProjTitle.trim(),
-          subtitle: `Tìm hiểu các định luật và mô hình khoa học trọng tâm ${newProjGrade}`,
-          subject: newProjSubject,
-          gradeLevel: newProjGrade,
-          badgeText: 'Chương trình mới',
-          narration: `Chào mừng các bạn đến với bài học ${newProjTitle}. Hôm nay chúng ta sẽ tìm hiểu khái niệm cốt lõi này.`,
-          durationInFrames: 150
-        },
-        {
-          id: `sc_${Date.now()}_2`,
-          type: 'MATH_FORMULA',
-          title: 'Công thức toán học định lượng',
-          latex: newProjSubject === 'Math' ? 'f\'(x) = \\lim_{\\Delta x \\to 0} \\frac{f(x+\\Delta x) - f(x)}{\\Delta x}' : 'T = 2\\pi \\sqrt{\\frac{l}{g}}',
-          narration: 'Công thức này biểu diễn mối quan hệ phụ thuộc giữa các đại lượng đo lường.',
-          durationInFrames: 180,
-          steps: [
-            { label: 'Bước 1', latexSnippet: 'l \\text{ (mét)}', explanation: 'Đại lượng độc lập' },
-            { label: 'Bước 2', latexSnippet: 'g = 9.8 \\text{ m/s}^2', explanation: 'Hằng số trọng trường' }
-          ]
-        },
-        {
-          id: `sc_${Date.now()}_3`,
-          type: 'DATA_CHART',
-          title: 'Đồ thị thực nghiệm và số liệu',
-          xAxisLabel: 'Đại lượng X',
-          yAxisLabel: 'Đại lượng Y',
-          durationInFrames: 150,
-          chartType: 'bar',
-          narration: 'Thực nghiệm chứng minh sự tương quan tỉ lệ giữa các tham số.',
-          dataPoints: [
-            { label: 'Mẫu 1', value: 1.2 },
-            { label: 'Mẫu 2', value: 2.4 },
-            { label: 'Mẫu 3', value: 4.8 }
-          ]
-        },
-        {
-          id: `sc_${Date.now()}_4`,
-          type: 'STEM_QUIZ',
-          title: 'Câu hỏi kiểm tra nhận thức',
-          question: `Ý nghĩa quan trọng nhất của ${newProjTitle} là gì?`,
-          options: ['Giải thích hiện tượng tự nhiên', 'Tính toán sai số', 'Chứng minh hình học', 'Không có ý nghĩa'],
-          correctIndex: 0,
-          hint: 'Liên quan trực tiếp đến ứng dụng thực tiễn.',
-          explanation: 'Khái niệm giúp chúng ta hiểu rõ quy luật vận động của tự nhiên.',
-          narration: 'Hãy cùng suy nghĩ và chọn đáp án chính xác.',
-          durationInFrames: 180
-        },
-        {
-          id: `sc_${Date.now()}_5`,
-          type: 'OUTRO',
-          title: 'Tổng kết và bài học kế tiếp',
-          instructorName: 'Thầy Nguyễn Văn Đức',
-          nextLessonSuggestion: 'Bài tập thực hành nâng cao',
-          narration: 'Cảm ơn các em đã theo dõi bài giảng. Hẹn gặp lại trong bài học tiếp theo.',
-          durationInFrames: 150,
-          summaryPoints: [
-            'Nắm vững công thức định lượng',
-            'Kiểm chứng qua đồ thị và số liệu',
-            'Làm bài tập trắc nghiệm trên LMS'
-          ]
-        }
-      ]
-    };
+    });
 
     setScript(newScript);
-    setActiveSceneId(newScript.scenes[0].id);
+    setActiveSceneId(newScript.scenes[0]?.id || '');
     setIsCreateProjectModalOpen(false);
     setCurrentRole('producer'); // Jump immediately to Studio to see the new video!
     showToast(`Đã tạo dự án mới: "${newProjTitle}"! Đang mở Studio dựng video.`);
@@ -534,7 +406,7 @@ export default function App() {
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-medium space-x-1">
             <button
               onClick={() => {
-                setCurrentRole('writer');
+                handleRoleChange('writer');
                 showToast('Chuyển sang Writer Studio');
               }}
               className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
@@ -549,7 +421,7 @@ export default function App() {
 
             <button
               onClick={() => {
-                setCurrentRole('reviewer');
+                handleRoleChange('reviewer');
                 showToast('Chuyển sang Reviewer QA');
               }}
               className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
@@ -564,7 +436,7 @@ export default function App() {
 
             <button
               onClick={() => {
-                setCurrentRole('producer');
+                handleRoleChange('producer');
                 showToast('Chuyển sang Producer Studio (Tạo Video)');
               }}
               className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
@@ -579,7 +451,7 @@ export default function App() {
 
             <button
               onClick={() => {
-                setCurrentRole('admin');
+                handleRoleChange('admin');
                 showToast('Chuyển sang Admin Portal');
               }}
               className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
@@ -595,7 +467,7 @@ export default function App() {
 
           <button
             onClick={() => {
-              setCurrentRole('library');
+              handleRoleChange('library');
               showToast('Mở Thư Viện Media');
             }}
             className={`px-3 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 text-xs font-bold flex items-center space-x-1.5 transition-colors ${
@@ -944,7 +816,8 @@ export default function App() {
             </div>
             <div className="flex items-center space-x-2">
               <button
-                onClick={() => {
+                onClick={async () => {
+                  await reviewService.submitReviewDecision(script.id, 'CHANGE_REQUESTED');
                   setScript((prev) => ({ ...prev, scriptStatus: 'CHANGE_REQUESTED' }));
                   showToast('Đã gửi yêu cầu chỉnh sửa lại cho Writer!', 'warn');
                 }}
@@ -954,7 +827,8 @@ export default function App() {
                 <span>Yêu Cầu Sửa Lại</span>
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
+                  await reviewService.submitReviewDecision(script.id, 'APPROVED');
                   setScript((prev) => ({ ...prev, videoStatus: 'APPROVED', scriptStatus: 'APPROVED' }));
                   showToast('Đã phê duyệt video hoàn chỉnh để xuất bản LMS!');
                 }}

@@ -1,3 +1,5 @@
+export type UserRole = 'producer' | 'reviewer' | 'writer' | 'admin' | 'library';
+
 export type STEMSubject = 'Math' | 'Physics' | 'Chemistry' | 'Biology' | 'ComputerScience';
 
 export type SceneType =
@@ -8,6 +10,8 @@ export type SceneType =
   | 'ALGORITHM_WALKTHROUGH'
   | 'STEM_QUIZ'
   | 'OUTRO';
+
+export type STEMTemplateType = SceneType;
 
 export interface SceneBase {
   id: string;
@@ -95,17 +99,23 @@ export type SceneData =
   | STEMQuizProps
   | OutroProps;
 
+export type STEMScene = SceneData;
+
 export interface STEMScript {
   id: string;
   title: string;
   subject: STEMSubject;
   gradeLevel: string;
-  totalDurationSeconds: number;
+  totalDurationSeconds?: number;
   scriptStatus: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'CHANGE_REQUESTED';
-  videoStatus: 'NOT_RENDERED' | 'RENDERING' | 'IN_QA' | 'APPROVED' | 'PUBLISHED';
-  fps: number;
+  videoStatus?: 'NOT_RENDERED' | 'RENDERING' | 'IN_QA' | 'APPROVED' | 'PUBLISHED';
+  fps?: number;
   scenes: SceneData[];
-  createdAt: string;
+  createdAt?: string;
+  reviewComments?: FeedbackComment[];
+  version?: string;
+  estimatedDurationSeconds?: number;
+  targetAudience?: string;
 }
 
 export interface FeedbackComment {
@@ -119,6 +129,8 @@ export interface FeedbackComment {
   status: 'OPEN' | 'RESOLVED';
   createdAt: string;
 }
+
+export type ReviewComment = FeedbackComment;
 
 export interface WorkspaceMember {
   id: string;
