@@ -46,7 +46,9 @@ import {
   Sparkles,
   Sliders,
   FileText,
-  Volume2
+  Volume2,
+  FlaskConical,
+  Shapes,
 } from 'lucide-react';
 import { RemotionPlayerWrapper } from './components/RemotionPlayerWrapper';
 import { DEFAULT_SAMPLE_SCRIPT, SAMPLE_WORKSPACES, SAMPLE_MEMBERS, SAMPLE_COMMENTS } from './lib/sampleData';
@@ -74,6 +76,142 @@ import {
   adminService,
   UserRole
 } from './services';
+
+export interface STEMTemplateCatalogItem {
+  type: SceneData['type'];
+  title: string;
+  subject: string;
+  category: 'ALL' | 'Math' | 'Physics' | 'Chemistry' | 'Biology' | 'ComputerScience';
+  badge: string;
+  duration: string;
+  description: string;
+  color: string;
+  bgBadge: string;
+}
+
+export const STEM_TEMPLATES_CATALOG: STEMTemplateCatalogItem[] = [
+  {
+    type: 'TITLE_HERO',
+    title: 'Tiêu Đề & Mở Đầu Bài Giảng',
+    subject: 'Đa Môn STEM',
+    category: 'ALL',
+    badge: 'Hook & Intro',
+    duration: '5 giây (150 frames)',
+    description: 'Mở đầu bài giảng với hiệu ứng chữ xuất hiện sống động, cấp học, môn học và lời dẫn.',
+    color: 'text-blue-600',
+    bgBadge: 'bg-blue-50 text-blue-700 border-blue-200',
+  },
+  {
+    type: 'MATH_FORMULA',
+    title: 'Khai Triển Công Thức KaTeX',
+    subject: 'Toán Học',
+    category: 'Math',
+    badge: 'Toán 9-12',
+    duration: '6 giây (180 frames)',
+    description: 'Biểu diễn công thức toán học sắc nét từng bước, giải thích tham số và điều kiện.',
+    color: 'text-indigo-600',
+    bgBadge: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  },
+  {
+    type: 'CHEMICAL_REACTION',
+    title: 'Phản Ứng & Ống Nghiệm Hóa Học',
+    subject: 'Hóa Học',
+    category: 'Chemistry',
+    badge: 'Hóa Học 8-12',
+    duration: '6 giây (180 frames)',
+    description: 'Bình tam giác sủi bọt khí đổi màu, phương trình hóa học KaTeX và hiện tượng quan sát.',
+    color: 'text-rose-600',
+    bgBadge: 'bg-rose-50 text-rose-700 border-rose-200',
+  },
+  {
+    type: 'COMPARISON_SPLIT',
+    title: 'So Sánh Đối Chiếu Chia Đôi Màn Hình',
+    subject: 'Đa Môn STEM',
+    category: 'ALL',
+    badge: 'Phân Tích 2 Chiều',
+    duration: '6 giây (180 frames)',
+    description: 'Màn hình 2 cột đối chiếu trực quan 2 khái niệm (DC vs AC, Nhân sơ vs Nhân thực, BFS vs DFS).',
+    color: 'text-amber-600',
+    bgBadge: 'bg-amber-50 text-amber-700 border-amber-200',
+  },
+  {
+    type: 'PROCESS_TIMELINE',
+    title: 'Tiến Trình & Chu Trình Sinh Học',
+    subject: 'Sinh Học',
+    category: 'Biology',
+    badge: 'Sinh Học & Tế Bào',
+    duration: '6 giây (180 frames)',
+    description: 'Quy trình theo dòng thời gian (nguyên phân, quang hợp) phát sáng theo từng giai đoạn.',
+    color: 'text-emerald-600',
+    bgBadge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  },
+  {
+    type: 'GEOMETRY_SPACE',
+    title: 'Hình Học Trực Quan & Định Lý',
+    subject: 'Toán Học',
+    category: 'Math',
+    badge: 'Hình Học & Định Lý',
+    duration: '6 giây (180 frames)',
+    description: 'Mô hình hình học SVG (định lý Pytago diện tích 3 hình vuông, tam giác vuông).',
+    color: 'text-cyan-600',
+    bgBadge: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  },
+  {
+    type: 'DIAGRAM_EXPLAINER',
+    title: 'Sơ Đồ Cơ Chế & Vật Lý Động',
+    subject: 'Vật Lý',
+    category: 'Physics',
+    badge: 'Vật Lý 9-12',
+    duration: '6 giây (180 frames)',
+    description: 'Sơ đồ con lắc đơn, mô hình nguyên tử, mạch điện có ghim nhãn tương tác.',
+    color: 'text-purple-600',
+    bgBadge: 'bg-purple-50 text-purple-700 border-purple-200',
+  },
+  {
+    type: 'DATA_CHART',
+    title: 'Biểu Đồ Trực Quan Số Liệu',
+    subject: 'Vật Lý / Toán',
+    category: 'Physics',
+    badge: 'Thực Nghiệm Số Liệu',
+    duration: '5 giây (150 frames)',
+    description: 'Biểu đồ cột/đường trực quan hóa mối tương quan số liệu thực nghiệm khoa học.',
+    color: 'text-teal-600',
+    bgBadge: 'bg-teal-50 text-teal-700 border-teal-200',
+  },
+  {
+    type: 'ALGORITHM_WALKTHROUGH',
+    title: 'Mô Phỏng Chạy Code Thuật Toán',
+    subject: 'Tin Học',
+    category: 'ComputerScience',
+    badge: 'Tin Học Lập Trình',
+    duration: '6 giây (180 frames)',
+    description: 'Chạy từng dòng code Python/C++, hiển thị trạng thái biến thiên bộ nhớ.',
+    color: 'text-slate-800',
+    bgBadge: 'bg-slate-100 text-slate-700 border-slate-300',
+  },
+  {
+    type: 'STEM_QUIZ',
+    title: 'Trắc Nghiệm Tương Tác Checkpoint',
+    subject: 'Đa Môn STEM',
+    category: 'ALL',
+    badge: 'Củng Cố Kiến Thức',
+    duration: '6 giây (180 frames)',
+    description: 'Câu hỏi trắc nghiệm kiểm tra độ hiểu bài kèm đồng hồ đếm ngược 5 giây.',
+    color: 'text-yellow-600',
+    bgBadge: 'bg-yellow-50 text-yellow-800 border-yellow-200',
+  },
+  {
+    type: 'OUTRO',
+    title: 'Tổng Kết Bài Học & Bài Tập LMS',
+    subject: 'Đa Môn STEM',
+    category: 'ALL',
+    badge: 'Tổng Kết & Về Nhà',
+    duration: '5 giây (150 frames)',
+    description: 'Tóm lược các điểm chính của bài học, bài tập thực hành trên Canvas/Moodle.',
+    color: 'text-sky-600',
+    bgBadge: 'bg-sky-50 text-sky-700 border-sky-200',
+  },
+];
 
 export default function App() {
   // Navigation Role: 'producer' | 'writer' | 'reviewer' | 'admin' | 'library'
@@ -124,6 +262,7 @@ export default function App() {
   const [isInviteWorkspaceModalOpen, setIsInviteWorkspaceModalOpen] = useState(false);
   const [isVersionDiffModalOpen, setIsVersionDiffModalOpen] = useState(false);
   const [isSwapAssetModalOpen, setIsSwapAssetModalOpen] = useState(false);
+  const [templateCatalogFilter, setTemplateCatalogFilter] = useState<'ALL' | 'Math' | 'Physics' | 'Chemistry' | 'Biology' | 'ComputerScience'>('ALL');
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [publishTarget, setPublishTarget] = useState<'youtube' | 'lms'>('youtube');
   const [youtubeForm, setYoutubeForm] = useState({
@@ -969,25 +1108,44 @@ export default function App() {
                 })}
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex gap-1.5">
+              <div className="pt-3 border-t border-slate-100 space-y-1.5">
                 <button
-                  onClick={() => handleAddNewScene('MATH_FORMULA')}
-                  className="flex-1 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
+                  onClick={() => setIsSwapAssetModalOpen(true)}
+                  className="w-full py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-lg border border-brand-200 flex items-center justify-center gap-1.5 shadow-2xs text-[11px]"
                 >
-                  + Công Thức
+                  <Library className="w-3.5 h-3.5 text-brand-600" />
+                  <span>+ Kho Template STEM (11)</span>
                 </button>
-                <button
-                  onClick={() => handleAddNewScene('DATA_CHART')}
-                  className="flex-1 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
-                >
-                  + Biểu Đồ
-                </button>
-                <button
-                  onClick={() => handleAddNewScene('STEM_QUIZ')}
-                  className="flex-1 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
-                >
-                  + Quiz
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleAddNewScene('MATH_FORMULA')}
+                    className="flex-1 py-1 rounded-md border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-slate-700 text-center"
+                    title="Thêm công thức Toán KaTeX"
+                  >
+                    + Toán
+                  </button>
+                  <button
+                    onClick={() => handleAddNewScene('CHEMICAL_REACTION')}
+                    className="flex-1 py-1 rounded-md border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-rose-700 text-center"
+                    title="Thêm phản ứng Hóa học"
+                  >
+                    + Hóa
+                  </button>
+                  <button
+                    onClick={() => handleAddNewScene('COMPARISON_SPLIT')}
+                    className="flex-1 py-1 rounded-md border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-amber-700 text-center"
+                    title="Thêm so sánh đối chiếu"
+                  >
+                    + So sánh
+                  </button>
+                  <button
+                    onClick={() => handleAddNewScene('PROCESS_TIMELINE')}
+                    className="flex-1 py-1 rounded-md border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-emerald-700 text-center"
+                    title="Thêm chu trình tiến trình"
+                  >
+                    + Chu trình
+                  </button>
+                </div>
               </div>
             </aside>
 
@@ -1127,6 +1285,188 @@ export default function App() {
                       onChange={(e) => updateSceneProperty((s) => ({ ...s, codeSnippet: e.target.value }))}
                       className="w-full p-2 bg-slate-950 border border-slate-800 rounded font-mono text-[11px] text-emerald-300"
                     />
+                  </div>
+                )}
+
+                {/* Sửa Phản ứng nếu là CHEMICAL_REACTION */}
+                {selectedScene.type === 'CHEMICAL_REACTION' && (
+                  <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-xl space-y-2">
+                    <span className="font-bold text-rose-950 block text-[11px]">
+                      Phương Trình Hóa Học & Phản Ứng:
+                    </span>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold block mb-0.5">Mã LaTeX Phương Trình:</span>
+                      <input
+                        type="text"
+                        value={(selectedScene as any).equation || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, equation: e.target.value }))}
+                        className="w-full p-1.5 border border-rose-300 rounded text-xs font-mono bg-white text-rose-900"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold block mb-0.5">Chất tham gia:</span>
+                      <input
+                        type="text"
+                        value={(selectedScene as any).reactants || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, reactants: e.target.value }))}
+                        className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold block mb-0.5">Sản phẩm thu được:</span>
+                      <input
+                        type="text"
+                        value={(selectedScene as any).products || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, products: e.target.value }))}
+                        className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-bold block mb-0.5">Hiện tượng quan sát:</span>
+                      <textarea
+                        rows={2}
+                        value={(selectedScene as any).observation || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, observation: e.target.value }))}
+                        className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Sửa So Sánh nếu là COMPARISON_SPLIT */}
+                {selectedScene.type === 'COMPARISON_SPLIT' && (
+                  <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2">
+                    <span className="font-bold text-amber-950 block text-[11px]">
+                      Thông Số So Sánh Đối Chiếu:
+                    </span>
+                    <div>
+                      <span className="text-[10px] text-blue-700 font-bold block mb-0.5">Tiêu đề Chủ Đề A (Cột Trái):</span>
+                      <input
+                        type="text"
+                        value={(selectedScene as any).topicA?.title || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, topicA: { ...(s as any).topicA, title: e.target.value } }))}
+                        className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-amber-700 font-bold block mb-0.5">Tiêu đề Chủ Đề B (Cột Phải):</span>
+                      <input
+                        type="text"
+                        value={(selectedScene as any).topicB?.title || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, topicB: { ...(s as any).topicB, title: e.target.value } }))}
+                        className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-0.5">Kết Luận Sư Phạm:</span>
+                      <textarea
+                        rows={2}
+                        value={(selectedScene as any).conclusion || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, conclusion: e.target.value }))}
+                        className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Sửa Chu Trình nếu là PROCESS_TIMELINE */}
+                {selectedScene.type === 'PROCESS_TIMELINE' && (
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2">
+                    <span className="font-bold text-emerald-950 block text-[11px]">
+                      Thông Số Chu Trình & Tiến Trình:
+                    </span>
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-0.5">Tên Chu Trình:</span>
+                      <input
+                        type="text"
+                        value={(selectedScene as any).processTitle || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, processTitle: e.target.value }))}
+                        className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      {(selectedScene as any).stages?.map((stg: any, sIdx: number) => (
+                        <div key={sIdx} className="p-2 border border-emerald-200 rounded-lg bg-white">
+                          <span className="text-[9px] font-bold text-emerald-700 block">Pha {sIdx + 1}:</span>
+                          <input
+                            type="text"
+                            value={stg.title}
+                            onChange={(e) => {
+                              const newStgs = [...(selectedScene as any).stages];
+                              newStgs[sIdx].title = e.target.value;
+                              updateSceneProperty((s) => ({ ...s, stages: newStgs }));
+                            }}
+                            className="w-full p-1 border border-slate-100 rounded text-xs font-bold mb-1"
+                          />
+                          <input
+                            type="text"
+                            value={stg.description}
+                            onChange={(e) => {
+                              const newStgs = [...(selectedScene as any).stages];
+                              newStgs[sIdx].description = e.target.value;
+                              updateSceneProperty((s) => ({ ...s, stages: newStgs }));
+                            }}
+                            className="w-full p-1 border border-slate-100 rounded text-[11px]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sửa Hình Học nếu là GEOMETRY_SPACE */}
+                {selectedScene.type === 'GEOMETRY_SPACE' && (
+                  <div className="p-3 bg-cyan-50/70 border border-cyan-200 rounded-xl space-y-2">
+                    <span className="font-bold text-cyan-950 block text-[11px]">
+                      Thông Số Hình Học & Định Lý:
+                    </span>
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-0.5">Tên Định Lý:</span>
+                      <input
+                        type="text"
+                        value={(selectedScene as any).theoremName || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, theoremName: e.target.value }))}
+                        className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div>
+                        <span className="text-[10px] text-slate-600 block">Cạnh a:</span>
+                        <input
+                          type="number"
+                          value={(selectedScene as any).dimensions?.a || 3}
+                          onChange={(e) => updateSceneProperty((s) => ({ ...s, dimensions: { ...(s as any).dimensions, a: Number(e.target.value) } }))}
+                          className="w-full p-1 border border-slate-200 rounded text-xs bg-white text-center font-bold"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-600 block">Cạnh b:</span>
+                        <input
+                          type="number"
+                          value={(selectedScene as any).dimensions?.b || 4}
+                          onChange={(e) => updateSceneProperty((s) => ({ ...s, dimensions: { ...(s as any).dimensions, b: Number(e.target.value) } }))}
+                          className="w-full p-1 border border-slate-200 rounded text-xs bg-white text-center font-bold"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-600 block">Cạnh huyền c:</span>
+                        <input
+                          type="number"
+                          value={(selectedScene as any).dimensions?.c || 5}
+                          onChange={(e) => updateSceneProperty((s) => ({ ...s, dimensions: { ...(s as any).dimensions, c: Number(e.target.value) } }))}
+                          className="w-full p-1 border border-slate-200 rounded text-xs bg-white text-center font-bold"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-0.5">Ý Nghĩa Định Lý:</span>
+                      <textarea
+                        rows={2}
+                        value={(selectedScene as any).explanation || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, explanation: e.target.value }))}
+                        className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -1400,6 +1740,86 @@ export default function App() {
                       </div>
                     </div>
                   )}
+
+                  {selectedScene.type === 'CHEMICAL_REACTION' && (
+                    <div className="p-4 bg-rose-50/60 rounded-xl border border-rose-200 space-y-2">
+                      <label className="text-xs font-bold text-rose-900 block">Thẩm Định Phương Trình & Phản Ứng Hóa Học:</label>
+                      <div
+                        className="p-3 bg-white rounded-lg border border-rose-200 text-center text-lg"
+                        dangerouslySetInnerHTML={renderLatexToString((selectedScene as any).equation || '')}
+                      />
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="p-2 bg-white rounded border">
+                          <b className="text-slate-700">Chất tham gia:</b> {(selectedScene as any).reactants}
+                        </div>
+                        <div className="p-2 bg-white rounded border">
+                          <b className="text-slate-700">Sản phẩm:</b> {(selectedScene as any).products}
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 bg-white p-2 rounded border">
+                        <b>Hiện tượng:</b> {(selectedScene as any).observation}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedScene.type === 'COMPARISON_SPLIT' && (
+                    <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200 space-y-2">
+                      <label className="text-xs font-bold text-amber-900 block">Thẩm Định Đối Chiếu Hai Khái Niệm:</label>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="p-2.5 bg-blue-50/60 rounded-lg border border-blue-200">
+                          <b className="text-blue-900 block mb-1">{(selectedScene as any).topicA?.title}</b>
+                          <ul className="list-disc pl-4 space-y-0.5 text-slate-700 text-[11px]">
+                            {(selectedScene as any).topicA?.points?.map((p: string, pIdx: number) => (
+                              <li key={pIdx}>{p}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="p-2.5 bg-amber-50/60 rounded-lg border border-amber-200">
+                          <b className="text-amber-900 block mb-1">{(selectedScene as any).topicB?.title}</b>
+                          <ul className="list-disc pl-4 space-y-0.5 text-slate-700 text-[11px]">
+                            {(selectedScene as any).topicB?.points?.map((p: string, pIdx: number) => (
+                              <li key={pIdx}>{p}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 bg-white p-2 rounded border">
+                        <b>Kết luận:</b> {(selectedScene as any).conclusion}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedScene.type === 'PROCESS_TIMELINE' && (
+                    <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-2">
+                      <label className="text-xs font-bold text-emerald-900 block">Thẩm Định Chu Trình Sinh Học & Tiến Trình:</label>
+                      <p className="font-bold text-slate-800 text-xs">{(selectedScene as any).processTitle}</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(selectedScene as any).stages?.map((st: any, sIdx: number) => (
+                          <div key={sIdx} className="p-2 bg-white rounded-lg border border-emerald-100 text-xs">
+                            <span className="font-bold text-emerald-800 block">Pha {sIdx + 1}: {st.title}</span>
+                            <span className="text-[11px] text-slate-600 mt-0.5 block">{st.description}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedScene.type === 'GEOMETRY_SPACE' && (
+                    <div className="p-4 bg-cyan-50/60 rounded-xl border border-cyan-200 space-y-2">
+                      <label className="text-xs font-bold text-cyan-900 block">Thẩm Định Hình Học & Định Lý:</label>
+                      <p className="font-bold text-slate-800 text-xs">{(selectedScene as any).theoremName}</p>
+                      <div
+                        className="p-3 bg-white rounded-lg border border-cyan-200 text-center text-lg"
+                        dangerouslySetInnerHTML={renderLatexToString((selectedScene as any).formulaLatex || '')}
+                      />
+                      <div className="p-2 bg-white rounded border text-xs text-slate-700">
+                        <b>Kích thước:</b> a = {(selectedScene as any).dimensions?.a}, b = {(selectedScene as any).dimensions?.b}, c = {(selectedScene as any).dimensions?.c}
+                      </div>
+                      <p className="text-xs text-slate-600 bg-white p-2 rounded border">
+                        <b>Ý nghĩa:</b> {(selectedScene as any).explanation}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </main>
 
@@ -1661,25 +2081,44 @@ export default function App() {
               </div>
 
               {/* Nút Thêm Cảnh Mới Nhanh */}
-              <div className="pt-3 border-t border-slate-100 grid grid-cols-3 gap-1">
+              <div className="pt-3 border-t border-slate-100 space-y-1.5">
                 <button
-                  onClick={() => handleAddNewScene('MATH_FORMULA')}
-                  className="py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[10px] font-bold text-slate-700"
+                  onClick={() => setIsSwapAssetModalOpen(true)}
+                  className="w-full py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-lg border border-brand-200 flex items-center justify-center gap-1.5 shadow-2xs text-[11px]"
                 >
-                  + Toán
+                  <Library className="w-3.5 h-3.5 text-brand-600" />
+                  <span>+ Kho Template STEM (11)</span>
                 </button>
-                <button
-                  onClick={() => handleAddNewScene('DATA_CHART')}
-                  className="py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[10px] font-bold text-slate-700"
-                >
-                  + Biểu Đồ
-                </button>
-                <button
-                  onClick={() => handleAddNewScene('STEM_QUIZ')}
-                  className="py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[10px] font-bold text-slate-700"
-                >
-                  + Quiz
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleAddNewScene('MATH_FORMULA')}
+                    className="flex-1 py-1 rounded-md border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-slate-700 text-center"
+                    title="Thêm công thức Toán"
+                  >
+                    + Toán
+                  </button>
+                  <button
+                    onClick={() => handleAddNewScene('CHEMICAL_REACTION')}
+                    className="flex-1 py-1 rounded-md border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-rose-700 text-center"
+                    title="Thêm phản ứng Hóa"
+                  >
+                    + Hóa
+                  </button>
+                  <button
+                    onClick={() => handleAddNewScene('COMPARISON_SPLIT')}
+                    className="flex-1 py-1 rounded-md border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-amber-700 text-center"
+                    title="Thêm so sánh"
+                  >
+                    + So sánh
+                  </button>
+                  <button
+                    onClick={() => handleAddNewScene('PROCESS_TIMELINE')}
+                    className="flex-1 py-1 rounded-md border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-emerald-700 text-center"
+                    title="Thêm chu trình"
+                  >
+                    + Chu trình
+                  </button>
+                </div>
               </div>
             </aside>
 
@@ -1852,6 +2291,171 @@ export default function App() {
                           className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
                         />
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedScene.type === 'CHEMICAL_REACTION' && (
+                  <div className="p-4 bg-rose-50/70 border border-rose-200 rounded-2xl space-y-3">
+                    <label className="text-xs font-bold text-rose-950 block">Soạn Thảo Phản Ứng Hóa Học & Phương Trình:</label>
+                    <div>
+                      <span className="text-[10px] text-rose-700 font-bold block mb-1">Phương Trình Hóa Học (LaTeX):</span>
+                      <input
+                        type="text"
+                        value={(selectedScene as any).equation || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, equation: e.target.value }))}
+                        className="w-full p-2 border border-rose-300 rounded-xl font-mono text-xs bg-white text-rose-900"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-rose-700 font-bold block mb-1">Xem trước phương trình:</span>
+                      <div
+                        className="p-2.5 bg-white rounded-xl border border-rose-200 text-center text-base"
+                        dangerouslySetInnerHTML={renderLatexToString((selectedScene as any).equation || '')}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-[10px] text-slate-600 font-bold block mb-1">Chất tham gia:</span>
+                        <input
+                          type="text"
+                          value={(selectedScene as any).reactants || ''}
+                          onChange={(e) => updateSceneProperty((s) => ({ ...s, reactants: e.target.value }))}
+                          className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-600 font-bold block mb-1">Sản phẩm:</span>
+                        <input
+                          type="text"
+                          value={(selectedScene as any).products || ''}
+                          onChange={(e) => updateSceneProperty((s) => ({ ...s, products: e.target.value }))}
+                          className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-1">Hiện tượng quan sát:</span>
+                      <textarea
+                        rows={2}
+                        value={(selectedScene as any).observation || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, observation: e.target.value }))}
+                        className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {selectedScene.type === 'COMPARISON_SPLIT' && (
+                  <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-3">
+                    <label className="text-xs font-bold text-amber-950 block">Soạn Thảo Nội Dung So Sánh Đối Chiếu:</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-[10px] text-blue-700 font-bold block mb-1">Chủ Đề A (Cột Trái):</span>
+                        <input
+                          type="text"
+                          value={(selectedScene as any).topicA?.title || ''}
+                          onChange={(e) => updateSceneProperty((s) => ({ ...s, topicA: { ...(s as any).topicA, title: e.target.value } }))}
+                          className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-amber-700 font-bold block mb-1">Chủ Đề B (Cột Phải):</span>
+                        <input
+                          type="text"
+                          value={(selectedScene as any).topicB?.title || ''}
+                          onChange={(e) => updateSceneProperty((s) => ({ ...s, topicB: { ...(s as any).topicB, title: e.target.value } }))}
+                          className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-1">Kết Luận Sư Phạm:</span>
+                      <textarea
+                        rows={2}
+                        value={(selectedScene as any).conclusion || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, conclusion: e.target.value }))}
+                        className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {selectedScene.type === 'PROCESS_TIMELINE' && (
+                  <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-3">
+                    <label className="text-xs font-bold text-emerald-950 block">Chu Trình & Tiến Trình Từng Giai Đoạn:</label>
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-1">Tên Chu Trình:</span>
+                      <input
+                        type="text"
+                        value={(selectedScene as any).processTitle || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, processTitle: e.target.value }))}
+                        className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      {(selectedScene as any).stages?.map((stg: any, sIdx: number) => (
+                        <div key={sIdx} className="p-2 border border-emerald-200 rounded-lg bg-white">
+                          <span className="text-[10px] font-bold text-emerald-700 block">Giai đoạn {sIdx + 1}:</span>
+                          <input
+                            type="text"
+                            value={stg.title}
+                            onChange={(e) => {
+                              const newStgs = [...(selectedScene as any).stages];
+                              newStgs[sIdx].title = e.target.value;
+                              updateSceneProperty((s) => ({ ...s, stages: newStgs }));
+                            }}
+                            className="w-full p-1 border border-slate-100 rounded text-xs font-bold mb-1"
+                          />
+                          <input
+                            type="text"
+                            value={stg.description}
+                            onChange={(e) => {
+                              const newStgs = [...(selectedScene as any).stages];
+                              newStgs[sIdx].description = e.target.value;
+                              updateSceneProperty((s) => ({ ...s, stages: newStgs }));
+                            }}
+                            className="w-full p-1 border border-slate-100 rounded text-xs"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedScene.type === 'GEOMETRY_SPACE' && (
+                  <div className="p-4 bg-cyan-50/70 border border-cyan-200 rounded-2xl space-y-3">
+                    <label className="text-xs font-bold text-cyan-950 block">Hình Học Trực Quan & Định Lý:</label>
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-1">Tên Định Lý:</span>
+                      <input
+                        type="text"
+                        value={(selectedScene as any).theoremName || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, theoremName: e.target.value }))}
+                        className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-1">Công Thức LaTeX:</span>
+                      <input
+                        type="text"
+                        value={(selectedScene as any).formulaLatex || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, formulaLatex: e.target.value }))}
+                        className="w-full p-2 border border-slate-200 rounded-lg font-mono text-xs bg-white"
+                      />
+                    </div>
+                    <div
+                      className="p-2.5 bg-white rounded-xl border border-cyan-200 text-center text-base"
+                      dangerouslySetInnerHTML={renderLatexToString((selectedScene as any).formulaLatex || '')}
+                    />
+                    <div>
+                      <span className="text-[10px] text-slate-600 font-bold block mb-1">Ý Nghĩa Sư Phạm:</span>
+                      <textarea
+                        rows={2}
+                        value={(selectedScene as any).explanation || ''}
+                        onChange={(e) => updateSceneProperty((s) => ({ ...s, explanation: e.target.value }))}
+                        className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                      />
                     </div>
                   </div>
                 )}
@@ -2402,63 +3006,112 @@ export default function App() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: ĐỔI TÀI NGUYÊN ĐỒ HỌA STEM */}
+      {/* MODAL: KHO PHÂN CẢNH & TEMPLATE STEM (TEMPLATE CATALOG 11 LOẠI) */}
       {/* ========================================================================= */}
       {isSwapAssetModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-1.5">
-                <Image className="w-4 h-4 text-indigo-600" />
-                <span>Kho Tài Nguyên Đồ Họa STEM</span>
-              </h3>
-              <button onClick={() => setIsSwapAssetModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3 shrink-0">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
+                  <Library className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span>Kho Template Phân Cảnh STEMotion 4.0</span>
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-mono font-bold">
+                      11 Templates Chuẩn GDPT
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Kho mẫu hoạt họa video Remotion trực quan hóa kiến thức chuyên sâu cho 5 môn học STEM
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsSwapAssetModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div
-                onClick={() => {
-                  handleAddNewScene('MATH_FORMULA');
-                  setIsSwapAssetModalOpen(false);
-                  showToast('Đã chèn sơ đồ Toán học mới vào Scene!');
-                }}
-                className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
-              >
-                <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-brand-600 font-bold">
-                  KaTeX Formula
-                </div>
-                <div className="font-bold text-slate-800 text-[11px]">Công Thức KaTeX</div>
-              </div>
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 shrink-0 border-b border-slate-100">
+              {[
+                { id: 'ALL', label: 'Tất Cả (11)' },
+                { id: 'Math', label: 'Toán Học' },
+                { id: 'Physics', label: 'Vật Lý' },
+                { id: 'Chemistry', label: 'Hóa Học' },
+                { id: 'Biology', label: 'Sinh Học' },
+                { id: 'ComputerScience', label: 'Tin Học' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setTemplateCatalogFilter(tab.id as any)}
+                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${
+                    templateCatalogFilter === tab.id
+                      ? 'bg-brand-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-              <div
-                onClick={() => {
-                  handleAddNewScene('DATA_CHART');
-                  setIsSwapAssetModalOpen(false);
-                  showToast('Đã chèn Biểu đồ dữ liệu vào Scene!');
-                }}
-                className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
-              >
-                <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-emerald-600 font-bold">
-                  Bar Chart
-                </div>
-                <div className="font-bold text-slate-800 text-[11px]">Biểu Đồ Cột Động</div>
-              </div>
+            {/* Template Grid List */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {STEM_TEMPLATES_CATALOG
+                .filter((tpl) => templateCatalogFilter === 'ALL' || tpl.category === templateCatalogFilter || tpl.category === 'ALL')
+                .map((tpl) => (
+                  <div
+                    key={tpl.type}
+                    className="border border-slate-200 rounded-xl p-3.5 hover:border-brand-500 hover:shadow-md transition-all flex flex-col justify-between group bg-white"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${tpl.bgBadge}`}>
+                          {tpl.badge}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">{tpl.duration}</span>
+                      </div>
+                      <h4 className="font-bold text-slate-900 text-xs group-hover:text-brand-600 transition-colors">
+                        {tpl.title}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                        {tpl.description}
+                      </p>
+                    </div>
 
-              <div
-                onClick={() => {
-                  handleAddNewScene('STEM_QUIZ');
-                  setIsSwapAssetModalOpen(false);
-                  showToast('Đã chèn Câu hỏi trắc nghiệm vào Scene!');
-                }}
-                className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-slate-400 font-semibold">{tpl.subject}</span>
+                      <button
+                        onClick={() => {
+                          handleAddNewScene(tpl.type);
+                          setIsSwapAssetModalOpen(false);
+                          showToast(`Đã thêm phân cảnh mới: "${tpl.title}"!`);
+                        }}
+                        className="px-3 py-1 bg-brand-50 group-hover:bg-brand-600 group-hover:text-white text-brand-700 font-bold rounded-lg transition-all text-xs flex items-center gap-1 shadow-2xs"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>+ Chèn Vào Video</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 text-[11px] text-slate-500 shrink-0 font-mono">
+              <span>Được xây dựng chuẩn sư phạm chương trình GDPT 2018</span>
+              <button
+                onClick={() => setIsSwapAssetModalOpen(false)}
+                className="px-4 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-lg"
               >
-                <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-amber-600 font-bold">
-                  STEM Quiz
-                </div>
-                <div className="font-bold text-slate-800 text-[11px]">Thẻ Trắc Nghiệm</div>
-              </div>
+                Đóng
+              </button>
             </div>
           </div>
         </div>
