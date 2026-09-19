@@ -1,4 +1,4 @@
-﻿/**
+/**
  * STEMotion Front-End - Script & Scene Service
  * Handles AI generation and scene mutations
  */
@@ -8,6 +8,14 @@ import { STEMScript, STEMSubject, SceneData, SceneType } from '../types/stem';
 import { projectService } from './projectService';
 
 export const scriptService = {
+  async segmentScript(rawScript: string): Promise<any> {
+    if (apiClient.isMockMode()) {
+      await apiClient.mockDelay(500);
+      return { scenes: [] };
+    }
+    return apiClient.post('/ai/segment', { rawScript });
+  },
+
   async generateScriptWithAI(
     prompt: string,
     subject: STEMSubject,

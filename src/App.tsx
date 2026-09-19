@@ -225,21 +225,24 @@ export default function App() {
   };
 
   // AI Script Action Trigger in Writer Studio
-  const handleTriggerAiAction = (action: 'resegment' | 'grade' | 'extract' | 'terms') => {
+  const handleTriggerAiAction = async (action: 'resegment' | 'grade' | 'extract' | 'terms') => {
     if (action === 'resegment') {
-      setAiAnalysisResult({
-        type: 'resegment',
-        title: 'Phân Cảnh Tự Động (AI Segment Optimization)',
-        details: [
-          'Gợi ý cấu trúc: 5 phân cảnh (Tối ưu cho video dưới 90 giây)',
-          'Scene 1: Hook & Đặt vấn đề (15s)',
-          'Scene 2: Khai triển công thức KaTeX trọng tâm (20s)',
-          'Scene 3: Đồ thị / Sơ đồ tương tác thực tế (20s)',
-          'Scene 4: Checkpoint Quiz phản xạ 3 giây (15s)',
-          'Scene 5: Tóm tắt & Bài tập về nhà LMS (15s)'
-        ]
-      });
-      showToast('AI: Đã tối ưu hóa lại phân cảnh và thời lượng từng Scene!');
+      try {
+        const rawScript = script.scenes.map(s => s.narration || (s as any).latex || (s as any).question || '').join(' ');
+        const response = await scriptService.segmentScript(rawScript);
+        
+        setAiAnalysisResult({
+          type: 'resegment',
+          title: 'Phân Cảnh Tự Động (Backend AI Response)',
+          details: [
+            'API Backend đã trả về:',
+            ...response.scenes.map((s: any, idx: number) => `Scene ${idx + 1} (${s.templateType}, ${s.suggestedDuration}s): ${s.narrationText}`)
+          ]
+        });
+        showToast('AI: Đã gọi Backend thành công!');
+      } catch (err: any) {
+        showToast('Lỗi khi gọi AI: ' + err.message, 'warn');
+      }
     } else if (action === 'grade') {
       setAiAnalysisResult({
         type: 'grade',
