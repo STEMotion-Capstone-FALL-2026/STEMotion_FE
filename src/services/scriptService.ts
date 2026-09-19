@@ -11,7 +11,15 @@ export const scriptService = {
   async segmentScript(rawScript: string): Promise<any> {
     if (apiClient.isMockMode()) {
       await apiClient.mockDelay(500);
-      return { scenes: [] };
+      return {
+        scenes: [
+          { templateType: 'CONCEPT_OVERVIEW', suggestedDuration: 15, narrationText: 'Giới thiệu khái niệm cốt lõi và hiện tượng thực tiễn.' },
+          { templateType: 'MATH_FORMULA', suggestedDuration: 20, narrationText: 'Khai triển công thức KaTeX và phân tích các thông số.' },
+          { templateType: 'INTERACTIVE_EXPERIMENT', suggestedDuration: 20, narrationText: 'Mô phỏng đồ thị và thực nghiệm ảo trực quan.' },
+          { templateType: 'QUIZ_CHECKPOINT', suggestedDuration: 15, narrationText: 'Câu hỏi trắc nghiệm tương tác kiểm tra độ hiểu bài.' },
+          { templateType: 'SUMMARY_OUTRO', suggestedDuration: 15, narrationText: 'Tổng kết nội dung trọng tâm và bài tập trên Canvas LMS.' },
+        ],
+      };
     }
     return apiClient.post('/ai/segment', { rawScript });
   },
