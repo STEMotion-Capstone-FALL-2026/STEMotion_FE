@@ -1,73 +1,147 @@
-# TÀI LIỆU BÀN GIAO FRONT-END & ĐẶC TẢ TÍCH HỢP BACKEND (FE HANDOVER & API SPECIFICATION)
+﻿# TÀI LIỆU BÀN GIAO FRONT-END & ĐẶC TẢ TÍCH HỢP BACKEND (FE HANDOVER & API SPECIFICATION)
 
-> **Dành cho**: Developer / AI Agent phụ trách phát triển Backend cho dự án **STEMotion**.  
-> **Mục tiêu**: Cung cấp toàn bộ ngữ cảnh kỹ thuật, kiến trúc Front-End, Data Models (TypeScript Interfaces), và danh sách các REST API Endpoints cần triển khai để kết nối hoàn chỉnh với Front-End.
-
----
-
-## 1. TỔNG QUAN HỆ THỐNG & FRONT-END ĐÃ HOÀN THIỆN
-
-Front-End của dự án STEMotion nằm tại thư mục: **`STEMotion_FE`**
-- **Tech Stack**: React 18 + Vite + Tailwind CSS + Lucide Icons + KaTeX.
-- **Engine chuyển động Video**: **Remotion 4.0** (`remotion`, `@remotion/player`).
-- **Kiến trúc giao diện**: Đã xây dựng hoàn chỉnh giao diện đa vai trò (RBAC) và các modal theo đúng bản thiết kế:
-  1. **Writer Studio**: Soạn thảo kịch bản, gọi AI Script Intelligence (Phân cảnh, Chấm độ khó, Trích xuất khái niệm, Bắt lỗi thuật ngữ).
-  2. **Reviewer QA**: Thẩm định học thuật 2 cấp: (1) Duyệt kịch bản văn bản; (2) Kiểm duyệt video MP4 ghim góp ý theo mốc thời gian (Timestamped pins).
-  3. **Producer Studio (Trọng tâm)**: Canvas Remotion Player xem trước video 1080p60, tinh chỉnh tham số 5-7 phân cảnh trực quan, điều khiển kết xuất Render Job qua BullMQ Queue.
-  4. **Multi-Workspace & Admin**: Quản lý tổ bộ môn, mời giáo viên bằng email, phân quyền, lấy mã nhúng LMS (Canvas, Moodle, iFrame).
+> **Dành cho**: Developer / AI Agent phụ trách phát triển Backend cho dự án **STEMotion** (Capstone Fall 2026).  
+> **Cập nhật mới nhất**: Đã hoàn thiện phân tầng Service Layer (`src/services/`) và cấu hình chuyển đổi Dual-Mode Mock/Live (`VITE_USE_MOCK`).  
+> **Mục tiêu**: Cung cấp toàn bộ ngữ cảnh kỹ thuật, data contract, cấu trúc response chuẩn, danh sách endpoints cụ thể và hướng dẫn tích hợp từng bước cho Backend.
 
 ---
 
-## 2. DATA SCHEMAS & TYPESCRIPT INTERFACES (DATA CONTRACT)
+## 1. TỔNG QUAN KIẾN TRÚC FRONT-END ĐÃ HOÀN THIỆN
 
-Tất cả các kiểu dữ liệu của Front-End được định nghĩa chuẩn tại:  
-📁 [`src/types/stem.ts`](file:///d:/capstone/STEMotion_FE/src/types/stem.ts)
+Toàn bộ mã nguồn Front-End nằm tại repository: **`STEMotion_FE`**  
+- **Tech Stack**: React 18 + Vite 5 + Tailwind CSS + Lucide Icons + KaTeX.
+- **Engine Chuyển Động Video**: **Remotion 4.0** (`remotion`, `@remotion/player`). Khung hình 1080p, 60fps, render thời gian thực.
+- **Hệ Thống Phân Quyền 5 Vai Trò (RBAC)**:
+  1. **Producer Studio (Trọng tâm)**: Canvas video Remotion 60fps, Timeline đa phân cảnh (Scene Timeline), Props Inspector động thay đổi theo từng loại phân cảnh, Trình kích hoạt render MP4 qua hàng đợi BullMQ.
+  2. **Reviewer QA**: Thẩm định video 2 chiều: Duyệt kịch bản (`APPROVED` / `CHANGE_REQUESTED`) và ghim góp ý theo mốc giây thời gian thực (`timestampSec`).
+  3. **Writer Studio**: Trình soạn kịch bản tích hợp AI Intelligence (Tối ưu phân cảnh, Chấm độ khó sư phạm Flesch-Kincaid, Trích xuất khái niệm, Bắt lỗi thuật ngữ).
+  4. **Admin Portal**: Giám sát GPU/CPU cluster, hàng đợi render BullMQ, quản lý giáo viên trong trường.
+  5. **Thư Viện Media (Library)**: Kho template bài giảng STEM dùng chung (Toán, Lý, Hóa, Sinh, Tin).
 
-Backend cần tuân thủ cấu trúc JSON sau để đảm bảo FE parse dữ liệu không bị lỗi:
+---
 
-### 2.1. Cấu trúc Kịch bản Tổng thể (`STEMScript`)
-```typescript
-export type STEMSubject = 'Math' | 'Physics' | 'Chemistry' | 'Biology' | 'ComputerScience';
+## 2. KIẾN TRÚC TẦNG SERVICE LAYER (`src/services/`)
 
-export interface STEMScript {
-  id: string;                         // Ví dụ: "SCR-MATH9-001"
-  title: string;                      // Tên bài giảng: "Định lý Vi-ét và Ứng dụng giải toán"
-  subject: STEMSubject;               // "Math" | "Physics" | "Chemistry" | "Biology" | "ComputerScience"
-  gradeLevel: string;                 // "Lớp 9", "Lớp 10", "Lớp 11", "Lớp 12"
-  totalDurationSeconds: number;       // Thời lượng tổng (giây), ví dụ: 85
-  scriptStatus: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'CHANGE_REQUESTED';
-  videoStatus: 'NOT_RENDERED' | 'RENDERING' | 'IN_QA' | 'APPROVED' | 'PUBLISHED';
-  fps: number;                        // 30 hoặc 60
-  scenes: SceneData[];                // Danh sách các phân cảnh STEM
-  createdAt: string;
+Front-End đã phân tầng Service chuẩn công nghiệp, tách biệt 100% logic giao diện (UI) khỏi tầng gọi mạng:
+
+```mermaid
+flowchart TD
+    UI[UI Views: Producer / Reviewer / Writer / Admin / Library] --> Facade[Service Layer: src/services]
+    
+    subgraph Facade [Service Facade]
+        AuthSvc[authService.ts]
+        ProjSvc[projectService.ts]
+        ScriptSvc[scriptService.ts]
+        RenderSvc[renderService.ts]
+        ReviewSvc[reviewService.ts]
+        AdminSvc[adminService.ts]
+    end
+    
+    Facade --> Client[apiClient.ts]
+    
+    Client -->|VITE_USE_MOCK=true| MockStore[Local Storage & In-Memory Store]
+    Client -->|VITE_USE_MOCK=false| RealBE[Backend REST API: /api/v1/...]
+```
+
+### 2.1. Cấu hình Môi trường kết nối (.env)
+File cấu hình nằm tại `.env` trong thư mục gốc của FE:
+```env
+# URL gốc trỏ về Backend Server (Express / NestJS / FastAPI)
+VITE_API_BASE_URL=http://localhost:8000/api/v1
+
+# Cờ chuyển đổi chế độ:
+# - true: FE tự chạy độc lập với mock data (dùng để demo khi chưa có server)
+# - false: FE tự động bắn REST API thật sang Backend Server
+VITE_USE_MOCK=false
+
+VITE_ENABLE_DEBUG_LOGS=true
+```
+
+### 2.2. Chuẩn Header & Token Gửi Đi
+Tất cả các request từ FE được `src/services/apiClient.ts` tự động đính kèm:
+- `Content-Type: application/json`
+- `Accept: application/json`
+- `Authorization: Bearer <JWT_ACCESS_TOKEN>` (Tự động lấy từ `localStorage.getItem('stemotion_access_token')`)
+
+### 2.3. Chuẩn Response Envelope (Bắt Buộc Backend Tuân Thủ)
+Tất cả các API của Backend cần bọc trong cấu trúc JSON thống nhất sau:
+
+**Thành công (HTTP 200 / 201):**
+```json
+{
+  "success": true,
+  "data": { ... }, // Đối tượng hoặc mảng dữ liệu trả về
+  "meta": {
+    "timestamp": "2026-09-19T16:45:00Z",
+    "requestId": "req_abc123"
+  }
 }
 ```
 
-### 2.2. Cấu trúc 7 Dạng Phân Cảnh STEM (`SceneData`)
-Mỗi phân cảnh trong kịch bản kế thừa từ `SceneBase` và thuộc 1 trong 7 kiểu sau:
+**Thất bại (HTTP 4xx / 5xx):**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "PROJECT_NOT_FOUND", // Mã lỗi bằng chữ viết hoa
+    "message": "Không tìm thấy dự án với ID đã cung cấp",
+    "details": {}
+  }
+}
+```
+
+---
+
+## 3. DATA MODELS & TYPESCRIPT INTERFACES (DATA CONTRACT)
+
+Định nghĩa chuẩn tại file: [`src/types/stem.ts`](file:///d:/capstone/STEMotion_FE/src/types/stem.ts)
+
+### 3.1. Dự Án & Kịch Bản (`STEMScript`)
+```typescript
+export type STEMSubject = 'Math' | 'Physics' | 'Chemistry' | 'Biology' | 'ComputerScience';
+export type UserRole = 'producer' | 'reviewer' | 'writer' | 'admin' | 'library';
+
+export interface STEMScript {
+  id: string;                         // Ví dụ: "SCR-PHYS-9812"
+  title: string;                      // Tên bài giảng: "Định luật bảo toàn cơ năng"
+  subject: STEMSubject;               // "Math" | "Physics" | "Chemistry" | "Biology" | "ComputerScience"
+  gradeLevel: string;                 // "Lớp 9" | "Lớp 10" | "Lớp 11" | "Lớp 12"
+  totalDurationSeconds?: number;      // Thời lượng tổng (giây)
+  scriptStatus: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'CHANGE_REQUESTED';
+  videoStatus?: 'NOT_RENDERED' | 'RENDERING' | 'IN_QA' | 'APPROVED' | 'PUBLISHED';
+  fps?: number;                        // 30 hoặc 60
+  scenes: SceneData[];                // Mảng các phân cảnh
+  reviewComments?: FeedbackComment[]; // Bình luận phản biện
+  createdAt?: string;
+  version?: string;
+}
+```
+
+### 3.2. Cấu Trúc Các Loại Phân Cảnh (`SceneData`)
+Mỗi Scene thuộc 1 trong các kiểu sau:
 
 ```typescript
-export interface SceneBase {
-  id: string;                         // "scene_1", "scene_2",...
-  type: SceneType;                    // Kiểu phân cảnh
-  title: string;                      // Tiêu đề hiển thị trong video
-  narration: string;                  // Lời thoại thuyết minh (Audio TTS đọc)
-  durationInFrames: number;           // Số frames (30 frames = 1 giây)
-}
-
-// 1. Scene Tiêu đề Mở màn
-export interface TitleHeroProps extends SceneBase {
+// 1. Tiêu đề bài giảng
+export interface TitleHeroProps {
+  id: string;
   type: 'TITLE_HERO';
+  title: string;
   subtitle: string;
   subject: STEMSubject;
   gradeLevel: string;
   badgeText: string;
+  narration: string;
+  durationInFrames: number; // 30 frames = 1s
 }
 
-// 2. Scene Công thức Toán/Lý (KaTeX)
-export interface MathFormulaProps extends SceneBase {
+// 2. Công thức Toán / Lý (KaTeX)
+export interface MathFormulaProps {
+  id: string;
   type: 'MATH_FORMULA';
-  latex: string;                      // Mã LaTeX: "x_1 + x_2 = -\\frac{b}{a}"
+  title: string;
+  latex: string;             // Ví dụ: "f(x) = ax^2 + bx + c"
+  narration: string;
+  durationInFrames: number;
   steps: {
     label: string;
     latexSnippet: string;
@@ -75,24 +149,16 @@ export interface MathFormulaProps extends SceneBase {
   }[];
 }
 
-// 3. Scene Sơ đồ / Hình giải phẫu khoa học
-export interface DiagramExplainerProps extends SceneBase {
-  type: 'DIAGRAM_EXPLAINER';
-  diagramTitle: string;
-  labels: {
-    name: string;
-    description: string;
-    xPercent: number;
-    yPercent: number;
-  }[];
-}
-
-// 4. Scene Biểu đồ Dữ liệu Động
-export interface DataChartProps extends SceneBase {
+// 3. Biểu đồ Dữ liệu
+export interface DataChartProps {
+  id: string;
   type: 'DATA_CHART';
+  title: string;
   chartType: 'bar' | 'line';
   xAxisLabel: string;
   yAxisLabel: string;
+  narration: string;
+  durationInFrames: number;
   dataPoints: {
     label: string;
     value: number;
@@ -100,11 +166,15 @@ export interface DataChartProps extends SceneBase {
   }[];
 }
 
-// 5. Scene Mô phỏng Thuật toán Tin học
-export interface AlgorithmWalkthroughProps extends SceneBase {
+// 4. Thuật toán / Lập trình Tin học
+export interface AlgorithmWalkthroughProps {
+  id: string;
   type: 'ALGORITHM_WALKTHROUGH';
-  language: string;                   // "python", "cpp", "javascript"
+  title: string;
+  language: string;          // "python" | "javascript"
   codeSnippet: string;
+  narration: string;
+  durationInFrames: number;
   steps: {
     lineHighlight: number;
     variableState: string;
@@ -112,172 +182,210 @@ export interface AlgorithmWalkthroughProps extends SceneBase {
   }[];
 }
 
-// 6. Scene Câu hỏi Trắc nghiệm Phản xạ
-export interface STEMQuizProps extends SceneBase {
+// 5. Câu hỏi trắc nghiệm tương tác
+export interface STEMQuizProps {
+  id: string;
   type: 'STEM_QUIZ';
+  title: string;
   question: string;
-  options: string[];                  // Mảng 4 đáp án [A, B, C, D]
-  correctIndex: number;               // 0, 1, 2, 3
+  options: string[];         // 4 lựa chọn A, B, C, D
+  correctIndex: number;      // 0, 1, 2, 3
   hint: string;
   explanation: string;
+  narration: string;
+  durationInFrames: number;
 }
 
-// 7. Scene Tổng kết & Gợi ý bài học
-export interface OutroProps extends SceneBase {
+// 6. Tổng kết bài học
+export interface OutroProps {
+  id: string;
   type: 'OUTRO';
+  title: string;
   summaryPoints: string[];
   nextLessonSuggestion: string;
   instructorName: string;
+  narration: string;
+  durationInFrames: number;
 }
-```
 
-### 2.3. Cấu trúc Góp ý Phản biện theo Thời gian (`FeedbackComment`)
-```typescript
-export interface FeedbackComment {
-  id: string;
-  author: string;                     // "GS. Lê Hoàng Nam (Reviewer)"
-  avatar: string;
-  role: 'Writer' | 'Reviewer' | 'Producer' | 'Admin';
-  timestampSec: number;               // Ví dụ: 15.5 (giây thứ 15.5 trong video)
-  sceneId?: string;
-  content: string;                    // Nội dung góp ý
-  status: 'OPEN' | 'RESOLVED';
-  createdAt: string;
-}
+export type SceneData =
+  | TitleHeroProps
+  | MathFormulaProps
+  | DataChartProps
+  | AlgorithmWalkthroughProps
+  | STEMQuizProps
+  | OutroProps;
 ```
 
 ---
 
-## 3. DANH SÁCH REST API ENDPOINTS CẦN TRIỂN KHAI PHÍA BACKEND
+## 4. DANH SÁCH REST API ENDPOINTS CẦN TRIỂN KHAI
 
-Backend cần xây dựng máy chủ (khuyến nghị **Node.js/Express/Fastify** hoặc **Python FastAPI**) cung cấp các endpoints sau:
+Tất cả các route dưới đây có tiền tố: `/api/v1`
 
-### 3.1. Module AI Script Intelligence
-Sử dụng **Google Gemini 1.5 Flash API** (hoặc OpenAI GPT-4o-mini):
-
-* **`POST /api/ai/script/generate`**
-  - **Request Body**:
+### 4.1. Module Xác Thực (Auth)
+* **`POST /api/v1/auth/login`**
+  - **Request**: `{ "email": "teacher@edu.vn", "password": "secure_password" }`
+  - **Response `data`**:
     ```json
     {
-      "topic": "Con lắc đơn và dao động điều hòa",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "user": {
+        "id": "usr_001",
+        "name": "Thầy Hoàng Nam",
+        "email": "teacher@edu.vn",
+        "role": "producer",
+        "workspaceId": "ws_01",
+        "workspaceName": "Tổ STEM THPT"
+      }
+    }
+    ```
+
+---
+
+### 4.2. Module Quản Lý Dự Án (Projects)
+* **`GET /api/v1/projects`**
+  - **Query Params**: `?subject=Physics` (Optional)
+  - **Response `data`**: Mảng `STEMScript[]`
+* **`GET /api/v1/projects/:id`**
+  - **Response `data`**: Đối tượng `STEMScript` chi tiết kèm các scenes.
+* **`POST /api/v1/projects`**
+  - **Mục đích**: Tạo mới đề tài bài giảng (khi giáo viên bấm `+ Đề Tài Mới`).
+  - **Request**:
+    ```json
+    {
+      "title": "Cân bằng phản ứng Oxi hóa khử",
+      "subject": "Chemistry",
+      "gradeLevel": "Lớp 10",
+      "topicPrompt": "Giải thích phương pháp thăng bằng electron..."
+    }
+    ```
+  - **Response `data`**: Đối tượng `STEMScript` vừa tạo kèm các default scenes.
+* **`PUT /api/v1/projects/:id`**
+  - **Request**: Cập nhật thông tin dự án (Partial updates).
+* **`DELETE /api/v1/projects/:id`**
+  - **Response `data`**: `{ "success": true }`
+
+---
+
+### 4.3. Module Kịch Bản & Phân Cảnh (Scripts & Scenes)
+* **`POST /api/v1/scripts/generate`** (AI Orchestration)
+  - **Mục đích**: Nhận đề tài từ giáo viên -> Gọi mô hình LLM (Gemini 1.5 Pro / GPT-4o) -> Trả về kịch bản chuẩn cấu trúc các phân cảnh STEM.
+  - **Request**:
+    ```json
+    {
+      "prompt": "Hướng dẫn định luật II Newton với ví dụ xe lăn chở vật nặng",
       "subject": "Physics",
-      "gradeLevel": "Lớp 11",
-      "targetDurationSec": 90
+      "gradeLevel": "Lớp 10"
     }
     ```
-  - **Response**: Trả về đúng JSON Object theo cấu trúc `STEMScript` với mảng `scenes` gồm 5 - 7 phân cảnh hợp lệ.
-
-* **`POST /api/ai/script/action`**
-  - **Mục đích**: Thực thi 4 tác vụ AI on-demand theo yêu cầu đề bài:
-    1. `"resegment"`: Phân cảnh tự động lại thời lượng và số scene.
-    2. `"grade"`: Đánh giá chỉ số Readability (độ khó đọc) theo khối lớp.
-    3. `"extract"`: Trích xuất các STEM Concept tags chính.
-    4. `"terms"`: Quét và bắt lỗi không nhất quán về thuật ngữ khoa học.
-  - **Request Body**:
-    ```json
-    {
-      "action": "resegment" | "grade" | "extract" | "terms",
-      "scriptText": "string...",
-      "subject": "Math",
-      "gradeLevel": "Lớp 9"
-    }
-    ```
+  - **Response `data`**: Đối tượng `STEMScript` hoàn chỉnh với đầy đủ các Scene chứa KaTeX và biểu đồ.
+* **`POST /api/v1/projects/:id/scenes`**
+  - **Mục đích**: Thêm một phân cảnh mới vào Timeline.
+  - **Request**: Đối tượng `SceneData`.
+* **`PUT /api/v1/projects/:id/scenes/:sceneId`**
+  - **Mục đích**: Cập nhật thuộc tính của phân cảnh khi giáo viên chỉnh sửa trong Props Inspector (sửa LaTeX, sửa biểu đồ, sửa câu hỏi).
+  - **Request**: Đối tượng `SceneData` đã cập nhật.
+* **`DELETE /api/v1/projects/:id/scenes/:sceneId`**
+  - **Mục đích**: Xóa phân cảnh khỏi kịch bản.
 
 ---
 
-### 3.2. Module Kịch bản & Dự án (Script Projects CRUD)
-
-* **`GET /api/workspaces/:workspaceId/scripts`**: Lấy danh sách kịch bản trong nhóm làm việc.
-* **`POST /api/workspaces/:workspaceId/scripts`**: Tạo mới kịch bản.
-* **`GET /api/scripts/:id`**: Xem chi tiết kịch bản và các scenes.
-* **`PUT /api/scripts/:id`**: Lưu nháp / Cập nhật nội dung phân cảnh.
-* **`POST /api/scripts/:id/submit-review`**: Writer nộp kịch bản xin phê duyệt (`scriptStatus` -> `IN_REVIEW`).
-* **`POST /api/scripts/:id/approve`**: Reviewer duyệt kịch bản (`scriptStatus` -> `APPROVED`).
-* **`POST /api/scripts/:id/request-changes`**: Reviewer yêu cầu chỉnh sửa kèm nhận xét (`scriptStatus` -> `CHANGE_REQUESTED`).
+### 4.4. Module Thẩm Định & Kiểm Duyệt (Reviews & Comments)
+* **`POST /api/v1/projects/:id/reviews`**
+  - **Mục đích**: Reviewer nộp quyết định thẩm định kịch bản.
+  - **Request**:
+    ```json
+    {
+      "decision": "APPROVED", // hoặc "CHANGE_REQUESTED"
+      "feedbackNote": "Nội dung đạt chuẩn chương trình GDPT 2018."
+    }
+    ```
+  - **Response `data`**: `{ "status": "APPROVED", "message": "..." }`
+* **`POST /api/v1/projects/:id/comments`**
+  - **Mục đích**: Reviewer ghim nhận xét vào mốc giây trên video.
+  - **Request**:
+    ```json
+    {
+      "author": "ThS. Trần Thị B (Reviewer)",
+      "avatar": "👩‍🏫",
+      "role": "Reviewer",
+      "timestampSec": 15.2,
+      "content": "Công thức Delta ở giây 15 cần đổi màu nổi bật hơn.",
+      "status": "OPEN",
+      "createdAt": "Vừa xong"
+    }
+    ```
+  - **Response `data`**: Đối tượng `FeedbackComment` kèm `id` tạo từ DB.
+* **`PUT /api/v1/projects/:id/comments/:commentId/resolve`**
+  - **Mục đích**: Đánh dấu nhận xét đã được xử lý xong.
 
 ---
 
-### 3.3. Module Render Video Remotion (Render Pipeline & BullMQ)
-
-* **`POST /api/render/start`**
-  - **Mục đích**: Nhận yêu cầu kết xuất video từ Producer, đẩy Job vào hàng đợi BullMQ / Redis.
-  - **Request Body**:
+### 4.5. Module Kết Xuất Video Remotion (Renders & BullMQ)
+* **`POST /api/v1/renders`**
+  - **Mục đích**: Producer bấm "Xuất Video MP4" -> Đưa Job render vào hàng đợi Redis/BullMQ.
+  - **Request**:
     ```json
     {
-      "scriptId": "SCR-MATH9-001",
-      "resolution": "1080p", // "1080p" | "720p" | "4k"
-      "fps": 30, // 30 hoặc 60
-      "ttsVoice": "banmai" // FPT.AI hoặc Edge TTS
+      "projectId": "SCR-PHYS-9812",
+      "resolution": "1080p",
+      "fps": 60
     }
     ```
-  - **Response**:
+  - **Response `data`**:
     ```json
     {
-      "jobId": "BULL-RENDER-9812",
+      "id": "rnd_job_7721",
+      "projectId": "SCR-PHYS-9812",
       "status": "QUEUED",
-      "estimatedSeconds": 45
+      "progressPercentage": 0,
+      "resolution": "1080p",
+      "fps": 60,
+      "createdAt": "2026-09-19T16:45:00Z"
     }
     ```
-
-* **`GET /api/render/status/:jobId`**
-  - **Mục đích**: Front-End polling để cập nhật thanh tiến trình % kết xuất.
-  - **Response**:
+* **`GET /api/v1/renders/:renderId`**
+  - **Mục đích**: FE polling tiến độ render hiển thị thanh loading cho người dùng.
+  - **Response `data`**:
     ```json
     {
-      "jobId": "BULL-RENDER-9812",
-      "status": "PROCESSING", // "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED"
-      "progress": 65, // Phần trăm hoàn thành (0 - 100)
-      "stage": "Đang ghép âm thanh và phụ đề Karaoke...",
-      "videoUrl": null // Hoặc URL file video .mp4 khi status = "COMPLETED"
+      "id": "rnd_job_7721",
+      "projectId": "SCR-PHYS-9812",
+      "status": "RENDERING", // "QUEUED" | "RENDERING" | "COMPLETED" | "FAILED"
+      "progressPercentage": 65,
+      "outputUrl": "https://storage.googleapis.com/stemotion/renders/SCR-PHYS-9812.mp4", // Khi status = COMPLETED
+      "errorMessage": null
     }
     ```
 
 ---
 
-### 3.4. Module Video QA & Timestamp Annotations
-
-* **`GET /api/scripts/:id/qa-comments`**: Lấy danh sách các ghi chú thời gian của video.
-* **`POST /api/scripts/:id/qa-comments`**: Reviewer ghim bình luận tại giây cụ thể:
-  ```json
-  {
-    "timestampSec": 15.5,
-    "content": "Cần tăng kích thước font công thức Vi-ét",
-    "tag": "Đồ họa"
-  }
-  ```
-* **`PUT /api/qa-comments/:commentId/resolve`**: Đánh dấu đã sửa xong nhận xét.
-* **`POST /api/scripts/:id/approve-video`**: Phê duyệt chất lượng video hoàn chỉnh (`videoStatus` -> `APPROVED`).
+### 4.6. Module Quản Trị & Thư Viện (Admin & Library)
+* **`GET /api/v1/admin/metrics`**: Trả về thống kê CPU, GPU, Memory, số render jobs trong ngày.
+* **`GET /api/v1/library/templates`**: Trả về danh sách template công thức, sơ đồ STEM dùng chung.
 
 ---
 
-### 3.5. Module Xuất Bản LMS & YouTube
+## 5. HƯỚNG DẪN DÀNH CHO AI CỦA TEAMMATE ĐỂ CODE BACKEND
 
-* **`POST /api/scripts/:id/publish`**
-  - **Request Body**:
-    ```json
-    {
-      "targets": ["LMS", "YOUTUBE"],
-      "title": "Định lý Vi-ét và Ứng dụng giải toán",
-      "description": "Video bài giảng STEM Toán 9..."
-    }
-    ```
-  - **Response**:
-    ```json
-    {
-      "lmsEmbedCode": "<iframe src=\"https://stemotion.edu.vn/embed/SCR-MATH9-001\" width=\"100%\" height=\"540\" frameborder=\"0\" allowfullscreen></iframe>",
-      "youtubeUrl": "https://youtube.com/watch?v=mock_stem_id"
-    }
-    ```
+Khi teammate bắt đầu xây dựng Backend, hãy copy toàn bộ đoạn Prompt dưới đây và gửi cho AI của họ:
 
----
+```markdown
+Bạn là Backend AI Software Engineer cho dự án STEMotion (Nền tảng sản xuất video bài giảng STEM bằng Remotion).
+Hãy đọc kỹ tài liệu bàn giao `BACKEND_API_SPEC.md` trong thư mục `STEMotion_FE` để nắm toàn bộ hợp đồng API (API Contract).
 
-## 4. HƯỚNG DẪN DÀNH CHO AI CỦA TEAMMATE KHI BẮT ĐẦU CODE BACKEND
-
-Khi AI của teammate bắt đầu làm Backend, teammate hãy dán lời nhắc (Prompt) sau vào AI của họ:
-
-> **System Prompt gợi ý cho AI Backend**:
-> *"Bạn là Backend AI Engineer cho dự án STEMotion. Bạn hãy đọc kỹ file `API_SPEC_AND_FE_HANDOVER.md` nằm tại thư mục gốc để nắm rõ toàn bộ Data Schemas và danh sách REST API Endpoints mà Front-End (`STEMotion_FE`) đang yêu cầu. Hãy sử dụng Node.js (Express/NestJS) hoặc Python (FastAPI), tích hợp Google Gemini API (`@google/genai`) cho phần AI Script, và dùng `@remotion/renderer` để thực thi tác vụ kết xuất video MP4. Đảm bảo trả về đúng các trường JSON mà FE đã quy định."*
+Nhiệm vụ của bạn là xây dựng Backend hoàn chỉnh với các yêu cầu sau:
+1. Công nghệ đề xuất: Node.js (NestJS hoặc Express + TypeScript) hoặc Python (FastAPI).
+2. Cơ sở dữ liệu: PostgreSQL (sử dụng Prisma ORM) hoặc Supabase.
+3. AI Orchestrator: Tích hợp Google Gemini 1.5 Pro API (`@google/genai`) để sinh kịch bản JSON theo đúng Interface `STEMScript` và `SceneData` được định nghĩa trong file `src/types/stem.ts`.
+4. Text-To-Speech (TTS): Tích hợp Edge-TTS hoặc Google Cloud TTS để chuyển text lời thoại (`narration`) thành file âm thanh .mp3 giọng đọc tiếng Việt chuẩn sư phạm.
+5. Video Render Worker: Cài đặt `@remotion/renderer` để đọc cấu trúc `STEMScript` và render ra file video `.mp4` chuẩn 1080p60.
+6. Tuân thủ tuyệt đối cấu trúc Response Envelope:
+   { "success": true, "data": { ... }, "meta": { ... } }
+7. Đảm bảo toàn bộ các endpoint trong mục 4 của tài liệu này hoạt động chính xác với tiền tố `/api/v1`.
+```
 
 ---
 
-*Tài liệu được sinh tự động bởi Antigravity AI Assistant cho dự án STEMotion Capstone.*
+*Tài liệu bàn giao kỹ thuật chính thức — STEMotion Capstone Project FALL 2026.*
