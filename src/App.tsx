@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Building,
   UserPlus,
@@ -19,6 +19,7 @@ import {
   Send,
   AlertCircle,
   Plus,
+  Trash2,
   Mic,
   Split,
   BarChart2,
@@ -39,21 +40,65 @@ import {
   CheckCheck,
   CheckCircle2,
   Sparkles,
-  Zap,
-  ArrowRight,
-  HelpCircle
+  Sliders,
+  FileText,
+  Volume2
 } from 'lucide-react';
+import { RemotionPlayerWrapper } from './components/RemotionPlayerWrapper';
+import { DEFAULT_SAMPLE_SCRIPT, SAMPLE_WORKSPACES, SAMPLE_MEMBERS, SAMPLE_COMMENTS } from './lib/sampleData';
+import { STEMScript, WorkspaceMember, FeedbackComment, Workspace, SceneData, STEMSubject } from './types/stem';
+import {
+  authService,
+  projectService,
+  scriptService,
+  renderService,
+  reviewService,
+  adminService,
+  UserRole
+} from './services';
 
 export default function App() {
-  // Navigation Screens:
-  // 'login' | 'dashboard-writer' | 'screen-writer' | 'dashboard-reviewer' | 'screen-reviewer' | 'screen-clip-review' | 'dashboard-producer' | 'screen-production' | 'dashboard-admin' | 'screen-library'
-  // Default to 'screen-production' (TẠO & DỰNG VIDEO REMOTION) as user requested!
-  const [currentScreen, setCurrentScreen] = useState<string>('screen-production');
-  const [currentRole, setCurrentRole] = useState<'writer' | 'reviewer' | 'producer' | 'admin'>('producer');
+  // Navigation Role: 'producer' | 'writer' | 'reviewer' | 'admin' | 'library'
+  const [currentRole, setCurrentRole] = useState<UserRole>(() => authService.getCurrentUser().role);
 
-  // Workspace state
+  const handleRoleChange = (role: UserRole) => {
+    authService.switchRole(role);
+    setCurrentRole(role);
+  };
+
+  // Multi-workspace state
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(SAMPLE_WORKSPACES);
   const [activeGroup, setActiveGroup] = useState({ name: 'Nhóm STEM THCS Tân Bình', code: 'Gr-01' });
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
+
+  // Central Dynamic Script State (Single Source of Truth)
+  const [script, setScript] = useState<STEMScript>(DEFAULT_SAMPLE_SCRIPT);
+  const [activeSceneId, setActiveSceneId] = useState<string>(script.scenes[0]?.id || 'scene_1');
+  const [comments, setComments] = useState<FeedbackComment[]>(SAMPLE_COMMENTS);
+  const [seekTimestampSec, setSeekTimestampSec] = useState<number | null>(null);
+  const [currentSec, setCurrentSec] = useState(0);
+
+  // AI Assistant Output State in Writer Studio
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<{
+    type: 'resegment' | 'grade' | 'extract' | 'terms' | null;
+    title: string;
+    details: string[];
+  }>({
+    type: 'grade',
+    title: 'Độ khó sư phạm (Readability Analysis)',
+    details: [
+      'Chỉ số Flesch-Kincaid: 7.8 (Phù hợp học sinh lớp 9 THCS)',
+      'Tốc độ đọc trung bình: 130 từ/phút (Chuẩn bài giảng video ngắn)',
+      'Thuật ngữ chuyên ngành: 8 từ (Định lý, Biệt thức Delta, Hệ thức Vi-ét, Parabol...)',
+      'Đánh giá: ĐẠT TIÊU CHUẨN SƯ PHẠM GDPT MỚI'
+    ]
+  });
+
+  // Render Hub state
+  const [isRendering, setIsRendering] = useState<boolean>(false);
+  const [renderProgress, setRenderProgress] = useState<number>(0);
+  const [renderStageText, setRenderStageText] = useState<string>('Khởi động BullMQ Worker...');
+  const [renderPercentageText, setRenderPercentageText] = useState<string>('0%');
 
   // Modals state
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
@@ -63,7 +108,7 @@ export default function App() {
   const [isSwapAssetModalOpen, setIsSwapAssetModalOpen] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
 
-  // Toast notification state
+  // Toast notifications
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' | 'warn' }[]>([]);
 
   const showToast = (message: string, type: 'success' | 'info' | 'warn' = 'success') => {
@@ -71,69 +116,170 @@ export default function App() {
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3000);
+    }, 3200);
   };
 
-  // Producer Studio state
-  const [producerActiveScene, setProducerActiveScene] = useState<number>(1);
-  const [isRendering, setIsRendering] = useState<boolean>(false);
-  const [renderProgress, setRenderProgress] = useState<number>(0);
-  const [renderPercentageText, setRenderPercentageText] = useState<string>('0%');
-  const [renderStageText, setRenderStageText] = useState<string>('Khởi động BullMQ Worker...');
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [clipCurrentTime, setClipCurrentTime] = useState<string>('00:25');
+  // Active scene pointer
+  const selectedScene = script.scenes.find((s) => s.id === activeSceneId) || script.scenes[0];
 
-  // Scene data in Producer Studio
-  const [scenes, setScenes] = useState([
-    { id: 1, name: 'Scene 1: Tiêu đề & Đặt vấn đề', template: 'TitleHeroReveal.tsx', duration: '15s', color: '#3B82F6', title: 'ĐỊNH LÝ VI-ÉT', subtitle: 'Toán Học Khối 9 Trực Quan', transition: 'fade' },
-    { id: 2, name: 'Scene 2: Công thức Vi-ét', template: 'MathFormulaStep.tsx', duration: '20s', color: '#10B981', title: 'CÔNG THỨC VI-ÉT', subtitle: 'x₁ + x₂ = -b/a  |  x₁·x₂ = c/a', transition: 'slide' },
-    { id: 3, name: 'Scene 3: Đồ thị Parabol', template: 'DiagramExplainer.tsx', duration: '20s', color: '#8B5CF6', title: 'MINH HỌA PARABOL', subtitle: 'Tọa độ giao điểm với trục hoành Ox', transition: 'zoom' },
-    { id: 4, name: 'Scene 4: Quiz phản xạ 3s', template: 'STEMQuizCard.tsx', duration: '15s', color: '#F59E0B', title: 'BÀI TẬP PHẢN XẠ 3S', subtitle: 'Tìm hai số biết tổng bằng 5 và tích bằng 6', transition: 'wipe' },
-    { id: 5, name: 'Scene 5: Tổng kết & Outro', template: 'OutroCard.tsx', duration: '15s', color: '#EC4899', title: 'TỔNG KẾT BÀI HỌC', subtitle: 'Đón xem bài tiếp theo trên STEMotion!', transition: 'fade' },
-  ]);
+  // Dynamic Scene Updater (Live Props Binding via Service Layer)
+  const updateSceneProperty = async (updater: (s: any) => any) => {
+    const updated = await scriptService.updateScene(script, selectedScene.id, updater);
+    setScript(updated);
+  };
 
-  const activeSceneObj = scenes.find((s) => s.id === producerActiveScene) || scenes[0];
+  // Add new scene dynamically via Service Layer
+  const handleAddNewScene = async (type: SceneData['type'] = 'MATH_FORMULA') => {
+    const { updatedScript, newScene } = await scriptService.addScene(script, type);
+    setScript(updatedScript);
+    setActiveSceneId(newScene.id);
+    showToast(`Đã thêm Scene mới (${type}) vào kịch bản!`);
+  };
 
-  // Trigger Render Simulation
+  // Delete scene dynamically via Service Layer
+  const handleDeleteScene = async (sceneId: string) => {
+    if (script.scenes.length <= 1) {
+      showToast('Video cần có ít nhất 1 phân cảnh!', 'warn');
+      return;
+    }
+    const updatedScript = await scriptService.deleteScene(script, sceneId);
+    setScript(updatedScript);
+    setActiveSceneId(updatedScript.scenes[0].id);
+    showToast('Đã xóa phân cảnh khỏi video.');
+  };
+
+  // Render Simulation with Real Stages
   const startRenderMock = () => {
     setIsRendering(true);
     setRenderProgress(0);
     setRenderPercentageText('0%');
-    setRenderStageText('BullMQ: Đang phân bổ task render trên GPU Node...');
-    showToast('Đã gửi job kết xuất Remotion lên BullMQ Queue!', 'info');
+    setRenderStageText('BullMQ: Đang gửi job render lên GPU Node...');
+    showToast('Đã bắt đầu kết xuất Remotion Video MP4!', 'info');
 
     let current = 0;
     const interval = setInterval(() => {
       current += 10;
-      if (current === 30) {
-        setRenderStageText('Remotion: Đang render khung hình & KaTeX SVG...');
-      } else if (current === 60) {
-        setRenderStageText('FPT.AI & Whisper: Đang ghép âm thanh và phụ đề Karaoke...');
-      } else if (current === 90) {
-        setRenderStageText('FFmpeg: Đang đóng gói file MP4 1080p60...');
+      if (current === 20) {
+        setRenderStageText('Remotion: Đang render các khung hình KaTeX SVG...');
+      } else if (current === 50) {
+        setRenderStageText('FPT.AI TTS: Đang tổng hợp giọng thuyết minh tiếng Việt...');
+      } else if (current === 80) {
+        setRenderStageText('Whisper: Đang đồng bộ Karaoke Subtitles & FFmpeg...');
       }
 
       if (current >= 100) {
         clearInterval(interval);
+        setIsRendering(false);
         setRenderProgress(100);
         setRenderPercentageText('100%');
-        setRenderStageText('Hoàn tất kết xuất! Clip đã sẵn sàng duyệt QA.');
-        showToast('Kết xuất video MP4 thành công! Đã gửi sang Reviewer.', 'success');
+        setRenderStageText('Kết xuất hoàn tất 1080p60!');
+        setScript((prev) => ({ ...prev, videoStatus: 'IN_QA' }));
+        showToast('Kết xuất video MP4 thành công! Clip đã chuyển sang Reviewer QA.', 'success');
       } else {
         setRenderProgress(current);
         setRenderPercentageText(`${current}%`);
       }
-    }, 400);
+    }, 350);
   };
 
-  // Switch role handler
-  const handleRoleSwitch = (role: 'writer' | 'reviewer' | 'producer' | 'admin') => {
-    setCurrentRole(role);
-    if (role === 'producer') setCurrentScreen('screen-production');
-    else if (role === 'writer') setCurrentScreen('dashboard-writer');
-    else if (role === 'reviewer') setCurrentScreen('dashboard-reviewer');
-    else if (role === 'admin') setCurrentScreen('dashboard-admin');
-    showToast(`Đã chuyển sang vai trò: ${role.toUpperCase()}`, 'info');
+  // Reviewer add comment dynamically
+  const [newCommentInput, setNewCommentInput] = useState('');
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCommentInput.trim()) return;
+    const newC = await reviewService.addComment(script.id, {
+      author: 'ThS. Trần Thị B (Reviewer)',
+      avatar: '👩‍🏫',
+      role: 'Reviewer',
+      timestampSec: Math.round(currentSec * 10) / 10,
+      content: newCommentInput.trim(),
+      status: 'OPEN',
+      createdAt: 'Vừa xong',
+    });
+    setComments([newC, ...comments]);
+    setNewCommentInput('');
+    showToast(`Đã ghim nhận xét tại giây thứ ${Math.round(currentSec)}!`);
+  };
+
+  // Create Project Form State
+  const [newProjTitle, setNewProjTitle] = useState('');
+  const [newProjSubject, setNewProjSubject] = useState<STEMSubject>('Physics');
+  const [newProjGrade, setNewProjGrade] = useState('Lớp 11');
+
+  const handleCreateNewProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjTitle.trim()) return;
+
+    const newScript = await projectService.createProject({
+      title: newProjTitle.trim(),
+      subject: newProjSubject,
+      gradeLevel: newProjGrade,
+    });
+
+    setScript(newScript);
+    setActiveSceneId(newScript.scenes[0]?.id || '');
+    setIsCreateProjectModalOpen(false);
+    setCurrentRole('producer'); // Jump immediately to Studio to see the new video!
+    showToast(`Đã tạo dự án mới: "${newProjTitle}"! Đang mở Studio dựng video.`);
+  };
+
+  // AI Script Action Trigger in Writer Studio
+  const handleTriggerAiAction = async (action: 'resegment' | 'grade' | 'extract' | 'terms') => {
+    if (action === 'resegment') {
+      try {
+        const rawScript = script.scenes.map(s => s.narration || (s as any).latex || (s as any).question || '').join(' ');
+        const response = await scriptService.segmentScript(rawScript);
+        
+        setAiAnalysisResult({
+          type: 'resegment',
+          title: 'Phân Cảnh Tự Động (Backend AI Response)',
+          details: [
+            'API Backend đã trả về:',
+            ...response.scenes.map((s: any, idx: number) => `Scene ${idx + 1} (${s.templateType}, ${s.suggestedDuration}s): ${s.narrationText}`)
+          ]
+        });
+        showToast('AI: Đã gọi Backend thành công!');
+      } catch (err: any) {
+        showToast('Lỗi khi gọi AI: ' + err.message, 'warn');
+      }
+    } else if (action === 'grade') {
+      setAiAnalysisResult({
+        type: 'grade',
+        title: 'Chấm Điểm Độ Khó Sư Phạm (Readability)',
+        details: [
+          `Độ khó: Phù hợp chuẩn ${script.gradeLevel}`,
+          'Chỉ số dễ hiểu: 82/100 (Học sinh tiếp thu nhanh)',
+          'Độ dài câu trung bình: 14 từ (Tránh câu phức tạp gây khó hiểu)',
+          'Khuyến nghị: Lời thoại rất trôi chảy, giọng đọc AI sẽ đọc tự nhiên.'
+        ]
+      });
+      showToast('AI: Đã phân tích chỉ số đọc dễ hiểu cho học sinh!');
+    } else if (action === 'extract') {
+      setAiAnalysisResult({
+        type: 'extract',
+        title: 'Trích Xuất Khái Niệm STEM (Concept Tags)',
+        details: [
+          '#DinhLyViet',
+          '#PhuongTrinhBacHai',
+          '#BietThucDelta',
+          '#ParabolOx',
+          '#ToanHoc9_GDPT2018'
+        ]
+      });
+      showToast('AI: Đã trích xuất các từ khóa khái niệm STEM cốt lõi!');
+    } else if (action === 'terms') {
+      setAiAnalysisResult({
+        type: 'terms',
+        title: 'Kiểm Tra Tính Nhất Quán Thuật Ngữ (Term Audit)',
+        details: [
+          'Thuật ngữ "Biệt thức Delta": Đồng nhất 100% giữa kịch bản và đồ họa.',
+          'Ký hiệu nghiệm x1, x2: Chuẩn định dạng chỉ số dưới (Subscript).',
+          'Không phát hiện mâu thuẫn ký hiệu toán học.'
+        ]
+      });
+      showToast('AI: Đã quét tính nhất quán thuật ngữ khoa học!');
+    }
   };
 
   return (
@@ -153,11 +299,13 @@ export default function App() {
         ))}
       </div>
 
+      {/* ========================================================================= */}
       {/* TOPBAR CHUNG CỦA HỆ THỐNG */}
+      {/* ========================================================================= */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-6 py-2.5 flex items-center justify-between shadow-xs">
         <div className="flex items-center space-x-4">
           <div
-            onClick={() => setCurrentScreen('screen-production')}
+            onClick={() => setCurrentRole('producer')}
             className="flex items-center space-x-2.5 cursor-pointer"
           >
             <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm">
@@ -180,7 +328,7 @@ export default function App() {
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </button>
 
-            {/* Nút Mời Thành Viên Nhanh */}
+            {/* Nút Mời Thành Viên */}
             <button
               onClick={() => setIsInviteWorkspaceModalOpen(true)}
               title="Mời thành viên vào nhóm này"
@@ -233,12 +381,12 @@ export default function App() {
                   <button
                     onClick={() => {
                       setIsGroupDropdownOpen(false);
-                      setIsCreateWorkspaceModalOpen(true);
+                      setIsCreateProjectModalOpen(true);
                     }}
                     className="w-full p-2 rounded-lg hover:bg-blue-50 text-left flex items-center space-x-2 text-brand-600 font-bold"
                   >
-                    <FolderPlus className="w-4 h-4" />
-                    <span>+ Tạo Nhóm / Workspace Mới</span>
+                    <PlusCircle className="w-4 h-4" />
+                    <span>+ Tạo Dự Án Kịch Bản Mới</span>
                   </button>
                   <button
                     onClick={() => {
@@ -256,14 +404,17 @@ export default function App() {
           </div>
         </div>
 
-        {/* Quick Switch Role Tabs & Media Library Button */}
+        {/* Quick Switch Role Tabs */}
         <div className="flex items-center space-x-2">
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-medium space-x-1">
             <button
-              onClick={() => handleRoleSwitch('writer')}
+              onClick={() => {
+                handleRoleChange('writer');
+                showToast('Chuyển sang Writer Studio');
+              }}
               className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
                 currentRole === 'writer'
-                  ? 'bg-white text-brand-600 shadow-xs'
+                  ? 'bg-white text-brand-600 shadow-xs ring-2 ring-blue-500/20'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -272,10 +423,13 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => handleRoleSwitch('reviewer')}
+              onClick={() => {
+                handleRoleChange('reviewer');
+                showToast('Chuyển sang Reviewer QA');
+              }}
               className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
                 currentRole === 'reviewer'
-                  ? 'bg-white text-amber-600 shadow-xs'
+                  ? 'bg-white text-amber-600 shadow-xs ring-2 ring-amber-500/20'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -284,7 +438,10 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => handleRoleSwitch('producer')}
+              onClick={() => {
+                handleRoleChange('producer');
+                showToast('Chuyển sang Producer Studio (Tạo Video)');
+              }}
               className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
                 currentRole === 'producer'
                   ? 'bg-white text-indigo-600 shadow-xs ring-2 ring-indigo-500/20'
@@ -296,10 +453,13 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => handleRoleSwitch('admin')}
+              onClick={() => {
+                handleRoleChange('admin');
+                showToast('Chuyển sang Admin Portal');
+              }}
               className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
                 currentRole === 'admin'
-                  ? 'bg-white text-rose-600 shadow-xs'
+                  ? 'bg-white text-rose-600 shadow-xs ring-2 ring-rose-500/20'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -309,9 +469,12 @@ export default function App() {
           </div>
 
           <button
-            onClick={() => setCurrentScreen('screen-library')}
+            onClick={() => {
+              handleRoleChange('library');
+              showToast('Mở Thư Viện Media');
+            }}
             className={`px-3 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 text-xs font-bold flex items-center space-x-1.5 transition-colors ${
-              currentScreen === 'screen-library' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-white text-slate-700'
+              currentRole === 'library' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-white text-slate-700'
             }`}
           >
             <Library className="w-3.5 h-3.5 text-indigo-600" />
@@ -319,10 +482,10 @@ export default function App() {
           </button>
         </div>
 
-        {/* User Profile & Quick Actions */}
+        {/* User Profile */}
         <div className="flex items-center space-x-3">
           <div className="text-xs px-2.5 py-1 rounded-full font-medium bg-blue-50 text-brand-700 border border-blue-200 flex items-center space-x-1.5">
-            <span>Vai trò: {currentRole === 'producer' ? 'Producer (Dựng Video)' : currentRole === 'writer' ? 'Writer (Biên kịch)' : currentRole === 'reviewer' ? 'Reviewer (Thẩm định)' : 'Admin'}</span>
+            <span>Vai trò: {currentRole === 'producer' ? 'Producer (Dựng Video)' : currentRole === 'writer' ? 'Writer (Biên kịch)' : currentRole === 'reviewer' ? 'Reviewer (Thẩm định)' : currentRole === 'admin' ? 'Admin (Quản trị)' : 'Khách xem'}</span>
           </div>
 
           <div className="flex items-center space-x-2 pl-2 border-l border-slate-200">
@@ -333,49 +496,40 @@ export default function App() {
               <div className="text-xs font-bold text-slate-800 leading-tight">Nguyễn Văn A</div>
               <div className="text-[10px] text-slate-400">nguyen.vana@edtech.vn</div>
             </div>
-            <button
-              onClick={() => setCurrentScreen('login')}
-              title="Đăng xuất"
-              className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors ml-1"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </header>
 
       {/* ========================================================================= */}
-      {/* 🎬 MÀN HÌNH CHÍNH: REMOTION PRODUCTION STUDIO (TẠO & DỰNG VIDEO REMOTION) */}
+      {/* 🎬 MÀN HÌNH 1: PRODUCER REMOTION STUDIO (TẠO & DỰNG VIDEO THẬT ĐỘNG 100%) */}
       {/* ========================================================================= */}
-      {currentScreen === 'screen-production' && (
+      {currentRole === 'producer' && (
         <section className="flex-1 flex flex-col">
-          {/* Top Studio Bar */}
+          {/* Top Bar Studio */}
           <div className="bg-white border-b px-6 py-2.5 flex justify-between items-center text-xs">
             <div className="flex items-center space-x-3">
-              <button
-                onClick={() => setCurrentScreen('dashboard-producer')}
-                className="text-indigo-600 font-bold hover:underline flex items-center space-x-1"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Về Dashboard Producer</span>
-              </button>
+              <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+                PRODUCER WORKSPACE
+              </span>
               <span className="text-slate-300">/</span>
-              <span className="font-bold text-sm text-slate-900">Remotion Production Studio: Định lý Vi-ét (5 Scenes)</span>
+              <span className="font-bold text-sm text-slate-900">{script.title}</span>
+              <span className="text-slate-500 font-mono text-[11px]">• {script.scenes.length} Scenes (Tổng: {script.totalDurationSeconds}s)</span>
             </div>
+
             <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setIsCreateProjectModalOpen(true)}
+                className="px-3 py-1.5 bg-blue-50 text-brand-700 hover:bg-blue-100 font-bold rounded-lg border border-blue-200 flex items-center space-x-1 shadow-xs"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>+ Đề Tài Mới</span>
+              </button>
               <button
                 onClick={() => setIsSwapAssetModalOpen(true)}
                 className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-lg flex items-center space-x-1 shadow-xs"
               >
                 <Image className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Đổi Tài Nguyên STEM (Swap Assets)</span>
-              </button>
-              <button
-                onClick={() => showToast('Đã đồng bộ giọng đọc AI TTS và tạo phụ đề Whisper!')}
-                className="px-3 py-1.5 bg-blue-50 text-brand-700 hover:bg-blue-100 font-bold rounded-lg border border-blue-200 flex items-center space-x-1"
-              >
-                <Mic className="w-3.5 h-3.5" />
-                <span>Tạo Giọng FPT.AI & Whisper</span>
+                <span>Đổi Tài Nguyên STEM</span>
               </button>
               <button
                 onClick={startRenderMock}
@@ -387,26 +541,32 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3 CỘT: CẢNH ÁNH XẠ (TRÁI) - VIDEO PREVIEW CANVAS (GIỮA) - THUỘC TÍNH SCENE (PHẢI) */}
+          {/* 3 CỘT ĐỘNG: Cột Trái (Scenes list) - Cột Giữa (Remotion Player Live) - Cột Phải (Live Props Inspector) */}
           <div className="flex-1 flex overflow-hidden">
-            
-            {/* CỘT 1: DANH SÁCH CẢNH ÁNH XẠ REMOTION (LEFT) */}
+            {/* Cột 1: Danh sách cảnh (Cho phép Click, Thêm mới, Xóa) */}
             <aside className="w-72 bg-white border-r border-slate-200 flex flex-col p-4">
               <div className="flex items-center justify-between mb-3 text-xs">
-                <span className="font-bold uppercase tracking-wider text-slate-500">Kịch bản ánh xạ Templates</span>
-                <span className="text-[11px] font-semibold text-indigo-600">Remotion 4.0</span>
+                <span className="font-bold uppercase tracking-wider text-slate-500">
+                  Phân cảnh ({script.scenes.length})
+                </span>
+                <button
+                  onClick={() => handleAddNewScene('MATH_FORMULA')}
+                  className="text-brand-600 hover:text-brand-700 font-bold flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Thêm Cảnh
+                </button>
               </div>
 
               <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                {scenes.map((sc) => {
-                  const isActive = sc.id === producerActiveScene;
+                {script.scenes.map((sc, idx) => {
+                  const isActive = sc.id === selectedScene.id;
                   return (
                     <div
                       key={sc.id}
-                      onClick={() => setProducerActiveScene(sc.id)}
+                      onClick={() => setActiveSceneId(sc.id)}
                       className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
                         isActive
-                          ? 'bg-indigo-50/70 border-indigo-400 shadow-xs ring-2 ring-indigo-500/20'
+                          ? 'bg-indigo-50/90 border-indigo-500 shadow-xs ring-2 ring-indigo-500/20'
                           : 'bg-white border-slate-200 hover:border-slate-300'
                       }`}
                     >
@@ -414,238 +574,219 @@ export default function App() {
                         <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
                           isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
                         }`}>
-                          0{sc.id}
+                          0{idx + 1}
                         </span>
-                        <span className="text-[10px] font-mono text-slate-400">{sc.duration}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {Math.round((sc.durationInFrames || 150) / 30)}s
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteScene(sc.id);
+                            }}
+                            className="text-slate-300 hover:text-rose-600 transition-colors ml-1"
+                            title="Xóa phân cảnh này"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
-                      <h4 className="text-xs font-bold text-slate-800 line-clamp-1">{sc.name}</h4>
+                      <h4 className="text-xs font-bold text-slate-800 line-clamp-1">{sc.title}</h4>
                       <span className="text-[10px] font-mono text-indigo-600 font-medium block mt-1">
-                        {sc.template}
+                        {sc.type}
                       </span>
                     </div>
                   );
                 })}
               </div>
+
+              <div className="pt-3 border-t border-slate-100 flex gap-1.5">
+                <button
+                  onClick={() => handleAddNewScene('MATH_FORMULA')}
+                  className="flex-1 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
+                >
+                  + Công Thức
+                </button>
+                <button
+                  onClick={() => handleAddNewScene('DATA_CHART')}
+                  className="flex-1 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
+                >
+                  + Biểu Đồ
+                </button>
+                <button
+                  onClick={() => handleAddNewScene('STEM_QUIZ')}
+                  className="flex-1 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
+                >
+                  + Quiz
+                </button>
+              </div>
             </aside>
 
-            {/* CỘT 2: PREVIEW CANVAS TRỰC TIẾP & AUTO-CAPTIONS (CENTER) */}
-            <main className="flex-1 bg-slate-900 p-6 flex flex-col items-center justify-between overflow-y-auto">
-              <div className="w-full max-w-2xl aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 shadow-2xl relative flex flex-col justify-between p-6 text-white text-center">
-                <div className="flex justify-between items-center text-[11px] text-slate-400">
-                  <span className="px-2 py-0.5 bg-white/10 rounded font-mono text-indigo-300">
-                    {activeSceneObj.template}
-                  </span>
-                  <span className="font-mono">FPS: 60 • 1920x1080</span>
-                </div>
+            {/* Cột 2: LIVE REMOTION PLAYER (Chạy Animation, KaTeX thật) */}
+            <main className="flex-1 bg-slate-900 p-6 flex flex-col justify-between overflow-y-auto">
+              <div className="w-full max-w-3xl mx-auto space-y-4">
+                <RemotionPlayerWrapper
+                  script={script}
+                  activeSceneId={selectedScene.id}
+                  onSceneChange={(id) => setActiveSceneId(id)}
+                />
 
-                {/* Dynamic Graphic Simulation based on Scene */}
-                <div className="my-auto py-6">
-                  {producerActiveScene === 1 && (
-                    <div className="space-y-3">
-                      <h2 className="text-3xl font-extrabold text-blue-400">{activeSceneObj.title}</h2>
-                      <div className="text-lg font-mono text-emerald-300">{activeSceneObj.subtitle}</div>
-                      <div className="text-xs text-slate-400 mt-2">Chương trình GDPT Toán Học Lớp 9 Mới</div>
+                {/* BullMQ Render Progress Simulator (Khi bấm Kết Xuất MP4) */}
+                {isRendering && (
+                  <div className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-xs text-white animate-fade-in">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold flex items-center space-x-2">
+                        <Cpu className="w-4 h-4 text-brand-400 animate-spin" />
+                        <span>{renderStageText}</span>
+                      </span>
+                      <span className="font-mono text-brand-400 font-bold">{renderPercentageText}</span>
                     </div>
-                  )}
-
-                  {producerActiveScene === 2 && (
-                    <div className="space-y-4">
-                      <div className="text-xs uppercase font-mono text-emerald-400 font-bold">HỆ THỨC VI-ÉT CHÍNH XÁC</div>
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-xl font-mono text-2xl text-emerald-300 inline-block">
-                        x₁ + x₂ = −b / a &nbsp;&nbsp;|&nbsp;&nbsp; x₁ · x₂ = c / a
-                      </div>
-                      <p className="text-xs text-slate-400">Điều kiện có nghiệm: Δ = b² − 4ac ≥ 0</p>
+                    <div className="w-full bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-brand-500 h-full transition-all duration-300 rounded-full"
+                        style={{ width: `${renderProgress}%` }}
+                      />
                     </div>
-                  )}
-
-                  {producerActiveScene === 3 && (
-                    <div className="space-y-3">
-                      <div className="text-xs uppercase font-mono text-purple-400 font-bold">TỌA ĐỘ GIAO ĐIỂM PARABOL</div>
-                      <div className="w-72 h-28 mx-auto bg-slate-950/80 border border-purple-500/30 rounded-xl flex items-center justify-center relative overflow-hidden">
-                        <svg className="w-full h-full" viewBox="0 0 200 80">
-                          <line x1="10" y1="60" x2="190" y2="60" stroke="#64748b" strokeWidth="1.5" />
-                          <line x1="100" y1="10" x2="100" y2="75" stroke="#64748b" strokeWidth="1.5" />
-                          <path d="M 30 10 Q 100 80 170 10" fill="none" stroke="#a855f7" strokeWidth="3" />
-                          <circle cx="58" cy="60" r="4" fill="#38bdf8" />
-                          <circle cx="142" cy="60" r="4" fill="#38bdf8" />
-                          <text x="58" y="74" fill="#38bdf8" fontSize="9" textAnchor="middle">x₁</text>
-                          <text x="142" y="74" fill="#38bdf8" fontSize="9" textAnchor="middle">x₂</text>
-                        </svg>
-                      </div>
-                      <div className="text-xs text-purple-300 font-mono">y = ax² + bx + c</div>
+                    <div className="flex justify-between text-[10px] text-slate-400 mt-1.5 font-mono">
+                      <span>Job ID: #BULL-RENDER-9812</span>
+                      <span>GPU Server: NVIDIA A10G (1080p60)</span>
                     </div>
-                  )}
-
-                  {producerActiveScene === 4 && (
-                    <div className="space-y-3 max-w-md mx-auto">
-                      <div className="text-xs uppercase font-mono text-amber-400 font-bold">CÂU HỎI PHẢN XẠ STEM</div>
-                      <h3 className="text-base font-bold text-slate-100">Tìm hai số biết Tổng S = 5 và Tích P = 6?</h3>
-                      <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                        <div className="p-2 rounded bg-slate-800 text-slate-300 border border-slate-700">A. 1 và 4</div>
-                        <div className="p-2 rounded bg-emerald-950/80 border border-emerald-500 text-emerald-300 font-bold">B. 2 và 3 ✓</div>
-                      </div>
-                    </div>
-                  )}
-
-                  {producerActiveScene === 5 && (
-                    <div className="space-y-3">
-                      <div className="text-xs uppercase font-mono text-rose-400 font-bold">TỔNG KẾT BÀI GIẢNG</div>
-                      <h3 className="text-2xl font-bold text-slate-100">Cảm Ơn Các Em Đã Theo Dõi!</h3>
-                      <p className="text-xs text-slate-300">Bài tiếp theo: Ứng dụng Vi-ét giải bài toán cực trị</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Subtitle Karaoke Display (Whisper Auto-Captions) */}
-                <div className="bg-black/60 backdrop-blur-xs py-1.5 px-4 rounded-lg text-xs font-semibold text-yellow-300 border border-yellow-300/20 max-w-lg mx-auto">
-                  <span className="text-white">Chào mừng các em học sinh lớp 9 </span>
-                  <span className="underline decoration-yellow-400">đến với chuỗi bài giảng STEM Toán học!</span>
-                </div>
-
-                {/* Scrubber & Controls */}
-                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400 mt-2">
-                  <div className="flex items-center space-x-3">
-                    <button
-                      onClick={() => setIsPlaying(!isPlaying)}
-                      className="text-white hover:text-blue-400 transition-colors"
-                    >
-                      {isPlaying ? '⏸' : '▶'}
-                    </button>
-                    <span className="font-mono text-white">{clipCurrentTime}</span>
-                    <span className="text-slate-600">/ 01:25</span>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-300">1080p60 • FPT.AI Voice</span>
-                    <button className="hover:text-white"><Maximize className="w-3.5 h-3.5" /></button>
-                  </div>
-                </div>
+                )}
               </div>
-
-              {/* BullMQ Render Progress Simulator (Visible when rendering) */}
-              {isRendering && (
-                <div className="w-full max-w-2xl bg-slate-800 border border-slate-700 rounded-xl p-4 mt-4 text-xs text-white">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold flex items-center space-x-2">
-                      <Cpu className="w-4 h-4 text-brand-400 animate-spin" />
-                      <span>{renderStageText}</span>
-                    </span>
-                    <span className="font-mono text-brand-400 font-bold">{renderPercentageText}</span>
-                  </div>
-                  <div className="w-full bg-slate-700 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="bg-brand-500 h-full transition-all duration-300"
-                      style={{ width: `${renderProgress}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-[10px] text-slate-400 mt-1.5">
-                    <span>Job ID: #BULL-RENDER-9812</span>
-                    <span>GPU Server: Node-SG-01 (NVIDIA A10G)</span>
-                  </div>
-                </div>
-              )}
             </main>
 
-            {/* CỘT 3: TÙY BIẾN THUỘC TÍNH PHÂN CẢNH (SCENE PROPERTIES - RIGHT) */}
+            {/* Cột 3: LIVE PROPS INSPECTOR (Sửa công thức KaTeX, tiêu đề, số liệu là video bên trái đổi theo tức thì!) */}
             <aside className="w-80 bg-white border-l border-slate-200 p-5 flex flex-col justify-between overflow-y-auto custom-scrollbar text-xs">
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="font-bold text-slate-900">Thuộc Tính Cảnh (Scene Properties)</h3>
-                  <span className="font-mono text-brand-600 font-bold">Scene {activeSceneObj.id}</span>
+                  <div>
+                    <h3 className="font-bold text-slate-900">Thuộc Tính Cảnh (Live Props)</h3>
+                    <span className="text-[10px] text-slate-400 font-mono">Scene ID: {selectedScene.id}</span>
+                  </div>
+                  <span className="font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                    {selectedScene.type}
+                  </span>
                 </div>
 
-                {/* Choose Remotion Template */}
+                {/* Tiêu đề phân cảnh */}
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Mẫu Giao Diện Remotion:</label>
-                  <select
-                    value={activeSceneObj.template.replace('.tsx', '')}
-                    onChange={(e) => {
-                      const newTemplate = `${e.target.value}.tsx`;
-                      setScenes((prev) =>
-                        prev.map((s) => (s.id === activeSceneObj.id ? { ...s, template: newTemplate } : s))
-                      );
-                      showToast(`Đã đổi mẫu giao diện thành ${newTemplate}`);
-                    }}
-                    className="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 focus:outline-none text-xs font-medium"
-                  >
-                    <option value="TitleHeroReveal">1. TitleHeroReveal (Tiêu đề)</option>
-                    <option value="MathFormulaStep">2. MathFormulaStep (Công thức/Step reveal)</option>
-                    <option value="DiagramExplainer">3. DiagramExplainer (Sơ đồ tương tác)</option>
-                    <option value="DataChartVisual">4. DataChartVisual (Biểu đồ số liệu)</option>
-                    <option value="AlgorithmWalkthrough">5. AlgorithmWalkthrough (Thuật toán)</option>
-                    <option value="STEMQuizCard">6. STEMQuizCard (Quiz tương tác)</option>
-                    <option value="OutroCard">7. OutroCard (Kết bài / Kêu gọi)</option>
-                  </select>
+                  <label className="font-bold text-slate-700 block mb-1">Tiêu đề phân cảnh:</label>
+                  <input
+                    type="text"
+                    value={selectedScene.title}
+                    onChange={(e) => updateSceneProperty((s) => ({ ...s, title: e.target.value }))}
+                    className="w-full p-2 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:border-brand-500"
+                  />
                 </div>
 
-                {/* Transition selector */}
+                {/* Lời thoại Thuyết minh */}
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Hiệu ứng Chuyển Cảnh (Transition):</label>
-                  <select
-                    value={activeSceneObj.transition}
-                    onChange={(e) => {
-                      setScenes((prev) =>
-                        prev.map((s) => (s.id === activeSceneObj.id ? { ...s, transition: e.target.value } : s))
-                      );
-                    }}
-                    className="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 focus:outline-none text-xs"
-                  >
-                    <option value="fade">Fade Transition (Mờ dần)</option>
-                    <option value="slide">Slide In Right (Trượt sang phải)</option>
-                    <option value="zoom">Zoom Reveal (Phóng to kịch tính)</option>
-                    <option value="wipe">Wipe Clockwise (Quét kim đồng hồ)</option>
-                  </select>
+                  <label className="font-bold text-slate-700 block mb-1 flex items-center justify-between">
+                    <span>Lời thoại đọc (TTS Voiceover):</span>
+                    <span className="text-[10px] text-slate-400">Đồng bộ giọng đọc</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={selectedScene.narration}
+                    onChange={(e) => updateSceneProperty((s) => ({ ...s, narration: e.target.value }))}
+                    className="w-full p-2 border border-slate-200 rounded-lg text-xs leading-relaxed focus:outline-none focus:border-brand-500"
+                  />
                 </div>
 
-                {/* Accent Color */}
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Màu Chủ Đạo (Accent Theme):</label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="color"
-                      value={activeSceneObj.color}
-                      onChange={(e) => {
-                        const newColor = e.target.value;
-                        setScenes((prev) =>
-                          prev.map((s) => (s.id === activeSceneObj.id ? { ...s, color: newColor } : s))
-                        );
-                      }}
-                      className="w-8 h-8 rounded border border-slate-200 cursor-pointer"
+                {/* Sửa công thức KaTeX nếu là MATH_FORMULA */}
+                {selectedScene.type === 'MATH_FORMULA' && (
+                  <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-xl space-y-2">
+                    <span className="font-bold text-blue-900 block text-[11px]">
+                      Mã KaTeX / LaTeX công thức:
+                    </span>
+                    <textarea
+                      rows={2}
+                      value={(selectedScene as any).latex}
+                      onChange={(e) => updateSceneProperty((s) => ({ ...s, latex: e.target.value }))}
+                      className="w-full p-2 border border-blue-300 rounded-lg font-mono text-xs text-blue-800 bg-white"
                     />
-                    <input
-                      type="text"
-                      value={activeSceneObj.color}
-                      readOnly
-                      className="flex-1 px-2 py-1 border rounded text-slate-700 font-mono text-xs bg-slate-50"
+                    <p className="text-[10px] text-blue-600">
+                      * Nhập mã LaTeX (VD: <code>\sqrt&#123;...&#125;</code>, <code>x_1 + x_2 = -b/a</code>). Video bên cạnh hiển thị chuẩn xác ngay!
+                    </p>
+                  </div>
+                )}
+
+                {/* Sửa biểu đồ nếu là DATA_CHART */}
+                {selectedScene.type === 'DATA_CHART' && (
+                  <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-2">
+                    <span className="font-bold text-emerald-900 block text-[11px]">
+                      Số liệu các cột biểu đồ (Data Points):
+                    </span>
+                    {(selectedScene as any).dataPoints?.map((dp: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={dp.label}
+                          onChange={(e) => {
+                            const newPts = [...(selectedScene as any).dataPoints];
+                            newPts[i].label = e.target.value;
+                            updateSceneProperty((s) => ({ ...s, dataPoints: newPts }));
+                          }}
+                          className="flex-1 p-1.5 border border-slate-200 rounded text-xs bg-white"
+                        />
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={dp.value}
+                          onChange={(e) => {
+                            const newPts = [...(selectedScene as any).dataPoints];
+                            newPts[i].value = parseFloat(e.target.value) || 0;
+                            updateSceneProperty((s) => ({ ...s, dataPoints: newPts }));
+                          }}
+                          className="w-16 p-1.5 border border-slate-200 rounded text-xs font-mono text-right bg-white"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Sửa Code nếu là ALGORITHM */}
+                {selectedScene.type === 'ALGORITHM_WALKTHROUGH' && (
+                  <div className="p-3 bg-slate-900 text-white rounded-xl space-y-2">
+                    <span className="font-bold text-emerald-400 block text-[11px] font-mono">
+                      Mã nguồn thuật toán:
+                    </span>
+                    <textarea
+                      rows={4}
+                      value={(selectedScene as any).codeSnippet}
+                      onChange={(e) => updateSceneProperty((s) => ({ ...s, codeSnippet: e.target.value }))}
+                      className="w-full p-2 bg-slate-950 border border-slate-800 rounded font-mono text-[11px] text-emerald-300"
                     />
                   </div>
-                </div>
+                )}
 
-                {/* TTS Voice Selector */}
+                {/* Sửa Subtitle nếu là TITLE_HERO */}
+                {selectedScene.type === 'TITLE_HERO' && (
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Mô tả phụ (Subtitle):</label>
+                    <input
+                      type="text"
+                      value={(selectedScene as any).subtitle || ''}
+                      onChange={(e) => updateSceneProperty((s) => ({ ...s, subtitle: e.target.value }))}
+                      className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+                )}
+
+                {/* Chọn Giọng Đọc FPT.AI */}
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                   <span className="font-bold text-slate-800 block text-[11px] flex items-center space-x-1">
                     <Mic className="w-3.5 h-3.5 text-brand-600" />
-                    <span>Cấu hình Giọng Đọc (TTS Engine):</span>
+                    <span>Giọng Đọc TTS Engine:</span>
                   </span>
                   <select className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white">
                     <option>FPT.AI - Ban Mai (Nữ miền Bắc chuẩn)</option>
-                    <option>FPT.AI - Nam Minh (Nam miền Bắc truyền cảm)</option>
-                    <option>FPT.AI - Lan Nhi (Nữ miền Nam)</option>
+                    <option>FPT.AI - Nam Minh (Nam miền Bắc)</option>
                     <option>ElevenLabs Multilingual v2</option>
                   </select>
-                  <div className="text-[10px] text-slate-400 flex items-center justify-between">
-                    <span>Tốc độ đọc: 1.0x</span>
-                    <span className="text-emerald-600 font-semibold">Tự đồng bộ Whisper Captions</span>
-                  </div>
                 </div>
-
-                {/* Button swap assets */}
-                <button
-                  onClick={() => setIsSwapAssetModalOpen(true)}
-                  className="w-full py-2 border border-dashed border-indigo-300 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-xs"
-                >
-                  <Layers className="w-4 h-4" />
-                  <span>Chọn Tài Nguyên Đồ Họa STEM</span>
-                </button>
               </div>
 
               <div className="pt-3 border-t border-slate-100">
@@ -658,159 +799,187 @@ export default function App() {
                 </button>
               </div>
             </aside>
-
           </div>
         </section>
       )}
 
       {/* ========================================================================= */}
-      {/* 📝 DASHBOARD WRITER & SOẠN THẢO */}
+      {/* 🔍 MÀN HÌNH 2: REVIEWER QA WORKSPACE (TIMELINE GHIM BÌNH LUẬN ĐỘNG) */}
       {/* ========================================================================= */}
-      {currentScreen === 'dashboard-writer' && (
-        <main className="flex-1 bg-slate-50 p-6 flex flex-col">
-          <div className="max-w-6xl w-full mx-auto space-y-6">
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex items-center justify-between">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h1 className="text-xl font-extrabold text-slate-900">Bảng điều khiển Biên kịch (Script Studio)</h1>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-brand-700 font-bold border border-blue-200">Không gian Nhóm</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Bạn đang làm việc trong: <strong className="text-slate-800">{activeGroup.name}</strong>. Tạo kịch bản mới cho 5 môn (Toán, Lý, Hóa, Sinh, Tin).
-                </p>
-              </div>
-              <button
-                onClick={() => setIsCreateProjectModalOpen(true)}
-                className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center space-x-2 transition-colors"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>+ Tạo Dự Án Kịch Bản Mới</span>
-              </button>
-            </div>
-
-            {/* Project List Table */}
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="text-sm font-bold text-slate-900">Danh sách Kịch bản trong Nhóm</h2>
-                <span className="text-xs text-slate-400">Chọn kịch bản để vào Studio soạn thảo, gọi AI và theo dõi phản hồi Reviewer</span>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-700">
-                  <thead className="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-100">
-                    <tr>
-                      <th className="px-6 py-3">Tên Dự Án Kịch Bản</th>
-                      <th className="px-4 py-3">Môn & Khối Lớp</th>
-                      <th className="px-4 py-3">Thời Lượng</th>
-                      <th className="px-4 py-3">Trạng Thái (State)</th>
-                      <th className="px-4 py-3">Góp Ý Reviewer</th>
-                      <th className="px-6 py-3 text-right">Thao Tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    <tr className="hover:bg-slate-50/70 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900 text-sm">Định lý Vi-ét và Ứng dụng giải toán</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">Mã kịch bản: #SCR-MATH9-001 • 5 phân cảnh</div>
-                      </td>
-                      <td className="px-4 py-4"><span className="px-2 py-0.5 rounded bg-blue-50 text-brand-700 font-medium">Toán • Lớp 9</span></td>
-                      <td className="px-4 py-4 font-mono font-medium">~85s</td>
-                      <td className="px-4 py-4">
-                        <span className="px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 font-semibold border border-amber-200 inline-flex items-center space-x-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                          <span>CHANGE_REQUESTED (v1.1)</span>
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="text-amber-800 font-semibold flex items-center space-x-1">
-                          <MessageSquare className="w-3 h-3" />
-                          <span>1 nhận xét cần sửa</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        <button
-                          onClick={() => setCurrentScreen('screen-writer')}
-                          className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-xs transition-colors"
-                        >
-                          Mở Sửa Kịch Bản →
-                        </button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </main>
-      )}
-
-      {/* ========================================================================= */}
-      {/* ✍️ SOẠN THẢO KỊCH BẢN VỚI AI SCRIPT INTELLIGENCE (WRITER STUDIO) */}
-      {/* ========================================================================= */}
-      {currentScreen === 'screen-writer' && (
+      {currentRole === 'reviewer' && (
         <section className="flex-1 flex flex-col">
-          <div className="bg-white border-b border-slate-200 px-6 py-2.5 flex items-center justify-between">
+          <div className="bg-white border-b px-6 py-2.5 flex justify-between items-center text-xs">
             <div className="flex items-center space-x-3">
-              <button
-                onClick={() => setCurrentScreen('dashboard-writer')}
-                className="text-brand-600 text-xs font-bold hover:underline flex items-center space-x-1"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Về Dashboard Writer</span>
-              </button>
-              <span className="text-slate-300">/</span>
-              <h1 className="text-sm font-bold text-slate-900">Định lý Vi-ét và Ứng dụng giải toán</h1>
-              <span className="text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium border border-slate-200">Toán • Lớp 9</span>
-              <span className="text-xs px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-medium border border-amber-200 flex items-center space-x-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                <span>Bản nháp v1.2 (Đang sửa)</span>
+              <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-bold border border-amber-200">
+                REVIEWER QA WORKSPACE
               </span>
+              <span className="text-slate-300">/</span>
+              <span className="font-bold text-sm text-slate-900">{script.title}</span>
+              <span className="text-slate-400 font-mono text-[11px]">• Thẩm định video & Ghim phản biện</span>
             </div>
-            <div className="flex items-center space-x-2 text-xs">
+            <div className="flex items-center space-x-2">
               <button
-                onClick={() => setIsVersionDiffModalOpen(true)}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold flex items-center space-x-1"
-              >
-                <GitCompare className="w-3.5 h-3.5 text-brand-600" />
-                <span>So Sánh Lịch Sử (Diff v1.1 vs v1.2)</span>
-              </button>
-              <button
-                onClick={() => showToast('Đã lưu nháp kịch bản thành công!')}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium"
-              >
-                Lưu nháp
-              </button>
-              <button
-                onClick={() => {
-                  showToast('Đã nộp lại bản kịch bản cho Reviewer!');
-                  setCurrentScreen('dashboard-writer');
+                onClick={async () => {
+                  await reviewService.submitReviewDecision(script.id, 'CHANGE_REQUESTED');
+                  setScript((prev) => ({ ...prev, scriptStatus: 'CHANGE_REQUESTED' }));
+                  showToast('Đã gửi yêu cầu chỉnh sửa lại cho Writer!', 'warn');
                 }}
-                className="px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold flex items-center space-x-1.5 shadow-xs transition-colors"
+                className="px-3.5 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-lg font-bold flex items-center space-x-1"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>Nộp Lại Bản Đã Sửa (Resubmit)</span>
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Yêu Cầu Sửa Lại</span>
+              </button>
+              <button
+                onClick={async () => {
+                  await reviewService.submitReviewDecision(script.id, 'APPROVED');
+                  setScript((prev) => ({ ...prev, videoStatus: 'APPROVED', scriptStatus: 'APPROVED' }));
+                  showToast('Đã phê duyệt video hoàn chỉnh để xuất bản LMS!');
+                }}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs"
+              >
+                <CheckCheck className="w-4 h-4" />
+                <span>Phê Duyệt Video Xuất Bản</span>
               </button>
             </div>
           </div>
 
           <div className="flex-1 flex overflow-hidden">
-            {/* Cột 1: Danh sách cảnh */}
-            <aside className="w-64 bg-white border-r border-slate-200 flex flex-col p-4">
-              <div className="flex items-center justify-between mb-3 text-xs">
-                <span className="font-bold uppercase tracking-wider text-slate-500">Cấu trúc cảnh (5)</span>
-                <span className="font-semibold text-brand-600">Tổng ~85s</span>
+            {/* Cột Trái: Remotion Player trực tiếp để Reviewer thẩm định từng frame */}
+            <main className="flex-1 bg-slate-900 p-6 flex flex-col justify-between overflow-y-auto">
+              <div className="w-full max-w-3xl mx-auto space-y-4">
+                <RemotionPlayerWrapper
+                  script={script}
+                  seekTimestampSec={seekTimestampSec}
+                  onFrameUpdate={(_f, s) => setCurrentSec(s)}
+                />
               </div>
-              <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                {scenes.map((sc) => (
+            </main>
+
+            {/* Cột Phải: Ghi chú phản biện theo mốc thời gian (Thêm mới, Nhảy tới giây) */}
+            <aside className="w-80 bg-white border-l border-slate-200 p-5 flex flex-col justify-between overflow-y-auto custom-scrollbar text-xs">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <MessageSquare className="w-4 h-4 text-purple-600" />
+                    <h3 className="font-bold text-slate-900">Ghi Chú Mốc Thời Gian ({comments.length})</h3>
+                  </div>
+                  <span className="font-mono text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                    {Math.floor(currentSec / 60).toString().padStart(2, '0')}:{(Math.floor(currentSec) % 60).toString().padStart(2, '0')}
+                  </span>
+                </div>
+
+                {/* Danh sách bình luận động */}
+                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                  {comments.map((cm) => (
+                    <div
+                      key={cm.id}
+                      className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 hover:border-purple-300 transition-colors"
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-mono font-bold text-purple-700 bg-white px-1.5 py-0.5 rounded border text-[10px]">
+                          ⏱ {Math.floor(cm.timestampSec / 60).toString().padStart(2, '0')}:{(Math.floor(cm.timestampSec) % 60).toString().padStart(2, '0')}
+                        </span>
+                        <button
+                          onClick={() => setSeekTimestampSec(cm.timestampSec)}
+                          className="text-[10px] text-blue-600 font-semibold hover:underline"
+                        >
+                          Nhảy tới giây này ▶
+                        </button>
+                      </div>
+                      <p className="text-slate-700 text-[11px] leading-relaxed">{cm.content}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Form thêm nhận xét ghim vào giây */}
+                <form onSubmit={handleAddComment} className="p-3 bg-purple-50/50 border border-purple-200 rounded-xl space-y-2">
+                  <span className="font-bold text-purple-900 block text-[11px]">
+                    Ghim nhận xét tại giây thứ {Math.round(currentSec)}:
+                  </span>
+                  <textarea
+                    rows={2}
+                    value={newCommentInput}
+                    onChange={(e) => setNewCommentInput(e.target.value)}
+                    placeholder="Nhập góp ý sư phạm hoặc đồ họa..."
+                    className="w-full p-2 border border-purple-300 rounded-lg text-xs bg-white focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-xs flex items-center justify-center space-x-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Ghim Vào Clip</span>
+                  </button>
+                </form>
+              </div>
+            </aside>
+          </div>
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ✍️ MÀN HÌNH 3: WRITER SCRIPT STUDIO (TÍCH HỢP AI INTELLIGENCE TƯƠNG TÁC THẬT) */}
+      {/* ========================================================================= */}
+      {currentRole === 'writer' && (
+        <section className="flex-1 flex flex-col">
+          <div className="bg-white border-b border-slate-200 px-6 py-2.5 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <span className="px-2 py-0.5 rounded bg-blue-50 text-brand-700 font-bold border border-blue-200">
+                WRITER SCRIPT STUDIO
+              </span>
+              <span className="text-slate-300">/</span>
+              <h1 className="text-sm font-bold text-slate-900">{script.title}</h1>
+              <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">{script.gradeLevel}</span>
+            </div>
+            <div className="flex items-center space-x-2 text-xs">
+              <button
+                onClick={() => setIsCreateProjectModalOpen(true)}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold flex items-center space-x-1"
+              >
+                <PlusCircle className="w-3.5 h-3.5 text-brand-600" />
+                <span>+ Đề Tài Mới</span>
+              </button>
+              <button
+                onClick={() => setIsVersionDiffModalOpen(true)}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold flex items-center space-x-1"
+              >
+                <GitCompare className="w-3.5 h-3.5 text-brand-600" />
+                <span>So Sánh Lịch Sử (Diff)</span>
+              </button>
+              <button
+                onClick={() => {
+                  setScript((prev) => ({ ...prev, scriptStatus: 'IN_REVIEW' }));
+                  showToast('Đã gửi kịch bản sang Reviewer để thẩm định!');
+                }}
+                className="px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold shadow-xs flex items-center space-x-1"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Gửi Kịch Bản Xin Duyệt</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 flex overflow-hidden">
+            {/* Cột 1: Cấu trúc cảnh */}
+            <aside className="w-72 bg-white border-r border-slate-200 p-4 overflow-y-auto">
+              <div className="flex items-center justify-between mb-3 text-xs">
+                <span className="font-bold uppercase tracking-wider text-slate-500">Cấu trúc cảnh ({script.scenes.length})</span>
+                <span className="font-semibold text-brand-600">{script.totalDurationSeconds}s</span>
+              </div>
+              <div className="space-y-2">
+                {script.scenes.map((sc, i) => (
                   <div
                     key={sc.id}
-                    className="p-3 rounded-lg border border-slate-200 hover:border-brand-400 bg-white cursor-pointer text-xs space-y-1"
+                    onClick={() => setActiveSceneId(sc.id)}
+                    className={`p-3 rounded-lg border cursor-pointer text-xs space-y-1 ${
+                      sc.id === selectedScene.id ? 'bg-blue-50 border-brand-400 font-semibold' : 'bg-white border-slate-200'
+                    }`}
                   >
-                    <div className="flex justify-between font-bold text-slate-800">
-                      <span>{sc.name.split(':')[0]}</span>
-                      <span className="text-slate-400">{sc.duration}</span>
+                    <div className="flex justify-between">
+                      <span>Cảnh 0{i + 1}</span>
+                      <span className="text-slate-400">{Math.round((sc.durationInFrames || 150) / 30)}s</span>
                     </div>
-                    <p className="text-[11px] text-slate-500 line-clamp-1">{sc.title}</p>
+                    <p className="text-[11px] text-slate-600 line-clamp-1">{sc.title}</p>
                   </div>
                 ))}
               </div>
@@ -820,28 +989,41 @@ export default function App() {
             <main className="flex-1 bg-slate-50 p-6 overflow-y-auto flex justify-center">
               <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-xl shadow-xs p-6 flex flex-col space-y-5">
                 <div className="border-b pb-3 flex justify-between items-center">
-                  <div>
-                    <span className="text-xs font-semibold text-brand-600 uppercase">Cảnh đang soạn thảo</span>
-                    <h2 className="text-base font-bold text-slate-900">Scene 2: Phát biểu công thức & Điều kiện</h2>
-                  </div>
-                  <span className="text-xs text-slate-500 font-mono">20 giây</span>
+                  <h2 className="text-base font-bold text-slate-900">{selectedScene.title}</h2>
+                  <span className="text-xs font-mono text-slate-400">{selectedScene.type}</span>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center space-x-1.5">
                     <Mic className="w-3.5 h-3.5 text-brand-600" />
-                    <span>Lời thoại Thuyết minh (TTS Audio Script)</span>
+                    <span>Lời thoại Thuyết minh (TTS Audio Script):</span>
                   </label>
                   <textarea
                     rows={6}
-                    defaultValue="Cho phương trình bậc hai dạng chuẩn ax² + bx + c = 0. Điều kiện tiên quyết là biệt thức delta phải lớn hơn hoặc bằng không để phương trình có nghiệm. Khi đó, tổng hai nghiệm x1 + x2 bằng trừ b trên a, và tích hai nghiệm x1 nhân x2 bằng c trên a."
+                    value={selectedScene.narration}
+                    onChange={(e) => updateSceneProperty((s) => ({ ...s, narration: e.target.value }))}
                     className="w-full text-sm text-slate-800 p-3 border border-slate-200 rounded-lg focus:border-brand-500 focus:outline-none leading-relaxed"
                   />
                 </div>
+
+                {/* Kết quả AI hiển thị ngay dưới form */}
+                {aiAnalysisResult.type && (
+                  <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 space-y-2 animate-fade-in">
+                    <div className="flex items-center gap-2 font-bold text-xs text-blue-900">
+                      <Sparkles className="w-4 h-4 text-brand-600" />
+                      <span>{aiAnalysisResult.title}</span>
+                    </div>
+                    <ul className="text-xs text-blue-800 space-y-1 pl-4 list-disc">
+                      {aiAnalysisResult.details.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </main>
 
-            {/* Cột 3: AI Script Intelligence */}
+            {/* Cột 3: AI Script Intelligence (Bấm nút nào phản hồi phân tích thật nút đó) */}
             <aside className="w-80 bg-white border-l border-slate-200 p-5 flex flex-col justify-between overflow-y-auto custom-scrollbar text-xs">
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 pb-3 border-b border-slate-100">
@@ -854,23 +1036,49 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="space-y-2">
                   <button
-                    onClick={() => showToast('AI: Đã phân cảnh tự động 5 bước tối ưu!')}
-                    className="p-2.5 rounded-lg border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 text-left transition-all"
+                    onClick={() => handleTriggerAiAction('resegment')}
+                    className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 text-left transition-all"
                   >
-                    <Split className="w-4 h-4 text-emerald-600 mb-1" />
-                    <div className="font-bold text-slate-800 text-[11px]">1. Phân Cảnh Tự Động</div>
-                    <div className="text-[10px] text-slate-400">Gợi ý scenes & duration</div>
+                    <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
+                      <Split className="w-4 h-4 text-emerald-600" />
+                      <span>1. Phân Cảnh Tự Động</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Tối ưu thời lượng các scenes</p>
                   </button>
 
                   <button
-                    onClick={() => showToast('AI: Độ khó đạt chuẩn Sách Giáo Khoa Lớp 9!')}
-                    className="p-2.5 rounded-lg border border-slate-200 hover:border-brand-400 hover:bg-blue-50/50 text-left transition-all"
+                    onClick={() => handleTriggerAiAction('grade')}
+                    className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-brand-400 hover:bg-blue-50/50 text-left transition-all"
                   >
-                    <BarChart2 className="w-4 h-4 text-brand-600 mb-1" />
-                    <div className="font-bold text-slate-800 text-[11px]">2. Chấm Độ Khó</div>
-                    <div className="text-[10px] text-slate-400">Readability cho Lớp 9</div>
+                    <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
+                      <BarChart2 className="w-4 h-4 text-brand-600" />
+                      <span>2. Chấm Độ Khó (Readability)</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Đánh giá theo khối lớp</p>
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerAiAction('extract')}
+                    className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-left transition-all"
+                  >
+                    <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
+                      <Tags className="w-4 h-4 text-indigo-600" />
+                      <span>3. Trích Xuất Khái Niệm</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Lấy các STEM concept tags</p>
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerAiAction('terms')}
+                    className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-amber-400 hover:bg-amber-50/50 text-left transition-all"
+                  >
+                    <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
+                      <ShieldAlert className="w-4 h-4 text-amber-500" />
+                      <span>4. Bắt Lỗi Thuật Ngữ</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Quét tính nhất quán khoa học</p>
                   </button>
                 </div>
               </div>
@@ -880,44 +1088,82 @@ export default function App() {
       )}
 
       {/* ========================================================================= */}
-      {/* 📚 THƯ VIỆN MEDIA STEM CÔNG KHAI */}
+      {/* 🛡️ MÀN HÌNH 4: ADMIN PORTAL (QUẢN TRỊ VIÊN & TỔ BỘ MÔN) */}
       {/* ========================================================================= */}
-      {currentScreen === 'screen-library' && (
+      {currentRole === 'admin' && (
         <main className="flex-1 bg-slate-50 p-6 flex flex-col">
           <div className="max-w-6xl w-full mx-auto space-y-6">
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex items-center justify-between">
               <div>
-                <div className="flex items-center space-x-2">
-                  <h1 className="text-xl font-extrabold text-slate-900">Thư Viện Clip STEM Nội Bộ (Media Library)</h1>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">Đã Xuất Bản</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Kho lưu trữ video bài giảng STEM đã duyệt, xuất bản lên kênh YouTube Data API hoặc nhúng LMS / Moodle.
-                </p>
+                <h1 className="text-xl font-extrabold text-slate-900">Bảng Quản Trị Hệ Thống (Admin Control Center)</h1>
+                <p className="text-xs text-slate-500 mt-1">Phân quyền RBAC, quản lý tổ bộ môn và mã nhúng LMS.</p>
               </div>
               <button
-                onClick={() => setCurrentScreen('screen-production')}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center space-x-1.5 self-start md:self-auto"
+                onClick={() => setIsInviteWorkspaceModalOpen(true)}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center space-x-2"
               >
-                <Clapperboard className="w-4 h-4" />
-                <span>Quay lại Studio Dựng Video →</span>
+                <UserPlus className="w-4 h-4" />
+                <span>+ Cấp Quyền Thành Viên Mới</span>
+              </button>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+              <h2 className="text-sm font-bold text-slate-900">Thành viên trong Tổ bộ môn ({SAMPLE_MEMBERS.length})</h2>
+              <div className="divide-y divide-slate-100 text-xs">
+                {SAMPLE_MEMBERS.map((m) => (
+                  <div key={m.id} className="py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{m.avatar}</span>
+                      <div>
+                        <div className="font-bold text-slate-800">{m.name}</div>
+                        <div className="text-slate-400 font-mono text-[11px]">{m.email}</div>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-brand-700 font-medium border border-blue-200">
+                      {m.role}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </main>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 📚 MÀN HÌNH 5: THƯ VIỆN MEDIA STEM */}
+      {/* ========================================================================= */}
+      {currentRole === 'library' && (
+        <main className="flex-1 bg-slate-50 p-6 flex flex-col">
+          <div className="max-w-6xl w-full mx-auto space-y-6">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-extrabold text-slate-900">Thư Viện Clip STEM Nội Bộ (Media Library)</h1>
+                <p className="text-xs text-slate-500 mt-1">Kho video bài giảng STEM đã duyệt, sẵn sàng nhúng vào LMS hoặc chia sẻ.</p>
+              </div>
+              <button
+                onClick={() => setIsPublishModalOpen(true)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center space-x-1.5"
+              >
+                <Code className="w-4 h-4" />
+                <span>Xem Mã Nhúng LMS</span>
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
                 <div className="aspect-video bg-gradient-to-br from-blue-900 to-indigo-950 p-4 text-white flex flex-col justify-between">
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/30 text-blue-300 w-fit">Toán • Lớp 9</span>
-                  <div className="font-bold text-base">Định lý Vi-ét và Ứng dụng giải toán</div>
-                  <span className="text-[11px] text-slate-400">Thời lượng: 01:25</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/30 text-blue-300 w-fit">{script.subject} • {script.gradeLevel}</span>
+                  <div className="font-bold text-base">{script.title}</div>
+                  <span className="text-[11px] text-slate-400">Thời lượng: ~{script.totalDurationSeconds}s</span>
                 </div>
                 <div className="p-4 flex items-center justify-between text-xs">
-                  <span className="text-emerald-600 font-bold">✓ Đã duyệt xuất bản</span>
+                  <span className="text-emerald-600 font-bold">✓ Đã xuất bản LMS</span>
                   <button
                     onClick={() => setIsPublishModalOpen(true)}
                     className="px-3 py-1.5 bg-brand-50 text-brand-700 font-bold rounded-lg hover:bg-brand-100"
                   >
-                    Xem Mã Nhúng LMS
+                    Lấy mã iFrame
                   </button>
                 </div>
               </div>
@@ -927,104 +1173,87 @@ export default function App() {
       )}
 
       {/* ========================================================================= */}
-      {/* ⚙️ DASHBOARD ADMIN */}
+      {/* 📌 MODAL TẠO DỰ ÁN KỊCH BẢN MỚI (TẠO CHỦ ĐỀ MỚI ĐỘNG 100%) */}
       {/* ========================================================================= */}
-      {currentScreen === 'dashboard-admin' && (
-        <main className="flex-1 bg-slate-50 p-6 flex flex-col">
-          <div className="max-w-6xl w-full mx-auto space-y-6">
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex items-center justify-between">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h1 className="text-xl font-extrabold text-slate-900">Bảng Quản Trị Hệ Thống (Admin Control Center)</h1>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 font-bold border border-rose-200">System Root</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">Quản lý cấp quyền RBAC, giám sát chi phí OpenAI API, hàng đợi BullMQ và thư viện mẫu Remotion.</p>
-              </div>
-              <button
-                onClick={() => setIsInviteWorkspaceModalOpen(true)}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center space-x-2 transition-colors"
-              >
-                <UserPlus className="w-4 h-4" />
-                <span>+ Cấp Quyền Người Dùng Mới</span>
+      {isCreateProjectModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-1.5">
+                <PlusCircle className="w-4 h-4 text-brand-600" />
+                <span>Tạo Dự Án Kịch Bản Video Mới</span>
+              </h3>
+              <button onClick={() => setIsCreateProjectModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
               </button>
             </div>
-          </div>
-        </main>
-      )}
 
-      {/* ========================================================================= */}
-      {/* 🔐 MÀN HÌNH ĐĂNG NHẬP / CHỌN VAI TRÒ NHANH (LOGIN SCREEN) */}
-      {/* ========================================================================= */}
-      {currentScreen === 'login' && (
-        <div className="fixed inset-0 bg-slate-100 z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-4xl bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden grid grid-cols-1 md:grid-cols-2 min-h-[560px]">
-            {/* Cột Trái */}
-            <div className="bg-gradient-to-br from-brand-600 via-indigo-600 to-slate-900 p-8 text-white flex flex-col justify-between relative overflow-hidden">
-              <div className="relative z-10">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center font-extrabold text-2xl">
-                    S
-                  </div>
-                  <span className="font-extrabold text-2xl tracking-tight">STEMotion</span>
-                </div>
-                <h2 className="text-2xl font-bold leading-snug">Hệ thống sản xuất clip STEM có hỗ trợ AI</h2>
-                <p className="text-blue-100 text-xs mt-3 leading-relaxed">
-                  Quy trình hoàn chỉnh: Admin cấp quyền RBAC ➔ Writer viết kịch bản với AI Intelligence ➔ Reviewer thẩm định kịch bản & clip ➔ Producer dựng Remotion Studio ➔ Xuất bản YouTube & Thư viện số.
-                </p>
-              </div>
-
-              <div className="text-[11px] text-blue-200/80 mt-4">
-                © 2026 STEMotion Platform • Capstone Project
-              </div>
-            </div>
-
-            {/* Cột Phải */}
-            <div className="p-8 flex flex-col justify-between bg-white">
+            <form onSubmit={handleCreateNewProject} className="space-y-3">
               <div>
-                <h3 className="text-xl font-bold text-slate-900 mb-1">Đăng nhập trải nghiệm</h3>
-                <p className="text-xs text-slate-500 mb-4">Chọn vai trò trong hệ sinh thái STEMotion</p>
+                <label className="font-bold text-slate-700 block mb-1">Chủ đề bài học STEM:</label>
+                <input
+                  type="text"
+                  required
+                  value={newProjTitle}
+                  onChange={(e) => setNewProjTitle(e.target.value)}
+                  placeholder="VD: Cân bằng phản ứng Oxi hóa khử, Định luật khúc xạ..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:border-brand-500 focus:outline-none"
+                />
+              </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs mb-4">
-                  <button
-                    onClick={() => {
-                      handleRoleSwitch('producer');
-                      setCurrentScreen('screen-production');
-                    }}
-                    className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-left hover:bg-indigo-100 transition-all font-bold text-indigo-700"
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Môn Học:</label>
+                  <select
+                    value={newProjSubject}
+                    onChange={(e) => setNewProjSubject(e.target.value as STEMSubject)}
+                    className="w-full p-2 border border-slate-200 rounded-lg bg-white"
                   >
-                    <div>3. Producer (Dựng video)</div>
-                    <div className="text-[10px] text-slate-500 font-normal">Remotion Studio & Render</div>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      handleRoleSwitch('writer');
-                      setCurrentScreen('dashboard-writer');
-                    }}
-                    className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-left hover:bg-blue-100 transition-all font-bold text-brand-700"
+                    <option value="Physics">Vật Lý (Physics)</option>
+                    <option value="Math">Toán Học (Math)</option>
+                    <option value="Chemistry">Hóa Học (Chemistry)</option>
+                    <option value="Biology">Sinh Học (Biology)</option>
+                    <option value="ComputerScience">Tin Học (Computer Science)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Khối Lớp:</label>
+                  <select
+                    value={newProjGrade}
+                    onChange={(e) => setNewProjGrade(e.target.value)}
+                    className="w-full p-2 border border-slate-200 rounded-lg bg-white"
                   >
-                    <div>1. Writer (Biên kịch)</div>
-                    <div className="text-[10px] text-slate-500 font-normal">Script Studio & AI</div>
-                  </button>
+                    <option value="Lớp 9">Lớp 9</option>
+                    <option value="Lớp 10">Lớp 10</option>
+                    <option value="Lớp 11">Lớp 11</option>
+                    <option value="Lớp 12">Lớp 12</option>
+                  </select>
                 </div>
               </div>
 
-              <button
-                onClick={() => setCurrentScreen('screen-production')}
-                className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs"
-              >
-                Vào Studio Dựng Video Ngay →
-              </button>
-            </div>
+              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateProjectModalOpen(false)}
+                  className="px-3.5 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold shadow-xs flex items-center space-x-1"
+                >
+                  <span>Khởi Tạo & Mở Studio</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* MODALS */}
-      {/* ========================================================================= */}
-
       {/* MODAL: MỜI THÀNH VIÊN VÀO WORKSPACE */}
+      {/* ========================================================================= */}
       {isInviteWorkspaceModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
@@ -1047,14 +1276,12 @@ export default function App() {
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:border-brand-500 focus:outline-none"
                 />
               </div>
-
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Phân Quyền Vai Trò (Role):</label>
+                <label className="font-bold text-slate-700 block mb-1">Vai Trò:</label>
                 <select className="w-full p-2 border border-slate-200 rounded-lg bg-white">
                   <option>Writer (Biên kịch kịch bản)</option>
-                  <option>Reviewer / Editor (Thẩm định học thuật & clip)</option>
+                  <option>Reviewer (Thẩm định học thuật & clip)</option>
                   <option>Producer (Dựng video Remotion)</option>
-                  <option>Admin (Trưởng bộ môn)</option>
                 </select>
               </div>
             </div>
@@ -1080,65 +1307,9 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL: ĐỔI TÀI NGUYÊN ĐỒ HỌA STEM (SWAP ASSETS) */}
-      {isSwapAssetModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-1.5">
-                <Image className="w-4 h-4 text-indigo-600" />
-                <span>Kho Tài Nguyên Đồ Họa STEM (Swap Assets)</span>
-              </h3>
-              <button onClick={() => setIsSwapAssetModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div
-                onClick={() => {
-                  setIsSwapAssetModalOpen(false);
-                  showToast('Đã áp dụng Sơ đồ Parabol Tương Tác vào Scene!');
-                }}
-                className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
-              >
-                <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-brand-600 font-bold">
-                  SVG Parabol
-                </div>
-                <div className="font-bold text-slate-800 text-[11px]">Đồ thị Parabol</div>
-              </div>
-
-              <div
-                onClick={() => {
-                  setIsSwapAssetModalOpen(false);
-                  showToast('Đã áp dụng Mô hình Nguyên tử vào Scene!');
-                }}
-                className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
-              >
-                <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-purple-600 font-bold">
-                  Atom 3D
-                </div>
-                <div className="font-bold text-slate-800 text-[11px]">Mô hình Hóa Học</div>
-              </div>
-
-              <div
-                onClick={() => {
-                  setIsSwapAssetModalOpen(false);
-                  showToast('Đã áp dụng Biểu đồ Cột Số liệu vào Scene!');
-                }}
-                className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
-              >
-                <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-emerald-600 font-bold">
-                  Bar Chart
-                </div>
-                <div className="font-bold text-slate-800 text-[11px]">Biểu đồ Dữ liệu</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: MÃ NHÚNG LMS & XUẤT BẢN */}
+      {/* ========================================================================= */}
+      {/* MODAL: MÃ NHÚNG LMS */}
+      {/* ========================================================================= */}
       {isPublishModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
@@ -1157,7 +1328,7 @@ export default function App() {
               <textarea
                 readOnly
                 rows={4}
-                defaultValue={`<iframe src="https://stemotion.edu.vn/embed/SCR-MATH9-001" width="100%" height="540" frameborder="0" allowfullscreen></iframe>`}
+                defaultValue={`<iframe src="https://stemotion.edu.vn/embed/${script.id}" width="100%" height="540" frameborder="0" allowfullscreen></iframe>`}
                 className="w-full p-2.5 rounded-lg bg-slate-900 text-slate-200 font-mono text-xs"
               />
             </div>
@@ -1165,7 +1336,7 @@ export default function App() {
             <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(`<iframe src="https://stemotion.edu.vn/embed/SCR-MATH9-001" width="100%" height="540" frameborder="0" allowfullscreen></iframe>`);
+                  navigator.clipboard.writeText(`<iframe src="https://stemotion.edu.vn/embed/${script.id}" width="100%" height="540" frameborder="0" allowfullscreen></iframe>`);
                   showToast('Đã sao chép mã nhúng LMS vào bộ nhớ tạm!');
                   setIsPublishModalOpen(false);
                 }}
@@ -1178,14 +1349,79 @@ export default function App() {
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* MODAL: ĐỔI TÀI NGUYÊN ĐỒ HỌA STEM */}
+      {/* ========================================================================= */}
+      {isSwapAssetModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-1.5">
+                <Image className="w-4 h-4 text-indigo-600" />
+                <span>Kho Tài Nguyên Đồ Họa STEM</span>
+              </h3>
+              <button onClick={() => setIsSwapAssetModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div
+                onClick={() => {
+                  handleAddNewScene('MATH_FORMULA');
+                  setIsSwapAssetModalOpen(false);
+                  showToast('Đã chèn sơ đồ Toán học mới vào Scene!');
+                }}
+                className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
+              >
+                <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-brand-600 font-bold">
+                  KaTeX Formula
+                </div>
+                <div className="font-bold text-slate-800 text-[11px]">Công Thức KaTeX</div>
+              </div>
+
+              <div
+                onClick={() => {
+                  handleAddNewScene('DATA_CHART');
+                  setIsSwapAssetModalOpen(false);
+                  showToast('Đã chèn Biểu đồ dữ liệu vào Scene!');
+                }}
+                className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
+              >
+                <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-emerald-600 font-bold">
+                  Bar Chart
+                </div>
+                <div className="font-bold text-slate-800 text-[11px]">Biểu Đồ Cột Động</div>
+              </div>
+
+              <div
+                onClick={() => {
+                  handleAddNewScene('STEM_QUIZ');
+                  setIsSwapAssetModalOpen(false);
+                  showToast('Đã chèn Câu hỏi trắc nghiệm vào Scene!');
+                }}
+                className="p-3 border rounded-xl hover:border-brand-500 hover:bg-blue-50 cursor-pointer text-center space-y-1.5"
+              >
+                <div className="h-16 bg-slate-100 rounded-lg flex items-center justify-center font-mono text-xs text-amber-600 font-bold">
+                  STEM Quiz
+                </div>
+                <div className="font-bold text-slate-800 text-[11px]">Thẻ Trắc Nghiệm</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL: SO SÁNH DIFF PHIÊN BẢN */}
+      {/* ========================================================================= */}
       {isVersionDiffModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
                 <GitCompare className="w-4 h-4 text-brand-600" />
-                <span>So Sánh Lịch Sử (Diff v1.1 vs v1.2)</span>
+                <span>So Sánh Lịch Sử Phiên Bản (Diff v1.1 vs v1.2)</span>
               </h3>
               <button onClick={() => setIsVersionDiffModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
