@@ -70,19 +70,84 @@ export const authService = {
       return user;
     }
 
-    const response = await apiClient.post<{ token: string; user: UserProfile }>('/auth/login', {
+    const response = await apiClient.post<any>('/auth/login', {
       email,
       password: pass,
     });
 
-    if (response?.token) {
-      apiClient.setAuthToken(response.token);
+    if (response?.accessToken) {
+      apiClient.setAuthToken(response.accessToken);
     }
     if (response?.user) {
-      this.setCurrentUser(response.user);
-      return response.user;
+      const user = this._toProfile(response.user);
+      this.setCurrentUser(user);
+      return user;
     }
     return this.getCurrentUser();
+  },
+
+  /** Creates an account and signs in with the returned token. */
+  async register(
+    fullName: string,
+    email: string,
+    pass: string,
+    role: UserRole = 'writer'
+  ): Promise<UserProfile> {
+    if (apiClient.isMockMode()) {
+      await apiClient.mockDelay(200);
+      return this.login(email, pass);
+    }
+
+    const response = await apiClient.post<any>('/auth/register', {
+      fullName,
+      email,
+      password: pass,
+      role: this._toBackendRole(role),
+    });
+
+    if (response?.accessToken) {
+      apiClient.setAuthToken(response.accessToken);
+    }
+    const user = this._toProfile(response.user);
+    this.setCurrentUser(user);
+    return user;
+  },
+
+  /** Re-reads the signed-in user from the backend, e.g. after a reload. */
+  async fetchCurrentUser(): Promise<UserProfile> {
+    if (apiClient.isMockMode() || !apiClient.getAuthToken()) {
+      return this.getCurrentUser();
+    }
+    try {
+      const me = await apiClient.get<any>('/auth/me');
+      const user = this._toProfile(me);
+      this.setCurrentUser(user);
+      return user;
+    } catch (error) {
+      console.warn('[authService] Could not refresh the current user:', error);
+      return this.getCurrentUser();
+    }
+  },
+
+  /** The backend spells roles in upper case; the UI uses capitalised names. */
+  _toProfile(raw: any): UserProfile {
+    const roleMap: Record<string, UserRole> = {
+      WRITER: 'writer',
+      REVIEWER: 'reviewer',
+      PRODUCER: 'producer',
+      ADMIN: 'admin',
+    };
+    return {
+      ...DEFAULT_MOCK_USER,
+      id: raw?.id ?? DEFAULT_MOCK_USER.id,
+      name: raw?.fullName ?? raw?.name ?? DEFAULT_MOCK_USER.name,
+      email: raw?.email ?? DEFAULT_MOCK_USER.email,
+      role: roleMap[raw?.role] ?? (raw?.role as UserRole) ?? DEFAULT_MOCK_USER.role,
+    };
+  },
+
+  _toBackendRole(role: UserRole): string {
+    return String(role).toUpperCase();
   },
 
   logout(): void {

@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from './apiClient';
+import { workspaceService } from './workspaceService';
 import { STEMScript, STEMSubject, SceneData } from '../types/stem';
 import { DEFAULT_SAMPLE_SCRIPT } from '../lib/sampleData';
 
@@ -14,6 +15,10 @@ export interface CreateProjectPayload {
   subject: STEMSubject;
   gradeLevel: string;
   topicPrompt?: string;
+  /** Frames per second for the clip; the backend defaults to 30. */
+  fps?: number;
+  /** Optional starting scenes, e.g. a draft accepted from the AI assistant. */
+  scenes?: SceneData[];
 }
 
 export const projectService = {
@@ -143,8 +148,9 @@ export const projectService = {
     }
 
     try {
-      const query = filterSubject ? `?subject=${filterSubject}` : '';
-      return await apiClient.get<STEMScript[]>(`/projects${query}`);
+      const workspaceId = await workspaceService.resolveActiveWorkspaceId();
+      const list = await apiClient.get<STEMScript[]>(`/workspaces/${workspaceId}/scripts`);
+      return filterSubject ? list.filter((p) => p.subject === filterSubject) : list;
     } catch (error) {
       console.warn('[projectService] Backend unreachable, falling back to mock projects:', error);
       const all = this._getMockProjects();
@@ -165,7 +171,7 @@ export const projectService = {
     }
 
     try {
-      return await apiClient.get<STEMScript>(`/projects/${id}`);
+      return await apiClient.get<STEMScript>(`/scripts/${id}`);
     } catch (error) {
       console.warn('[projectService] Backend unreachable, falling back to cached project:', error);
       const all = this._getMockProjects();
@@ -182,7 +188,14 @@ export const projectService = {
     }
 
     try {
-      return await apiClient.post<STEMScript>('/projects', payload);
+      const workspaceId = await workspaceService.resolveActiveWorkspaceId();
+      return await apiClient.post<STEMScript>(`/workspaces/${workspaceId}/scripts`, {
+        title: payload.title,
+        subject: payload.subject,
+        gradeLevel: payload.gradeLevel,
+        fps: payload.fps ?? 30,
+        scenes: payload.scenes ?? [],
+      });
     } catch (error) {
       console.warn('[projectService] Backend unreachable, fallback to local project:', error);
       return this._generateNewProject(payload);
@@ -205,7 +218,7 @@ export const projectService = {
     }
 
     try {
-      return await apiClient.put<STEMScript>(`/projects/${id}`, updates);
+      return await apiClient.put<STEMScript>(`/scripts/${id}`, updates);
     } catch (error) {
       console.warn('[projectService] Backend unreachable, keeping local update:', error);
       return updated;
@@ -222,7 +235,7 @@ export const projectService = {
     }
 
     try {
-      await apiClient.delete(`/projects/${id}`);
+      await apiClient.delete(`/scripts/${id}`);
     } catch (error) {
       console.warn('[projectService] Backend unreachable, deleted locally:', error);
     }

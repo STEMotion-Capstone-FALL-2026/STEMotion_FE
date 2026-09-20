@@ -35,12 +35,13 @@ const TOKEN_KEY = 'stemotion_access_token';
 
 export const apiClient = {
   getBaseUrl(): string {
-    return (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+    return (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
   },
 
+  // Defaults to the real backend; set VITE_USE_MOCK=true to work offline.
   isMockMode(): boolean {
     const mockEnv = (import.meta as any).env?.VITE_USE_MOCK;
-    return mockEnv === undefined || mockEnv === 'true' || mockEnv === true;
+    return mockEnv === 'true' || mockEnv === true;
   },
 
   getAuthToken(): string | null {
@@ -88,12 +89,13 @@ export const apiClient = {
         headers,
       });
 
-      const json = await response.json();
+      const raw = await response.text();
+      const json = raw ? JSON.parse(raw) : {};
 
       if (!response.ok || json.success === false) {
         throw new ApiError(
-          json.error?.message || response.statusText || 'API Request Failed',
-          json.error?.code || `HTTP_${response.status}`,
+          json.error?.message || json.message || response.statusText || 'API Request Failed',
+          json.error?.code || json.code || `HTTP_${response.status}`,
           response.status,
           json.error?.details
         );
@@ -123,6 +125,14 @@ export const apiClient = {
   async put<T>(endpoint: string, body?: any, headers?: Record<string, string>): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PUT',
+      body: body ? JSON.stringify(body) : undefined,
+      headers,
+    });
+  },
+
+  async patch<T>(endpoint: string, body?: any, headers?: Record<string, string>): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
       body: body ? JSON.stringify(body) : undefined,
       headers,
     });

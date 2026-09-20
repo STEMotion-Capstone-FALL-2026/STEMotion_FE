@@ -46,6 +46,6 @@ export const adminService = {
         { id: 'tpl_4', name: 'Thuật toán Duyệt Đồ Thị', category: 'ComputerScience', previewType: 'ALGORITHM_WALKTHROUGH', tags: ['Python', 'Graph'] },
       ];
     }
-    return apiClient.get<STEMAssetTemplate[]>('/library/templates');
+    return apiClient.get<STEMAssetTemplate[]>('/templates');
   },
 };
