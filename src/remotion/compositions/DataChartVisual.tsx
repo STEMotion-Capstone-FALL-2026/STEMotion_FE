@@ -5,9 +5,9 @@ import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { DataChartProps } from '@/types/stem';
 
 export const DataChartVisual: React.FC<DataChartProps> = ({
-  title,
-  xAxisLabel,
-  yAxisLabel,
+  title = 'Biểu Đồ Số Liệu Trực Quan',
+  xAxisLabel = 'Biến số độc lập (X)',
+  yAxisLabel = 'Giá trị đo lường (Y)',
   dataPoints,
   customFontSize,
   cardScale,
@@ -18,7 +18,13 @@ export const DataChartVisual: React.FC<DataChartProps> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const maxValue = Math.max(...dataPoints.map((d) => d.value), 10);
+  const safeDataPoints = Array.isArray(dataPoints) && dataPoints.length > 0 ? dataPoints : [
+    { label: 'Mẫu A', value: 12, color: 'linear-gradient(to top, #3b82f6, #60a5fa)' },
+    { label: 'Mẫu B', value: 24, color: 'linear-gradient(to top, #6366f1, #818cf8)' },
+    { label: 'Mẫu C', value: 38, color: 'linear-gradient(to top, #10b981, #34d399)' },
+  ];
+
+  const maxValue = Math.max(...safeDataPoints.map((d) => d.value || 0), 10);
 
   // Dynamic theme styling for the inner card
   const getThemeClass = () => {
@@ -95,7 +101,7 @@ export const DataChartVisual: React.FC<DataChartProps> = ({
 
         {/* Bars Container */}
         <div className="h-72 flex items-end justify-around gap-6 border-b border-l border-slate-700 p-4">
-          {dataPoints.map((point, idx) => {
+          {safeDataPoints.map((point, idx) => {
             const barDelay = 15 + idx * 8;
             const barSpring = spring({
               frame: frame - barDelay,

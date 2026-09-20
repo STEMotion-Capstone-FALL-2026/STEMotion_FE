@@ -58,14 +58,20 @@ export const AlgorithmWalkthrough: React.FC<AlgorithmWalkthroughProps> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const codeLines = codeSnippet.split('\n');
+  const safeCodeSnippet = codeSnippet || 'def execute_step(n):\n    # Giải thuật tối ưu\n    return n * 2';
+  const safeSteps = Array.isArray(steps) && steps.length > 0 ? steps : [
+    { lineHighlight: 1, variableState: 'n = 5', note: 'Khởi tạo tham số thuật toán' },
+    { lineHighlight: 3, variableState: 'result = 10', note: 'Tính toán giá trị trả về' },
+  ];
+
+  const codeLines = safeCodeSnippet.split('\n');
 
   // Determine active step based on frame
   const currentStepIndex = Math.min(
     Math.floor((frame / (fps * 2.5))),
-    steps.length - 1
+    safeSteps.length - 1
   );
-  const activeStep = steps[Math.max(0, currentStepIndex)] || steps[0];
+  const activeStep = safeSteps[Math.max(0, currentStepIndex)] || safeSteps[0];
 
   const colSpans = getColSpanClass();
 
@@ -132,7 +138,7 @@ export const AlgorithmWalkthrough: React.FC<AlgorithmWalkthroughProps> = ({
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
               <span className="text-xs uppercase font-mono font-bold text-amber-400">Trạng thái bộ nhớ (Memory Heap)</span>
-              <span className="text-xs text-slate-400 font-mono">Step {Math.max(1, currentStepIndex + 1)} / {steps.length}</span>
+              <span className="text-xs text-slate-400 font-mono">Step {Math.max(1, currentStepIndex + 1)} / {safeSteps.length}</span>
             </div>
 
             <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 font-mono text-xs text-emerald-400 mb-4" style={{ fontSize: `${Math.max(12, Math.round(baseSize * 0.48))}px` }}>

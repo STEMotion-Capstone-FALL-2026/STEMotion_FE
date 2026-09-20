@@ -8,47 +8,193 @@ import { STEMScript, STEMSubject, SceneData, SceneType } from '../types/stem';
 import { projectService } from './projectService';
 
 export const scriptService = {
-  async segmentScript(rawScript: string): Promise<any> {
+  async segmentScript(rawScript: string, subject?: STEMSubject, gradeLevel?: string): Promise<any> {
+    return this.runAiAction('resegment', rawScript, subject, gradeLevel);
+  },
+
+  async runAiAction(
+    action: 'resegment' | 'grade' | 'extract' | 'terms',
+    scriptText: string,
+    subject?: STEMSubject,
+    gradeLevel?: string
+  ): Promise<any> {
     if (apiClient.isMockMode()) {
       await apiClient.mockDelay(500);
+      if (action === 'grade') {
+        return {
+          readabilityScore: 85,
+          estimatedGrade: gradeLevel || 'Lớp 10',
+          matchesTargetGrade: true,
+          verdict: 'Nội dung kiến thức phù hợp chuẩn sư phạm.',
+          suggestions: ['Bổ sung thêm ví dụ thực tế để học sinh dễ liên hệ.'],
+        };
+      }
+      if (action === 'extract') {
+        return {
+          concepts: [
+            { name: 'Khái niệm trọng tâm', category: 'Cốt lõi', importance: 'Cao' },
+          ],
+        };
+      }
+      if (action === 'terms') {
+        return { issues: [] };
+      }
       return {
         scenes: [
-          { templateType: 'CONCEPT_OVERVIEW', suggestedDuration: 15, narrationText: 'Giới thiệu khái niệm cốt lõi và hiện tượng thực tiễn.' },
-          { templateType: 'MATH_FORMULA', suggestedDuration: 20, narrationText: 'Khai triển công thức KaTeX và phân tích các thông số.' },
-          { templateType: 'INTERACTIVE_EXPERIMENT', suggestedDuration: 20, narrationText: 'Mô phỏng đồ thị và thực nghiệm ảo trực quan.' },
-          { templateType: 'QUIZ_CHECKPOINT', suggestedDuration: 15, narrationText: 'Câu hỏi trắc nghiệm tương tác kiểm tra độ hiểu bài.' },
-          { templateType: 'SUMMARY_OUTRO', suggestedDuration: 15, narrationText: 'Tổng kết nội dung trọng tâm và bài tập trên Canvas LMS.' },
+          { templateType: 'CONCEPT_OVERVIEW', suggestedDuration: 15, narrationText: 'Giới thiệu khái niệm cốt lõi.' },
+          { templateType: 'MATH_FORMULA', suggestedDuration: 20, narrationText: 'Khai triển công thức KaTeX.' },
         ],
       };
     }
+
     const res = await apiClient.post<any>('/ai/script/action', {
-      action: 'resegment',
-      scriptText: rawScript,
+      action,
+      scriptText,
+      subject: subject || 'Math',
+      gradeLevel: gradeLevel || 'Lớp 10',
     });
-    // The model's payload sits under `result`; unwrap it for the caller.
     return res?.result ?? res;
   },
 
   async generateScriptWithAI(
-    prompt: string,
+    topic: string,
     subject: STEMSubject,
-    gradeLevel: string
+    gradeLevel: string,
+    targetDurationSec: number = 60
   ): Promise<STEMScript> {
     if (apiClient.isMockMode()) {
       await apiClient.mockDelay(500);
       return projectService.createProject({
-        title: prompt || `Khám phá ${subject} - ${gradeLevel}`,
+        title: topic || `Khám phá ${subject} - ${gradeLevel}`,
         subject,
         gradeLevel,
-        topicPrompt: prompt,
+        topicPrompt: topic,
       });
     }
 
-    return apiClient.post<STEMScript>('/ai/script/generate', {
-      prompt,
+    const res = await apiClient.post<any>('/ai/script/generate', {
+      topic,
       subject,
       gradeLevel,
+      targetDurationSec,
     });
+    const payload = res?.result ?? res;
+    const rawScenes: any[] = payload?.scenes || [];
+
+    const scenes: SceneData[] = rawScenes.map((sc, idx) => {
+      const type = sc.type || 'TITLE_HERO';
+      const durationInFrames = sc.durationInFrames || 300;
+
+      const base: any = {
+        id: `scene_ai_${Date.now()}_${idx}`,
+        type,
+        title: sc.title || `Phân cảnh ${idx + 1}`,
+        narration: sc.narration || '',
+        durationInFrames,
+      };
+
+      if (type === 'TITLE_HERO') {
+        return {
+          ...base,
+          subtitle: sc.subtitle || `Chuyên đề ${subject} ${gradeLevel}`,
+          badgeText: sc.badgeText || 'STEMotion AI Studio',
+          subject,
+          gradeLevel,
+        } as SceneData;
+      }
+      if (type === 'MATH_FORMULA') {
+        return {
+          ...base,
+          latex: sc.latex || (sc.props?.latex) || 'f(x) = ax^2 + bx + c',
+          steps: sc.steps || (sc.props?.steps) || [
+            { label: 'Bước 1', latexSnippet: sc.latex || 'f(x)', explanation: 'Đại lượng trọng tâm' },
+          ],
+        } as SceneData;
+      }
+      if (type === 'STEM_QUIZ') {
+        return {
+          ...base,
+          question: sc.question || (sc.props?.question) || 'Khẳng định nào sau đây là chính xác?',
+          options: sc.options || (sc.props?.options) || ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
+          correctIndex: sc.correctIndex ?? (sc.props?.correctIndex ?? 0),
+          hint: sc.hint || (sc.props?.hint) || 'Vận dụng kiến thức vừa học ở phần trước.',
+          explanation: sc.explanation || (sc.props?.explanation) || 'Phương án chính xác theo quy luật bài giảng.',
+        } as SceneData;
+      }
+      if (type === 'CHEMICAL_REACTION') {
+        return {
+          ...base,
+          equation: sc.equation || (sc.props?.equation) || '2H2 + O2 -> 2H2O',
+          reactants: sc.reactants || (sc.props?.reactants) || 'Chất tham gia',
+          products: sc.products || (sc.props?.products) || 'Chất sản phẩm',
+          condition: sc.condition || (sc.props?.condition) || 'Điều kiện phản ứng',
+          observation: sc.observation || (sc.props?.observation) || 'Hiện tượng quan sát',
+        } as SceneData;
+      }
+      if (type === 'COMPARISON_SPLIT') {
+        const topicA = sc.topicA || sc.props?.topicA;
+        const topicB = sc.topicB || sc.props?.topicB;
+        return {
+          ...base,
+          topicA: topicA || {
+            title: sc.leftTitle || 'Khái niệm A',
+            badge: 'Đặc tính A',
+            points: sc.leftPoints || ['Đặc trưng cốt lõi A', 'Mô hình ứng dụng thực tế'],
+          },
+          topicB: topicB || {
+            title: sc.rightTitle || 'Khái niệm B',
+            badge: 'Đặc tính B',
+            points: sc.rightPoints || ['Đặc trưng tương phản B', 'Ứng dụng trong kỹ thuật'],
+          },
+          conclusion: sc.conclusion || sc.props?.conclusion || 'Cả hai mô hình bổ trợ cho nhau tùy theo điều kiện thực tế.',
+        } as SceneData;
+      }
+      if (type === 'DATA_CHART') {
+        return {
+          ...base,
+          chartType: sc.chartType || sc.props?.chartType || 'bar',
+          xAxisLabel: sc.xAxisLabel || sc.props?.xAxisLabel || 'Tham số X',
+          yAxisLabel: sc.yAxisLabel || sc.props?.yAxisLabel || 'Giá trị Y',
+          dataPoints: sc.dataPoints || sc.props?.dataPoints || [
+            { label: 'Mẫu 1', value: 3.5, color: '#3B82F6' },
+            { label: 'Mẫu 2', value: 7.2, color: '#10B981' },
+          ],
+        } as SceneData;
+      }
+      if (type === 'OUTRO') {
+        return {
+          ...base,
+          summaryPoints: sc.summaryPoints || sc.props?.summaryPoints || ['Nắm vững kiến thức trọng tâm', 'Luyện tập bài tập ứng dụng', 'Chuẩn bị bài học kế tiếp'],
+          nextLessonSuggestion: sc.nextLessonSuggestion || sc.props?.nextLessonSuggestion || 'Hẹn gặp lại các em trong bài học tiếp theo!',
+          instructorName: 'STEMotion Studio',
+        } as SceneData;
+      }
+
+      return { ...base, ...sc } as SceneData;
+    });
+
+    return {
+      id: `SCR-${subject.toUpperCase().slice(0, 4)}-${Date.now().toString().slice(-4)}`,
+      title: payload?.title || topic,
+      subject,
+      gradeLevel: payload?.gradeLevel || gradeLevel,
+      version: '1.0',
+      totalDurationSeconds: payload?.totalDurationSeconds || Math.round(scenes.reduce((acc, s) => acc + s.durationInFrames, 0) / 30),
+      scriptStatus: 'DRAFT',
+      scenes: scenes.length ? scenes : [
+        {
+          id: `sc_init_1`,
+          type: 'TITLE_HERO',
+          title: topic,
+          subtitle: `Chuyên đề ${subject} ${gradeLevel}`,
+          badgeText: 'STEMotion Studio',
+          subject,
+          gradeLevel,
+          narration: `Chào mừng các em đến với bài học ${topic}.`,
+          durationInFrames: 180,
+        },
+      ],
+    };
   },
 
   async updateScene(

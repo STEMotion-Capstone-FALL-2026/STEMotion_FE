@@ -5,15 +5,21 @@ import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { STEMQuizProps } from '@/types/stem';
 
 export const STEMQuizCard: React.FC<STEMQuizProps> = ({
-  title,
-  question,
+  title = 'Câu Hỏi Trắc Nghiệm',
+  question = 'Hãy lựa chọn phương án chính xác nhất:',
   options,
-  correctIndex,
-  explanation,
+  correctIndex = 0,
+  explanation = 'Ghi nhớ bản chất quy luật để suy luận chính xác.',
   customFontSize,
   cardScale: userCardScale = 1.0,
   cardWidth = 'standard',
 }) => {
+  const safeOptions = Array.isArray(options) && options.length > 0 ? options : [
+    'Phương án A: Khẳng định đúng',
+    'Phương án B: Chưa chính xác',
+    'Phương án C: Điều kiện chưa đủ',
+    'Phương án D: Cả A và B',
+  ];
   const baseSize = customFontSize || 30;
   const questionFontSize = Math.round(baseSize * 0.9);
   const optionFontSize = Math.max(14, Math.round(baseSize * 0.65));
@@ -84,7 +90,7 @@ export const STEMQuizCard: React.FC<STEMQuizProps> = ({
 
         {/* Options Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {options.map((option, idx) => {
+          {safeOptions.map((option, idx) => {
             const isCorrect = idx === correctIndex;
             let optionStyle = 'bg-slate-900/60 border-slate-800 text-slate-300';
 

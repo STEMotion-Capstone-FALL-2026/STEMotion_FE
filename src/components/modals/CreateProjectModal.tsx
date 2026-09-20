@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { PlusCircle, X } from 'lucide-react';
+import { PlusCircle, X, Sparkles, Loader2 } from 'lucide-react';
 import { STEMSubject } from '../../types/stem';
 
 interface CreateProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (title: string, subject: STEMSubject, grade: string) => void;
+  onCreate: (title: string, subject: STEMSubject, grade: string, useAi: boolean) => Promise<void> | void;
 }
 
 export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
@@ -16,15 +16,22 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   const [newProjTitle, setNewProjTitle] = useState('');
   const [newProjSubject, setNewProjSubject] = useState<STEMSubject>('Physics');
   const [newProjGrade, setNewProjGrade] = useState('Lớp 10');
+  const [useAi, setUseAi] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjTitle.trim()) return;
-    onCreate(newProjTitle.trim(), newProjSubject, newProjGrade);
-    setNewProjTitle('');
-    onClose();
+    setIsLoading(true);
+    try {
+      await onCreate(newProjTitle.trim(), newProjSubject, newProjGrade, useAi);
+      setNewProjTitle('');
+      onClose();
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -83,19 +90,48 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
             </div>
           </div>
 
+          <div className="flex items-center space-x-2 bg-indigo-50/80 border border-indigo-200 p-2.5 rounded-xl">
+            <input
+              type="checkbox"
+              id="useAiGenerate"
+              checked={useAi}
+              onChange={(e) => setUseAi(e.target.checked)}
+              className="rounded text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer"
+            />
+            <label htmlFor="useAiGenerate" className="text-indigo-950 font-medium cursor-pointer select-none">
+              <span className="font-bold flex items-center gap-1.5 text-xs text-indigo-950">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                Soạn kịch bản thông minh bằng Google Gemini AI
+              </span>
+              <span className="text-[10px] text-indigo-600 block">Tự động cấu trúc 5-7 phân cảnh, lời thoại thuyết minh & công thức chuẩn môn học</span>
+            </label>
+          </div>
+
           <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
             <button
               type="button"
+              disabled={isLoading}
               onClick={onClose}
-              className="px-3.5 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 font-semibold"
+              className="px-3.5 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 font-semibold disabled:opacity-50"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold shadow-xs flex items-center space-x-1"
+              disabled={isLoading}
+              className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold shadow-xs flex items-center space-x-1.5 disabled:opacity-75"
             >
-              <span>Khởi Tạo & Mở Studio</span>
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Gemini AI Đang Soạn Kịch Bản...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Khởi Tạo & Mở Studio</span>
+                </>
+              )}
             </button>
           </div>
         </form>

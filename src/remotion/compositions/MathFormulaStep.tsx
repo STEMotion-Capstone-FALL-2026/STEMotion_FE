@@ -6,14 +6,19 @@ import { MathFormulaProps } from '@/types/stem';
 import katex from 'katex';
 
 export const MathFormulaStep: React.FC<MathFormulaProps> = ({
-  title,
-  latex,
+  title = 'Công Thức Trọng Tâm',
+  latex = 'f(x) = ax^2 + bx + c',
   steps,
   customFontSize,
   cardScale,
   cardTheme = 'dark',
   cardWidth = 'standard',
 }) => {
+  const safeSteps = Array.isArray(steps) && steps.length > 0 ? steps : [
+    { label: 'Bước 1', latexSnippet: 'a \\neq 0', explanation: 'Điều kiện xác định của phương trình' },
+    { label: 'Bước 2', latexSnippet: '\\Delta = b^2 - 4ac', explanation: 'Biệt thức quyết định số nghiệm' },
+    { label: 'Bước 3', latexSnippet: 'x = \\frac{-b \\pm \\sqrt{\\Delta}}{2a}', explanation: 'Nghiệm tổng quát của phương trình' },
+  ];
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -121,7 +126,7 @@ export const MathFormulaStep: React.FC<MathFormulaProps> = ({
 
       {/* Progressive Step Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
-        {steps.map((step, idx) => {
+        {safeSteps.map((step, idx) => {
           const stepDelay = 25 + idx * 25;
           const stepOpacity = interpolate(frame, [stepDelay, stepDelay + 15], [0, 1], {
             extrapolateLeft: 'clamp',

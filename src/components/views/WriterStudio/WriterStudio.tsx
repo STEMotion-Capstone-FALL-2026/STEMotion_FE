@@ -14,6 +14,7 @@ import {
   Tags,
   ShieldAlert,
   GripVertical,
+  Volume2,
 } from 'lucide-react';
 import { STEMScript, SceneData } from '../../../types/stem';
 import { UserRole } from '../../../services';
@@ -64,6 +65,33 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
 }) => {
   const [draggedSceneIdx, setDraggedSceneIdx] = useState<number | null>(null);
   const [dragOverSceneIdx, setDragOverSceneIdx] = useState<number | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const handlePlayTts = (text: string) => {
+    if (!('speechSynthesis' in window)) {
+      showToast('Trình duyệt không hỗ trợ Web Speech API', 'warn');
+      return;
+    }
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      showToast('Đã dừng đọc lời thoại.');
+      return;
+    }
+    if (!text?.trim()) {
+      showToast('Vui lòng nhập lời thoại trước khi nghe thử!', 'warn');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'vi-VN';
+    utterance.rate = 1.0;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+    showToast('Đang phát âm giọng đọc tiếng Việt...');
+  };
 
   return (
     <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -342,6 +370,19 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                   className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold border border-emerald-200 flex items-center gap-1"
                 >
                   <span>Tối Ưu Sư Phạm</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePlayTts(selectedScene.narration || '')}
+                  className={`text-[11px] px-2.5 py-1 rounded-lg font-semibold border flex items-center gap-1.5 transition-all ${
+                    isSpeaking
+                      ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
+                      : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200'
+                  }`}
+                  title="Nghe máy tính phát âm thử lời thoại bằng tiếng Việt"
+                >
+                  <Volume2 className="w-3.5 h-3.5 text-purple-600" />
+                  <span>{isSpeaking ? 'Dừng Đọc' : '🔊 Nghe Thử Giọng Đọc'}</span>
                 </button>
               </div>
             </div>

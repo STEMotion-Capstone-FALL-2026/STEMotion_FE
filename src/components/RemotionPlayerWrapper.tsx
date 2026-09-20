@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Player, PlayerRef } from '@remotion/player';
 import { STEMScript, SceneData } from '../types/stem';
-import { FullSTEMVideo } from '../remotion/compositions/FullSTEMVideo';
+import { FullSTEMVideo, SceneErrorBoundary } from '../remotion/compositions/FullSTEMVideo';
 import { TitleHeroReveal } from '../remotion/compositions/TitleHeroReveal';
 import { MathFormulaStep } from '../remotion/compositions/MathFormulaStep';
 import { DiagramExplainer } from '../remotion/compositions/DiagramExplainer';
@@ -159,6 +159,15 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
     }
   };
 
+  const SingleSceneRenderer: React.FC<{ scene: SceneData }> = ({ scene }) => {
+    const Comp = getSingleComponent(scene);
+    return (
+      <SceneErrorBoundary scene={scene}>
+        <Comp {...(scene as any)} />
+      </SceneErrorBoundary>
+    );
+  };
+
   return (
     <div
       ref={containerRef}
@@ -247,7 +256,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
         ) : (
           <Player
             ref={playerRef}
-            component={getSingleComponent(selectedScene) as any}
+            component={SingleSceneRenderer}
             durationInFrames={selectedScene.durationInFrames || 150}
             compositionWidth={1920}
             compositionHeight={1080}
@@ -256,7 +265,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
               width: '100%',
               height: '100%',
             }}
-            inputProps={selectedScene as any}
+            inputProps={{ scene: selectedScene }}
             controls={false}
             loop
           />

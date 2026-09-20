@@ -4,37 +4,48 @@ import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { ComparisonSplitProps } from '@/types/stem';
 
-export const ComparisonSplit: React.FC<ComparisonSplitProps> = ({
-  title,
-  topicA = {
-    title: 'Dòng Điện Một Chiều (DC)',
-    badge: 'Direct Current',
-    points: [
-      'Dòng electron chuyển dời có hướng theo 1 chiều duy nhất',
-      'Điện áp không đổi theo thời gian',
-      'Nguồn phát: Pin, Ắc quy, Pin năng lượng mặt trời',
-      'Ứng dụng: Bo mạch điện tử, điện thoại, vi xử lý',
-    ],
-    color: '#3b82f6',
-  },
-  topicB = {
-    title: 'Dòng Điện Xoay Chiều (AC)',
-    badge: 'Alternating Current',
-    points: [
-      'Chiều và cường độ biến thiên tuần hoàn hình sin',
-      'Dễ dàng tăng/hạ áp bằng máy biến áp',
-      'Truyền tải điện năng đi xa ít hao phí nhiệt lượng',
-      'Ứng dụng: Lưới điện quốc gia, động cơ công nghiệp',
-    ],
-    color: '#f59e0b',
-  },
-  conclusion = 'Điện AC tối ưu cho truyền tải lưới điện lớn, còn DC không thể thay thế trong các thiết bị vi mạch số.',
-  fontSizeScale = 'large',
-  customFontSize,
-  cardScale,
-  cardTheme = 'dark',
-  cardWidth = 'standard',
-}) => {
+export const ComparisonSplit: React.FC<ComparisonSplitProps> = (props) => {
+  const {
+    title = 'So Sánh & Phân Biệt Đối Chiếu',
+    topicA,
+    topicB,
+    conclusion = 'Cả hai mô hình bổ trợ cho nhau tùy thuộc vào bài toán và điều kiện thực tế.',
+    fontSizeScale = 'large',
+    customFontSize,
+    cardScale,
+    cardTheme = 'dark',
+    cardWidth = 'standard',
+  } = props;
+
+  const safeTopicA: { title: string; badge: string; points: string[]; color: string } = {
+    title: (props as any).leftTitle || topicA?.title || 'Khái Niệm A (Mô Hình 1)',
+    badge: topicA?.badge || 'Đặc tính A',
+    points: Array.isArray(topicA?.points) && topicA.points.length > 0
+      ? topicA.points
+      : (Array.isArray((props as any).leftPoints) && (props as any).leftPoints.length > 0
+          ? (props as any).leftPoints
+          : [
+              'Đặc trưng cốt lõi của hiện tượng A',
+              'Mô hình định lượng và điều kiện áp dụng',
+              'Ý nghĩa ứng dụng trong thực tế',
+            ]),
+    color: topicA?.color || '#3b82f6',
+  };
+
+  const safeTopicB: { title: string; badge: string; points: string[]; color: string } = {
+    title: (props as any).rightTitle || topicB?.title || 'Khái Niệm B (Mô Hình 2)',
+    badge: topicB?.badge || 'Đặc tính B',
+    points: Array.isArray(topicB?.points) && topicB.points.length > 0
+      ? topicB.points
+      : (Array.isArray((props as any).rightPoints) && (props as any).rightPoints.length > 0
+          ? (props as any).rightPoints
+          : [
+              'Đặc trưng tương phản của hiện tượng B',
+              'Mô hình biến thiên theo chu kỳ',
+              'Ứng dụng tối ưu trong kỹ thuật',
+            ]),
+    color: topicB?.color || '#f59e0b',
+  };
   const getWidthClass = () => {
     switch (cardWidth) {
       case 'compact':
@@ -151,7 +162,7 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = ({
                 style={{ fontSize: `${badgeFontSize}px` }}
                 className="rounded-full bg-blue-500/20 text-blue-400 font-mono font-bold border border-blue-500/40 px-3 py-0.5"
               >
-                {topicA.badge || 'KHÁI NIỆM A'}
+                {safeTopicA.badge}
               </span>
               <span className="text-xs text-blue-300/70 font-mono">01</span>
             </div>
@@ -159,7 +170,7 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = ({
               style={{ fontSize: `${topicTitleFontSize}px`, lineHeight: 1.25 }}
               className="font-black text-blue-200"
             >
-              {topicA.title}
+              {safeTopicA.title}
             </h3>
           </div>
 
@@ -168,7 +179,7 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = ({
             className="flex-1 flex flex-col justify-center my-4"
             style={{ gap: `${gapSize}px` }}
           >
-            {topicA.points?.map((pt, idx) => (
+            {safeTopicA.points.map((pt, idx) => (
               <div
                 key={idx}
                 className="flex items-start gap-3.5 text-slate-100"
@@ -219,7 +230,7 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = ({
                 style={{ fontSize: `${badgeFontSize}px` }}
                 className="rounded-full bg-amber-500/20 text-amber-400 font-mono font-bold border border-amber-500/40 px-3 py-0.5"
               >
-                {topicB.badge || 'KHÁI NIỆM B'}
+                {safeTopicB.badge}
               </span>
               <span className="text-xs text-amber-300/70 font-mono">02</span>
             </div>
@@ -227,7 +238,7 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = ({
               style={{ fontSize: `${topicTitleFontSize}px`, lineHeight: 1.25 }}
               className="font-black text-amber-200"
             >
-              {topicB.title}
+              {safeTopicB.title}
             </h3>
           </div>
 
@@ -236,7 +247,7 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = ({
             className="flex-1 flex flex-col justify-center my-4"
             style={{ gap: `${gapSize}px` }}
           >
-            {topicB.points?.map((pt, idx) => (
+            {safeTopicB.points.map((pt, idx) => (
               <div
                 key={idx}
                 className="flex items-start gap-3.5 text-slate-100"

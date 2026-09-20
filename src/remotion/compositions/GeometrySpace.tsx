@@ -47,6 +47,12 @@ export const GeometrySpace: React.FC<GeometrySpaceProps> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
+  const safeDims = {
+    a: typeof dimensions?.a === 'number' ? dimensions.a : 3,
+    b: typeof dimensions?.b === 'number' ? dimensions.b : 4,
+    c: typeof dimensions?.c === 'number' ? dimensions.c : 5,
+  };
+
   const renderLatex = (tex: string) => {
     try {
       return {
@@ -131,7 +137,7 @@ export const GeometrySpace: React.FC<GeometrySpaceProps> = ({
               strokeWidth="2"
             />
             <text x="150" y="215" fill="#6ee7b7" fontSize="11" fontWeight="bold" textAnchor="middle">
-              b² = {dimensions.b * dimensions.b}
+              b² = {safeDims.b * safeDims.b}
             </text>
 
             {/* Triangle ABC */}
@@ -147,13 +153,13 @@ export const GeometrySpace: React.FC<GeometrySpaceProps> = ({
 
             {/* Labels on triangle sides */}
             <text x="100" y="145" fill="#ffffff" fontSize="12" fontWeight="bold">
-              a={dimensions.a}
+              a={safeDims.a}
             </text>
             <text x="145" y="165" fill="#ffffff" fontSize="12" fontWeight="bold">
-              b={dimensions.b}
+              b={safeDims.b}
             </text>
             <text x="155" y="135" fill="#fbbf24" fontSize="12" fontWeight="bold">
-              c={dimensions.c}
+              c={safeDims.c}
             </text>
 
             {/* Square on hypotenuse C (slanted visual outline) */}
@@ -165,12 +171,12 @@ export const GeometrySpace: React.FC<GeometrySpaceProps> = ({
               strokeDasharray="4 4"
             />
             <text x="180" y="105" fill="#fde68a" fontSize="11" fontWeight="bold" textAnchor="middle">
-              c² = {dimensions.c * dimensions.c}
+              c² = {safeDims.c * safeDims.c}
             </text>
           </svg>
 
           <span className="text-[10px] font-mono text-cyan-400 mt-2">
-            Diện tích: {dimensions.a * dimensions.a} + {dimensions.b * dimensions.b} = {dimensions.c * dimensions.c} (Đẳng thức chuẩn)
+            Diện tích: {safeDims.a * safeDims.a} + {safeDims.b * safeDims.b} = {safeDims.c * safeDims.c} (Đẳng thức chuẩn)
           </span>
         </div>
 

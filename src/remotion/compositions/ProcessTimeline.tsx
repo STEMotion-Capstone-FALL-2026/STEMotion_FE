@@ -38,6 +38,12 @@ export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
   cardTheme = 'dark',
   cardWidth = 'standard',
 }) => {
+  const safeStages = Array.isArray(stages) && stages.length > 0 ? stages : [
+    { stageNumber: 1, title: 'Giai Đoạn 1', description: 'Khởi đầu tiến trình khoa học', badge: 'Pha 1' },
+    { stageNumber: 2, title: 'Giai Đoạn 2', description: 'Chuyển hóa và phản ứng trọng tâm', badge: 'Pha 2' },
+    { stageNumber: 3, title: 'Giai Đoạn 3', description: 'Phân ly và giải phóng năng lượng', badge: 'Pha 3' },
+    { stageNumber: 4, title: 'Giai Đoạn 4', description: 'Hoàn tất và thiết lập trạng thái bền vững', badge: 'Pha 4' },
+  ];
   const getWidthClass = () => {
     switch (cardWidth) {
       case 'compact':
@@ -130,7 +136,7 @@ export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
 
         {/* Stages Grid */}
         <div className="grid grid-cols-4 gap-4">
-          {stages.map((stg, idx) => {
+          {safeStages.map((stg, idx) => {
             const delay = idx * 10;
             const cardSpring = spring({
               frame: frame - delay,

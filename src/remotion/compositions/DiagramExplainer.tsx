@@ -5,14 +5,18 @@ import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { DiagramExplainerProps } from '@/types/stem';
 
 export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
-  title,
-  diagramTitle,
+  title = 'Sơ đồ cơ chế khoa học',
+  diagramTitle = 'Mô hình trực quan',
   labels,
   customFontSize,
   cardScale,
   cardTheme = 'dark',
   cardWidth = 'standard',
 }) => {
+  const safeLabels = Array.isArray(labels) && labels.length > 0 ? labels : [
+    { name: 'Cấu trúc trọng tâm', description: 'Phần tử tương tác chính của hệ thống' },
+    { name: 'Trường lực / Môi trường', description: 'Tác nhân kích hoạt phản ứng hoặc chuyển động' },
+  ];
   const getWidthClass = () => {
     switch (cardWidth) {
       case 'compact':
@@ -118,7 +122,7 @@ export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
 
         {/* Labels and Descriptions List */}
         <div className="flex flex-col gap-4">
-          {labels.map((item, idx) => {
+          {safeLabels.map((item, idx) => {
             const labelDelay = 20 + idx * 20;
             const labelOpacity = interpolate(frame, [labelDelay, labelDelay + 12], [0, 1], {
               extrapolateLeft: 'clamp',

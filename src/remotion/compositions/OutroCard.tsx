@@ -5,15 +5,20 @@ import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { OutroProps } from '@/types/stem';
 
 export const OutroCard: React.FC<OutroProps> = ({
-  title,
+  title = 'Tổng Kết Bài Học',
   summaryPoints,
-  nextLessonSuggestion,
-  instructorName,
+  nextLessonSuggestion = 'Bài học chuyên đề tiếp theo',
+  instructorName = 'STEMotion Academy',
   customFontSize,
   cardScale,
   cardTheme = 'dark',
   cardWidth = 'standard',
 }) => {
+  const safeSummaryPoints = Array.isArray(summaryPoints) && summaryPoints.length > 0 ? summaryPoints : [
+    'Nắm vững bản chất và công thức trọng tâm',
+    'Hoàn thành bài tập thực hành trên hệ thống LMS',
+    'Đón chờ chuyên đề ứng dụng trong bài học kế tiếp',
+  ];
   const getWidthClass = () => {
     switch (cardWidth) {
       case 'compact':
@@ -92,7 +97,7 @@ export const OutroCard: React.FC<OutroProps> = ({
               Điểm cốt lõi cần ghi nhớ
             </h3>
             <div className="space-y-3">
-              {summaryPoints.map((point, idx) => {
+              {safeSummaryPoints.map((point, idx) => {
                 const pointOpacity = interpolate(frame, [15 + idx * 10, 25 + idx * 10], [0, 1], {
                   extrapolateLeft: 'clamp',
                   extrapolateRight: 'clamp',

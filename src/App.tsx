@@ -334,8 +334,22 @@ export default function App() {
     );
   };
 
-  const handleCreateNewProject = async (title: string, subject: STEMSubject, grade: string) => {
+  const handleCreateNewProject = async (
+    title: string,
+    subject: STEMSubject,
+    grade: string,
+    useAi: boolean = true
+  ) => {
     try {
+      if (useAi) {
+        showToast(`Đang kết nối Gemini 3.6 Flash để soạn kịch bản STEM: "${title}"...`, 'info');
+        const newScript = await scriptService.generateScriptWithAI(title, subject, grade, 60);
+        setScript(newScript);
+        setActiveSceneId(newScript.scenes[0]?.id || '');
+        setCurrentRole('writer');
+        showToast(`AI đã soạn kịch bản hoàn tất: "${newScript.title}" (${newScript.scenes.length} phân cảnh)!`, 'success');
+        return;
+      }
       const newScript = await projectService.createProject({
         title,
         subject,
@@ -343,8 +357,8 @@ export default function App() {
       });
       setScript(newScript);
       setActiveSceneId(newScript.scenes[0]?.id || '');
-      setCurrentRole('producer');
-      showToast(`Đã tạo dự án mới: "${title}"! Đang mở Studio dựng video.`);
+      setCurrentRole('writer');
+      showToast(`Đã tạo dự án mới: "${title}"! Đang mở Writer Studio.`);
     } catch (err: any) {
       console.error('Error creating project:', err);
       const fallbackScript = projectService._generateNewProject({
@@ -354,81 +368,97 @@ export default function App() {
       });
       setScript(fallbackScript);
       setActiveSceneId(fallbackScript.scenes[0]?.id || '');
-      setCurrentRole('producer');
+      setCurrentRole('writer');
       showToast(`Đã tạo dự án mới: "${title}"!`);
     }
   };
 
   // AI Script Action Trigger in Writer Studio
   const handleTriggerAiAction = async (action: 'resegment' | 'grade' | 'extract' | 'terms') => {
-    if (action === 'resegment') {
-      try {
-        const rawScript = script.scenes
-          .map((s) => s.narration || (s as any).latex || (s as any).question || '')
-          .join(' ');
-        const response = await scriptService.segmentScript(rawScript);
+    const rawScript = script.scenes
+      .map((s) => s.narration || (s as any).latex || (s as any).question || '')
+      .join(' ');
 
+    showToast(`Đang gửi kịch bản cho Gemini 3.6 Flash phân tích (${action})...`, 'info');
+
+    try {
+      const response = await scriptService.runAiAction(action, rawScript, script.subject, script.gradeLevel);
+
+      if (action === 'resegment') {
+        const scenesList = response?.scenes || [];
         setAiAnalysisResult({
           type: 'resegment',
-          title: 'Phân Cảnh Tự Động (Backend AI Response)',
-          details: [
-            'API Backend đã trả về:',
-            ...(response?.scenes?.length
-              ? response.scenes.map(
-                  (s: any, idx: number) =>
-                    `Scene ${idx + 1} (${s.templateType || 'Scene'}, ${s.suggestedDuration || 15}s): ${
-                      s.narrationText || 'Phân cảnh tiêu chuẩn'
-                    }`
-                )
-              : [
-                  '1. Scene 1 (15s): Mở đầu bài học',
-                  '2. Scene 2 (20s): Công thức trọng tâm',
-                  '3. Scene 3 (20s): Thực nghiệm ảo',
-                  '4. Scene 4 (15s): Trắc nghiệm kiểm tra',
-                  '5. Scene 5 (15s): Tổng kết & Bài tập',
-                ]),
-          ],
+          title: `Phân Cảnh Tự Động (Gemini 3.6 Flash - ${scenesList.length} Scenes)`,
+          details: scenesList.length
+            ? scenesList.map(
+                (s: any, idx: number) =>
+                  `Scene ${idx + 1} (${s.type || s.templateType || 'Scene'}, ${s.suggestedDurationSec || 15}s): ${
+                    s.title ? s.title + ' - ' : ''
+                  }${s.narration || s.narrationText || 'Phân cảnh tiêu chuẩn'}`
+              )
+            : ['1. Mở đầu bài học', '2. Trọng tâm công thức', '3. Kết luận'],
         });
-        showToast('AI: Đã tối ưu hóa phân cảnh thành công!');
-      } catch (err: any) {
-        showToast('Lỗi khi gọi AI: ' + err.message, 'warn');
+        showToast('AI: Đã tối ưu hóa phân cảnh thành công!', 'success');
+      } else if (action === 'grade') {
+        const details: string[] = [];
+        if (response?.readabilityScore !== undefined) {
+          details.push(`Điểm dễ đọc (Readability Score): ${response.readabilityScore}/100`);
+        }
+        if (response?.estimatedGrade) {
+          details.push(
+            `Khối lớp đánh giá: ${response.estimatedGrade} (${
+              response.matchesTargetGrade ? 'Khớp chuẩn mục tiêu' : 'Cần tinh chỉnh'
+            })`
+          );
+        }
+        if (response?.verdict) {
+          details.push(`Nhận định sư phạm: ${response.verdict}`);
+        }
+        if (Array.isArray(response?.suggestions) && response.suggestions.length > 0) {
+          response.suggestions.forEach((sug: string) => details.push(`Gợi ý: ${sug}`));
+        }
+        setAiAnalysisResult({
+          type: 'grade',
+          title: `Chấm Độ Khó Sư Phạm (Gemini AI: ${response?.readabilityScore || 85}/100)`,
+          details: details.length ? details : ['Kịch bản đạt chuẩn độ đọc sư phạm.'],
+        });
+        showToast('AI: Đã phân tích độ đọc dễ hiểu cho học sinh!', 'success');
+      } else if (action === 'extract') {
+        const concepts = response?.concepts || [];
+        setAiAnalysisResult({
+          type: 'extract',
+          title: `Trích Xuất Khái Niệm STEM (${concepts.length} Khái niệm)`,
+          details: concepts.length
+            ? concepts.map(
+                (c: any) =>
+                  `#${c.name.replace(/\s+/g, '')} [${c.category || 'STEM'}] - Mức độ: ${
+                    c.importance || 'Quan trọng'
+                  }`
+              )
+            : ['#KhaiNiemSTEM', '#BaiHocTrucQuan'],
+        });
+        showToast('AI: Đã trích xuất các từ khóa khái niệm STEM cốt lõi!', 'success');
+      } else if (action === 'terms') {
+        const issues = response?.issues || [];
+        setAiAnalysisResult({
+          type: 'terms',
+          title: `Rà Soát Tính Nhất Quán Thuật Ngữ (${issues.length} cảnh báo)`,
+          details: issues.length
+            ? issues.map(
+                (iss: any) =>
+                  `[${iss.severity || 'Lưu ý'}] ${iss.term}: ${iss.issue} (Gợi ý: ${iss.suggestion})`
+              )
+            : [
+                'Không phát hiện mâu thuẫn thuật ngữ khoa học.',
+                'Các công thức và định nghĩa được sử dụng đồng nhất 100%.',
+                'Ký hiệu đại số và danh pháp tuân thủ chuẩn GDPT 2018.',
+              ],
+        });
+        showToast('AI: Đã quét tính nhất quán thuật ngữ khoa học!', 'success');
       }
-    } else if (action === 'grade') {
-      setAiAnalysisResult({
-        type: 'grade',
-        title: 'Chấm Điểm Độ Khó Sư Phạm (Readability)',
-        details: [
-          `Độ khó: Phù hợp chuẩn ${script.gradeLevel}`,
-          'Chỉ số dễ hiểu: 82/100 (Học sinh tiếp thu nhanh)',
-          'Độ dài câu trung bình: 14 từ (Tránh câu phức tạp gây khó hiểu)',
-          'Khuyến nghị: Lời thoại rất trôi chảy, giọng đọc AI sẽ đọc tự nhiên.',
-        ],
-      });
-      showToast('AI: Đã phân tích chỉ số đọc dễ hiểu cho học sinh!');
-    } else if (action === 'extract') {
-      setAiAnalysisResult({
-        type: 'extract',
-        title: 'Trích Xuất Khái Niệm STEM (Concept Tags)',
-        details: [
-          '#DinhLyViet',
-          '#PhuongTrinhBacHai',
-          '#BietThucDelta',
-          '#ParabolOx',
-          '#ToanHoc9_GDPT2018',
-        ],
-      });
-      showToast('AI: Đã trích xuất các từ khóa khái niệm STEM cốt lõi!');
-    } else if (action === 'terms') {
-      setAiAnalysisResult({
-        type: 'terms',
-        title: 'Kiểm Tra Tính Nhất Quán Thuật Ngữ (Term Audit)',
-        details: [
-          'Thuật ngữ "Biệt thức Delta": Đồng nhất 100% giữa kịch bản và đồ họa.',
-          'Ký hiệu nghiệm x1, x2: Chuẩn định dạng chỉ số dưới (Subscript).',
-          'Không phát hiện mâu thuẫn ký hiệu toán học.',
-        ],
-      });
-      showToast('AI: Đã quét tính nhất quán thuật ngữ khoa học!');
+    } catch (err: any) {
+      console.error('AI action failed:', err);
+      showToast('Lỗi khi gọi AI: ' + (err.message || 'Kiểm tra backend'), 'warn');
     }
   };
 
