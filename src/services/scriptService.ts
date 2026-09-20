@@ -11,7 +11,15 @@ export const scriptService = {
   async segmentScript(rawScript: string): Promise<any> {
     if (apiClient.isMockMode()) {
       await apiClient.mockDelay(500);
-      return { scenes: [] };
+      return {
+        scenes: [
+          { templateType: 'CONCEPT_OVERVIEW', suggestedDuration: 15, narrationText: 'Giới thiệu khái niệm cốt lõi và hiện tượng thực tiễn.' },
+          { templateType: 'MATH_FORMULA', suggestedDuration: 20, narrationText: 'Khai triển công thức KaTeX và phân tích các thông số.' },
+          { templateType: 'INTERACTIVE_EXPERIMENT', suggestedDuration: 20, narrationText: 'Mô phỏng đồ thị và thực nghiệm ảo trực quan.' },
+          { templateType: 'QUIZ_CHECKPOINT', suggestedDuration: 15, narrationText: 'Câu hỏi trắc nghiệm tương tác kiểm tra độ hiểu bài.' },
+          { templateType: 'SUMMARY_OUTRO', suggestedDuration: 15, narrationText: 'Tổng kết nội dung trọng tâm và bài tập trên Canvas LMS.' },
+        ],
+      };
     }
     return apiClient.post('/ai/segment', { rawScript });
   },
@@ -55,13 +63,21 @@ export const scriptService = {
       scenes: updatedScenes,
     };
 
+    // Always update local cache for smooth instantaneous interaction
+    projectService.updateProject(currentScript.id, updatedScript);
+
     if (apiClient.isMockMode()) {
-      projectService.updateProject(currentScript.id, updatedScript);
       return updatedScript;
     }
 
-    const targetScene = updatedScenes.find((s) => s.id === sceneId);
-    return apiClient.put<STEMScript>(`/projects/${currentScript.id}/scenes/${sceneId}`, targetScene);
+    try {
+      const targetScene = updatedScenes.find((s) => s.id === sceneId);
+      const res = await apiClient.put<STEMScript>(`/projects/${currentScript.id}/scenes/${sceneId}`, targetScene);
+      return res || updatedScript;
+    } catch (error) {
+      console.warn('[scriptService] Backend sync failed, keeping local update:', error);
+      return updatedScript;
+    }
   },
 
   async addScene(
@@ -82,6 +98,97 @@ export const scriptService = {
         steps: [
           { label: 'Tọa độ đỉnh I', latexSnippet: 'I\\left(-\\frac{b}{2a}, -\\frac{\\Delta}{4a}\\right)', explanation: 'Điểm cực trị của đồ thị parabol' },
         ],
+      };
+    } else if (type === 'CHEMICAL_REACTION') {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'CHEMICAL_REACTION',
+        title: `Scene ${sceneNum}: Phản ứng hóa học thực nghiệm`,
+        equation: 'Fe + 2HCl \\rightarrow FeCl_2 + H_2\\uparrow',
+        reactants: 'Sắt kim loại (Fe) + Axit Clohidric (HCl)',
+        products: 'Sắt(II) Clorua (FeCl2) + Khí Hydro (H2)',
+        condition: 'Nhiệt độ phòng, không cần xúc tác',
+        observation: 'Kim loại sắt tan dần, sủi nhiều bọt khí không màu thoát ra khỏi dung dịch.',
+        flaskColor: '#0ea5e9',
+        narration: 'Cho đinh sắt vào ống nghiệm chứa dung dịch axit clohidric, ta thấy có bọt khí hiđro thoát ra mãnh liệt.',
+        durationInFrames: 180,
+      };
+    } else if (type === 'COMPARISON_SPLIT') {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'COMPARISON_SPLIT',
+        title: `Scene ${sceneNum}: So sánh đối chiếu hai khái niệm`,
+        topicA: {
+          title: 'Khái Niệm A (DC)',
+          badge: 'Mô Hình 1',
+          points: ['Chuyển dời một chiều ổn định', 'Điện áp cố định theo thời gian', 'Phù hợp vi mạch và pin sạc'],
+          color: '#3b82f6',
+        },
+        topicB: {
+          title: 'Khái Niệm B (AC)',
+          badge: 'Mô Hình 2',
+          points: ['Biến thiên điều hòa chu kỳ', 'Dễ dàng thay đổi điện áp', 'Truyền tải xa hiệu suất cao'],
+          color: '#f59e0b',
+        },
+        conclusion: 'Cả hai mô hình bổ trợ cho nhau tùy thuộc vào bài toán kỹ thuật thực tế.',
+        narration: 'Chúng ta cùng phân tích và đối chiếu các đặc tính trọng tâm giữa hai hiện tượng.',
+        durationInFrames: 180,
+      };
+    } else if (type === 'PROCESS_TIMELINE') {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'PROCESS_TIMELINE',
+        title: `Scene ${sceneNum}: Tiến trình chu trình khoa học`,
+        processTitle: 'Chu Trình Tiến Trình Các Giai Đoạn (4 Pha)',
+        stages: [
+          { stageNumber: 1, title: 'Khởi đầu (Pha 1)', description: 'Tích lũy năng lượng và chuẩn bị vật chất', badge: 'Giai Đoạn 1' },
+          { stageNumber: 2, title: 'Chuyển hóa (Pha 2)', description: 'Biến đổi cấu trúc và hoạt hóa phân tử', badge: 'Giai Đoạn 2' },
+          { stageNumber: 3, title: 'Phân ly (Pha 3)', description: 'Tách chiết và giải phóng năng lượng', badge: 'Giai Đoạn 3' },
+          { stageNumber: 4, title: 'Hoàn tất (Pha 4)', description: 'Tạo sản phẩm bền vững và lập lại chu trình', badge: 'Giai Đoạn 4' },
+        ],
+        narration: 'Tiến trình này diễn ra liên tục theo các giai đoạn được kiểm soát nghiêm ngặt.',
+        durationInFrames: 180,
+      };
+    } else if (type === 'GEOMETRY_SPACE') {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'GEOMETRY_SPACE',
+        title: `Scene ${sceneNum}: Hình học trực quan & định lý`,
+        shapeType: 'pythagoras_triangle',
+        theoremName: 'Định Lý Pytago Trong Tam Giác Vuông',
+        formulaLatex: 'a^2 + b^2 = c^2',
+        dimensions: { a: 3, b: 4, c: 5 },
+        explanation: 'Diện tích hai hình vuông trên hai cạnh góc vuông bù đúng bằng diện tích hình vuông cạnh huyền.',
+        narration: 'Mô hình hình học trực quan giúp học sinh ghi nhớ bản chất diện tích của định lý Pytago.',
+        durationInFrames: 180,
+      };
+    } else if (type === 'DIAGRAM_EXPLAINER') {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'DIAGRAM_EXPLAINER',
+        title: `Scene ${sceneNum}: Sơ đồ giải thích cơ chế`,
+        diagramTitle: 'Cấu Trúc Mô Hình Vật Lý',
+        svgType: 'circuit',
+        labels: [
+          { name: 'Nguồn điện', description: 'Cung cấp năng lượng', xPercent: 20, yPercent: 40 },
+          { name: 'Tải tiêu thụ', description: 'Biến đổi quang/nhiệt', xPercent: 80, yPercent: 60 },
+        ],
+        narration: 'Sơ đồ giúp chúng ta hình dung trực tiếp đường đi của các đại lượng vật lý.',
+        durationInFrames: 180,
+      };
+    } else if (type === 'ALGORITHM_WALKTHROUGH') {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'ALGORITHM_WALKTHROUGH',
+        title: `Scene ${sceneNum}: Mô phỏng thuật toán lập trình`,
+        language: 'python',
+        codeSnippet: 'def binary_search(arr, target):\n    low, high = 0, len(arr) - 1\n    while low <= high:\n        mid = (low + high) // 2\n        if arr[mid] == target: return mid\n        elif arr[mid] < target: low = mid + 1\n        else: high = mid - 1\n    return -1',
+        steps: [
+          { lineHighlight: 2, variableState: 'low=0, high=9', note: 'Thiết lập phạm vi tìm kiếm ban đầu' },
+          { lineHighlight: 4, variableState: 'mid=4, arr[mid]=15', note: 'So sánh phần tử chính giữa' },
+        ],
+        narration: 'Thuật toán tìm kiếm nhị phân giảm một nửa không gian tìm kiếm sau mỗi bước lặp.',
+        durationInFrames: 180,
       };
     } else if (type === 'DATA_CHART') {
       newScene = {
@@ -113,6 +220,21 @@ export const scriptService = {
         narration: 'Hãy chọn đáp án đúng trong 5 giây.',
         durationInFrames: 180,
       };
+    } else if (type === 'OUTRO') {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'OUTRO',
+        title: `Scene ${sceneNum}: Tổng kết bài học & Bài tập LMS`,
+        summaryPoints: [
+          'Nắm vững bản chất quy luật và phương trình',
+          'Biết vận dụng công thức vào bài toán thực tiễn',
+          'Luyện tập các câu hỏi kiểm tra trên Canvas LMS',
+        ],
+        nextLessonSuggestion: 'Bài tiếp theo: Ứng dụng nâng cao trong kỹ thuật',
+        instructorName: 'Tổ Chuyên Môn STEM',
+        narration: 'Cảm ơn các em đã theo dõi bài giảng hôm nay. Hãy hoàn thành các bài tập củng cố trên LMS.',
+        durationInFrames: 150,
+      };
     } else {
       newScene = {
         id: `scene_${Date.now()}`,
@@ -138,13 +260,19 @@ export const scriptService = {
       totalDurationSeconds,
     };
 
+    projectService.updateProject(currentScript.id, updatedScript);
+
     if (apiClient.isMockMode()) {
-      projectService.updateProject(currentScript.id, updatedScript);
       return { updatedScript, newScene };
     }
 
-    const res = await apiClient.post<STEMScript>(`/projects/${currentScript.id}/scenes`, newScene);
-    return { updatedScript: res || updatedScript, newScene };
+    try {
+      const res = await apiClient.post<STEMScript>(`/projects/${currentScript.id}/scenes`, newScene);
+      return { updatedScript: res || updatedScript, newScene };
+    } catch (error) {
+      console.warn('[scriptService] Backend add scene failed, added locally:', error);
+      return { updatedScript, newScene };
+    }
   },
 
   async deleteScene(
@@ -166,12 +294,17 @@ export const scriptService = {
       totalDurationSeconds,
     };
 
+    projectService.updateProject(currentScript.id, updatedScript);
+
     if (apiClient.isMockMode()) {
-      projectService.updateProject(currentScript.id, updatedScript);
       return updatedScript;
     }
 
-    await apiClient.delete(`/projects/${currentScript.id}/scenes/${sceneId}`);
+    try {
+      await apiClient.delete(`/projects/${currentScript.id}/scenes/${sceneId}`);
+    } catch (error) {
+      console.warn('[scriptService] Backend delete scene failed, deleted locally:', error);
+    }
     return updatedScript;
   },
 };

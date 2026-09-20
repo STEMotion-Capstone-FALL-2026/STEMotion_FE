@@ -9,7 +9,11 @@ export type SceneType =
   | 'DATA_CHART'
   | 'ALGORITHM_WALKTHROUGH'
   | 'STEM_QUIZ'
-  | 'OUTRO';
+  | 'OUTRO'
+  | 'CHEMICAL_REACTION'
+  | 'COMPARISON_SPLIT'
+  | 'PROCESS_TIMELINE'
+  | 'GEOMETRY_SPACE';
 
 export type STEMTemplateType = SceneType;
 
@@ -90,6 +94,57 @@ export interface OutroProps extends SceneBase {
   instructorName: string;
 }
 
+export interface ChemicalReactionProps extends SceneBase {
+  type: 'CHEMICAL_REACTION';
+  equation: string;
+  reactants: string;
+  products: string;
+  condition: string;
+  observation: string;
+  flaskColor?: string;
+}
+
+export interface ComparisonSplitProps extends SceneBase {
+  type: 'COMPARISON_SPLIT';
+  topicA: {
+    title: string;
+    badge: string;
+    points: string[];
+    color?: string;
+  };
+  topicB: {
+    title: string;
+    badge: string;
+    points: string[];
+    color?: string;
+  };
+  conclusion: string;
+}
+
+export interface ProcessTimelineProps extends SceneBase {
+  type: 'PROCESS_TIMELINE';
+  processTitle: string;
+  stages: {
+    stageNumber: number;
+    title: string;
+    description: string;
+    badge?: string;
+  }[];
+}
+
+export interface GeometrySpaceProps extends SceneBase {
+  type: 'GEOMETRY_SPACE';
+  shapeType: 'pythagoras_triangle' | 'cone_3d' | 'circle_trig';
+  theoremName: string;
+  formulaLatex: string;
+  dimensions: {
+    a: number;
+    b: number;
+    c: number;
+  };
+  explanation: string;
+}
+
 export type SceneData =
   | TitleHeroProps
   | MathFormulaProps
@@ -97,7 +152,11 @@ export type SceneData =
   | DataChartProps
   | AlgorithmWalkthroughProps
   | STEMQuizProps
-  | OutroProps;
+  | OutroProps
+  | ChemicalReactionProps
+  | ComparisonSplitProps
+  | ProcessTimelineProps
+  | GeometrySpaceProps;
 
 export type STEMScene = SceneData;
 

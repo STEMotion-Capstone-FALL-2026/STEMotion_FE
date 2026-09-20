@@ -10,6 +10,10 @@ import { DataChartVisual } from './DataChartVisual';
 import { AlgorithmWalkthrough } from './AlgorithmWalkthrough';
 import { STEMQuizCard } from './STEMQuizCard';
 import { OutroCard } from './OutroCard';
+import { ChemicalReaction } from './ChemicalReaction';
+import { ComparisonSplit } from './ComparisonSplit';
+import { ProcessTimeline } from './ProcessTimeline';
+import { GeometrySpace } from './GeometrySpace';
 
 export const renderSceneComponent = (scene: SceneData) => {
   switch (scene.type) {
@@ -27,6 +31,14 @@ export const renderSceneComponent = (scene: SceneData) => {
       return <STEMQuizCard {...scene} />;
     case 'OUTRO':
       return <OutroCard {...scene} />;
+    case 'CHEMICAL_REACTION':
+      return <ChemicalReaction {...scene} />;
+    case 'COMPARISON_SPLIT':
+      return <ComparisonSplit {...scene} />;
+    case 'PROCESS_TIMELINE':
+      return <ProcessTimeline {...scene} />;
+    case 'GEOMETRY_SPACE':
+      return <GeometrySpace {...scene} />;
     default:
       return null;
   }
