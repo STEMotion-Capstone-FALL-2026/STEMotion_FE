@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Building,
   UserPlus,
@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import { RemotionPlayerWrapper } from './components/RemotionPlayerWrapper';
 import { DEFAULT_SAMPLE_SCRIPT, SAMPLE_WORKSPACES, SAMPLE_MEMBERS, SAMPLE_COMMENTS } from './lib/sampleData';
+import { LoginScreen } from './components/LoginScreen';
 import { STEMScript, WorkspaceMember, FeedbackComment, Workspace, SceneData, STEMSubject } from './types/stem';
 import katex from 'katex';
 
@@ -68,7 +69,9 @@ const renderLatexToString = (tex: string) => {
   }
 };
 import {
+  apiClient,
   authService,
+  workspaceService,
   projectService,
   scriptService,
   renderService,
@@ -215,6 +218,14 @@ export const STEM_TEMPLATES_CATALOG: STEMTemplateCatalogItem[] = [
 
 export default function App() {
   // Navigation Role: 'producer' | 'writer' | 'reviewer' | 'admin' | 'library'
+  // ---- Session -----------------------------------------------------------
+  // In mock mode the studio opens straight away; against a real backend the
+  // user must sign in first so every request carries a JWT.
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
+    () => apiClient.isMockMode() || Boolean(apiClient.getAuthToken())
+  );
+  const [isBootstrapping, setIsBootstrapping] = useState<boolean>(false);
+
   const [currentRole, setCurrentRole] = useState<UserRole>(() => authService.getCurrentUser().role);
 
   const handleRoleChange = (role: UserRole) => {
@@ -290,6 +301,66 @@ export default function App() {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3200);
   };
+
+  // ---- Load the studio from the backend -----------------------------------
+  /**
+   * Pulls the signed-in user, their workspace and its scripts. Falls back to
+   * the bundled sample data when the workspace is still empty, so a fresh
+   * account opens on a usable studio instead of a blank screen.
+   */
+  const bootstrapFromApi = useCallback(async () => {
+    if (apiClient.isMockMode()) return;
+
+    setIsBootstrapping(true);
+    try {
+      const profile = await authService.fetchCurrentUser();
+      setCurrentRole(profile.role);
+
+      // Resolve first: a brand-new account has no workspace yet and this
+      // creates the default one, so the list below is never empty.
+      await workspaceService.resolveActiveWorkspaceId();
+      const myWorkspaces = await workspaceService.getMyWorkspaces();
+      if (myWorkspaces.length > 0) {
+        workspaceService.setActiveWorkspaceId(myWorkspaces[0].id);
+        setWorkspaces(
+          myWorkspaces.map((w) => ({
+            id: w.id,
+            name: w.name,
+            department: w.department || '',
+            membersCount: w.membersCount,
+            activeProjects: w.activeProjects,
+          }))
+        );
+        setActiveGroup({ name: myWorkspaces[0].name, code: myWorkspaces[0].id.slice(0, 6) });
+      }
+
+      const list = await projectService.getProjects();
+      if (list.length > 0) {
+        // The list endpoint returns summaries; fetch the newest in full so the
+        // Player and the scene editor have the actual scenes to work with.
+        const full = await projectService.getProjectById(list[0].id);
+        setScript(full);
+        setActiveSceneId(full.scenes?.[0]?.id || 'scene_1');
+
+        const qa = await reviewService.getComments(full.id);
+        setComments(qa);
+        showToast(`Đã tải ${list.length} kịch bản từ máy chủ`, 'success');
+      } else {
+        showToast('Workspace chưa có kịch bản nào — đang dùng bản mẫu', 'info');
+      }
+    } catch (error: any) {
+      console.error('[bootstrap] Không tải được dữ liệu từ backend:', error);
+      showToast('Không tải được dữ liệu từ máy chủ, đang dùng bản mẫu', 'warn');
+    } finally {
+      setIsBootstrapping(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      void bootstrapFromApi();
+    }
+  }, [isAuthenticated, bootstrapFromApi]);
 
   // Active scene pointer
   const selectedScene = script.scenes.find((s) => s.id === activeSceneId) || script.scenes[0];
@@ -557,8 +628,24 @@ export default function App() {
     }
   };
 
+  if (!isAuthenticated) {
+    return (
+      <LoginScreen
+        onAuthenticated={(user) => {
+          setCurrentRole(user.role);
+          setIsAuthenticated(true);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-screen font-sans bg-slate-50 text-slate-900">
+      {isBootstrapping && (
+        <div className="fixed top-0 left-0 right-0 z-[60] h-1 bg-brand-100 overflow-hidden">
+          <div className="h-full w-1/3 bg-brand-600 animate-pulse" />
+        </div>
+      )}
       {/* TOAST CONTAINER */}
       <div className="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none">
         {toasts.map((t) => (

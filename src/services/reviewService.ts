@@ -8,6 +8,34 @@ import { FeedbackComment } from '../types/stem';
 import { projectService } from './projectService';
 
 export const reviewService = {
+  /** Review notes pinned to a clip, in timecode order. */
+  async getComments(projectId: string): Promise<FeedbackComment[]> {
+    if (apiClient.isMockMode()) {
+      await apiClient.mockDelay(100);
+      const project = await projectService.getProjectById(projectId);
+      return project.reviewComments || [];
+    }
+
+    try {
+      const raw = await apiClient.get<any[]>(`/scripts/${projectId}/qa-comments`);
+      return raw.map((c) => ({
+        id: c.id,
+        author: c.author,
+        avatar: c.avatar,
+        // The API spells roles in upper case; FeedbackComment uses title case.
+        role: (c.role?.charAt(0) + c.role?.slice(1).toLowerCase()) as FeedbackComment['role'],
+        timestampSec: c.timestampSec ?? 0,
+        sceneId: c.sceneId ?? undefined,
+        content: c.content,
+        status: c.status,
+        createdAt: c.createdAt,
+      }));
+    } catch (error) {
+      console.warn('[reviewService] Backend unreachable, no comments loaded:', error);
+      return [];
+    }
+  },
+
   async submitReviewDecision(
     projectId: string,
     decision: 'APPROVED' | 'CHANGE_REQUESTED',
