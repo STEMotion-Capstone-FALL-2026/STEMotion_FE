@@ -18,6 +18,22 @@ export interface RenderJobStatus {
 }
 
 export const renderService = {
+  /** Maps the backend RenderJobResponse onto the shape the UI renders. */
+  _toRenderJobStatus(job: any, resolution = '1080p', fps = 30): RenderJobStatus {
+    return {
+      id: job.jobId ?? job.id,
+      projectId: job.projectId,
+      // The backend calls the in-flight state PROCESSING; the UI says RENDERING.
+      status: job.status === 'PROCESSING' ? 'RENDERING' : job.status,
+      progressPercentage: job.progress ?? 0,
+      outputUrl: job.videoUrl ?? undefined,
+      errorMessage: job.errorMessage ?? undefined,
+      resolution,
+      fps,
+      createdAt: job.createdAt ?? new Date().toISOString(),
+    };
+  },
+
   async requestRender(
     projectId: string,
     options: { resolution?: string; fps?: number } = {}
@@ -39,11 +55,11 @@ export const renderService = {
     }
 
     try {
-      return await apiClient.post<RenderJobStatus>('/renders', {
-        projectId,
+      const job = await apiClient.post<any>(`/render/projects/${projectId}/start`, {
         resolution,
         fps,
       });
+      return this._toRenderJobStatus(job, resolution, fps);
     } catch (error) {
       console.warn('[renderService] Backend unreachable, simulating render job locally:', error);
       return {
@@ -74,7 +90,8 @@ export const renderService = {
     }
 
     try {
-      return await apiClient.get<RenderJobStatus>(`/renders/${renderId}`);
+      const job = await apiClient.get<any>(`/render/status/${renderId}`);
+      return this._toRenderJobStatus(job);
     } catch (error) {
       console.warn('[renderService] Backend unreachable, returning simulated completion:', error);
       return {
@@ -94,7 +111,7 @@ export const renderService = {
     if (apiClient.isMockMode()) {
       return true;
     }
-    await apiClient.delete(`/renders/${renderId}`);
+    await apiClient.delete(`/render/jobs/${renderId}`);
     return true;
   },
 };

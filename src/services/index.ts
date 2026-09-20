@@ -4,6 +4,7 @@
 
 export * from './apiClient';
 export * from './authService';
+export * from './workspaceService';
 export * from './projectService';
 export * from './scriptService';
 export * from './renderService';

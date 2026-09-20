@@ -21,7 +21,12 @@ export const scriptService = {
         ],
       };
     }
-    return apiClient.post('/ai/segment', { rawScript });
+    const res = await apiClient.post<any>('/ai/script/action', {
+      action: 'resegment',
+      scriptText: rawScript,
+    });
+    // The model's payload sits under `result`; unwrap it for the caller.
+    return res?.result ?? res;
   },
 
   async generateScriptWithAI(
@@ -39,7 +44,7 @@ export const scriptService = {
       });
     }
 
-    return apiClient.post<STEMScript>('/scripts/generate', {
+    return apiClient.post<STEMScript>('/ai/script/generate', {
       prompt,
       subject,
       gradeLevel,
@@ -71,8 +76,9 @@ export const scriptService = {
     }
 
     try {
-      const targetScene = updatedScenes.find((s) => s.id === sceneId);
-      const res = await apiClient.put<STEMScript>(`/projects/${currentScript.id}/scenes/${sceneId}`, targetScene);
+      const res = await apiClient.put<STEMScript>(`/scripts/${currentScript.id}`, {
+        scenes: updatedScenes,
+      });
       return res || updatedScript;
     } catch (error) {
       console.warn('[scriptService] Backend sync failed, keeping local update:', error);
@@ -267,7 +273,9 @@ export const scriptService = {
     }
 
     try {
-      const res = await apiClient.post<STEMScript>(`/projects/${currentScript.id}/scenes`, newScene);
+      const res = await apiClient.put<STEMScript>(`/scripts/${currentScript.id}`, {
+        scenes: updatedScript.scenes,
+      });
       return { updatedScript: res || updatedScript, newScene };
     } catch (error) {
       console.warn('[scriptService] Backend add scene failed, added locally:', error);
@@ -301,7 +309,7 @@ export const scriptService = {
     }
 
     try {
-      await apiClient.delete(`/projects/${currentScript.id}/scenes/${sceneId}`);
+      await apiClient.put(`/scripts/${currentScript.id}`, { scenes: filtered });
     } catch (error) {
       console.warn('[scriptService] Backend delete scene failed, deleted locally:', error);
     }

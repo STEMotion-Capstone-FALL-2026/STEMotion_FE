@@ -25,10 +25,18 @@ export const reviewService = {
     }
 
     try {
-      return await apiClient.post<{ status: 'APPROVED' | 'CHANGE_REQUESTED'; message: string }>(
-        `/projects/${projectId}/reviews`,
-        { decision, feedbackNote }
+      // The backend exposes the two decisions as separate transitions.
+      const path = decision === 'APPROVED' ? 'approve' : 'request-changes';
+      const updated = await apiClient.post<{ scriptStatus: string }>(
+        `/scripts/${projectId}/${path}`,
+        { note: feedbackNote }
       );
+      return {
+        status: (updated.scriptStatus as 'APPROVED' | 'CHANGE_REQUESTED') ?? decision,
+        message: decision === 'APPROVED'
+          ? 'Kịch bản đã được phê duyệt chính thức!'
+          : 'Đã gửi yêu cầu chỉnh sửa đến đạo diễn sản xuất.',
+      };
     } catch (error) {
       console.warn('[reviewService] Backend unreachable, fallback to local decision:', error);
       await projectService.updateProject(projectId, { scriptStatus: decision });
@@ -59,7 +67,12 @@ export const reviewService = {
     }
 
     try {
-      return await apiClient.post<FeedbackComment>(`/projects/${projectId}/comments`, fullComment);
+      const saved = await apiClient.post<any>(`/scripts/${projectId}/qa-comments`, {
+        timestampSec: comment.timestampSec,
+        sceneId: comment.sceneId,
+        content: comment.content,
+      });
+      return { ...fullComment, id: saved.id, author: saved.author, status: saved.status };
     } catch (error) {
       console.warn('[reviewService] Backend unreachable, saving comment locally:', error);
       const project = await projectService.getProjectById(projectId);
@@ -81,7 +94,7 @@ export const reviewService = {
     }
 
     try {
-      await apiClient.put(`/projects/${projectId}/comments/${commentId}/resolve`, {});
+      await apiClient.put(`/qa-comments/${commentId}/resolve`, {});
     } catch (error) {
       console.warn('[reviewService] Backend unreachable, resolved locally:', error);
     }

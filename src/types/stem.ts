@@ -166,7 +166,7 @@ export interface STEMScript {
   subject: STEMSubject;
   gradeLevel: string;
   totalDurationSeconds?: number;
-  scriptStatus: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'CHANGE_REQUESTED';
+  scriptStatus: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'CHANGE_REQUESTED';
   videoStatus?: 'NOT_RENDERED' | 'RENDERING' | 'IN_QA' | 'APPROVED' | 'PUBLISHED';
   fps?: number;
   scenes: SceneData[];
