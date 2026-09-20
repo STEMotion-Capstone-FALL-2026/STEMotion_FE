@@ -29,9 +29,14 @@ export const RemotionRoot: React.FC = () => {
         }}
       />
 
+      {/*
+        The single-scene previews below pass one scene as defaultProps.
+        That cast hides the prop type from Remotion, so each component is
+        cast to match. The scenes stay strongly typed in FullSTEMVideo.
+      */}
       <Composition
         id="TitleHero"
-        component={TitleHeroReveal}
+        component={TitleHeroReveal as unknown as React.FC<Record<string, unknown>>}
         durationInFrames={150}
         fps={30}
         width={1920}
@@ -41,7 +46,7 @@ export const RemotionRoot: React.FC = () => {
 
       <Composition
         id="MathFormula"
-        component={MathFormulaStep}
+        component={MathFormulaStep as unknown as React.FC<Record<string, unknown>>}
         durationInFrames={180}
         fps={30}
         width={1920}
@@ -51,7 +56,7 @@ export const RemotionRoot: React.FC = () => {
 
       <Composition
         id="DiagramExplainer"
-        component={DiagramExplainer}
+        component={DiagramExplainer as unknown as React.FC<Record<string, unknown>>}
         durationInFrames={180}
         fps={30}
         width={1920}
@@ -61,7 +66,7 @@ export const RemotionRoot: React.FC = () => {
 
       <Composition
         id="DataChart"
-        component={DataChartVisual}
+        component={DataChartVisual as unknown as React.FC<Record<string, unknown>>}
         durationInFrames={150}
         fps={30}
         width={1920}
@@ -71,7 +76,7 @@ export const RemotionRoot: React.FC = () => {
 
       <Composition
         id="AlgorithmWalkthrough"
-        component={AlgorithmWalkthrough}
+        component={AlgorithmWalkthrough as unknown as React.FC<Record<string, unknown>>}
         durationInFrames={180}
         fps={30}
         width={1920}
@@ -81,7 +86,7 @@ export const RemotionRoot: React.FC = () => {
 
       <Composition
         id="STEMQuiz"
-        component={STEMQuizCard}
+        component={STEMQuizCard as unknown as React.FC<Record<string, unknown>>}
         durationInFrames={180}
         fps={30}
         width={1920}
@@ -91,7 +96,7 @@ export const RemotionRoot: React.FC = () => {
 
       <Composition
         id="OutroCard"
-        component={OutroCard}
+        component={OutroCard as unknown as React.FC<Record<string, unknown>>}
         durationInFrames={150}
         fps={30}
         width={1920}
@@ -101,7 +106,7 @@ export const RemotionRoot: React.FC = () => {
 
       <Composition
         id="ChemicalReaction"
-        component={ChemicalReaction}
+        component={ChemicalReaction as unknown as React.FC<Record<string, unknown>>}
         durationInFrames={180}
         fps={30}
         width={1920}
@@ -123,7 +128,7 @@ export const RemotionRoot: React.FC = () => {
 
       <Composition
         id="ComparisonSplit"
-        component={ComparisonSplit}
+        component={ComparisonSplit as unknown as React.FC<Record<string, unknown>>}
         durationInFrames={180}
         fps={30}
         width={1920}
@@ -152,7 +157,7 @@ export const RemotionRoot: React.FC = () => {
 
       <Composition
         id="ProcessTimeline"
-        component={ProcessTimeline}
+        component={ProcessTimeline as unknown as React.FC<Record<string, unknown>>}
         durationInFrames={180}
         fps={30}
         width={1920}
@@ -175,7 +180,7 @@ export const RemotionRoot: React.FC = () => {
 
       <Composition
         id="GeometrySpace"
-        component={GeometrySpace}
+        component={GeometrySpace as unknown as React.FC<Record<string, unknown>>}
         durationInFrames={180}
         fps={30}
         width={1920}

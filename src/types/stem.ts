@@ -19,6 +19,11 @@ export type STEMTemplateType = SceneType;
 
 export interface SceneBase {
   id: string;
+  /**
+   * URL of the generated Vietnamese narration. Set by the render service after
+   * TTS; absent in the browser Player, where the preview stays silent.
+   */
+  narrationAudioUrl?: string;
   type: SceneType;
   title: string;
   narration: string;

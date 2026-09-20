@@ -7,44 +7,72 @@ import { apiClient } from './apiClient';
 import { STEMScript, STEMSubject, SceneData, SceneType } from '../types/stem';
 import { projectService } from './projectService';
 
+export type AiAction = 'resegment' | 'grade' | 'extract' | 'terms';
+
+/** Raw payload the AI endpoint returns, plus the metadata the UI shows. */
+export interface AiActionResult {
+  action: AiAction;
+  result: any;
+  model: string;
+  elapsedMs: number;
+}
+
 export const scriptService = {
-  async segmentScript(rawScript: string, subject?: STEMSubject, gradeLevel?: string): Promise<any> {
+  /** Kept for callers that only want the segmentation analysis. */
+  async segmentScript(
+    rawScript: string,
+    subject?: STEMSubject,
+    gradeLevel?: string
+  ): Promise<AiActionResult> {
     return this.runAiAction('resegment', rawScript, subject, gradeLevel);
   },
 
+  /**
+   * Runs one of the four on-demand analyses on the backend.
+   *
+   * Results are advisory: the caller shows them to the writer, who decides
+   * whether to act on them. Nothing is written to the script here.
+   */
   async runAiAction(
-    action: 'resegment' | 'grade' | 'extract' | 'terms',
+    action: AiAction,
     scriptText: string,
     subject?: STEMSubject,
     gradeLevel?: string
-  ): Promise<any> {
+  ): Promise<AiActionResult> {
+    const wrap = (result: any): AiActionResult => ({
+      action,
+      result,
+      model: 'mock',
+      elapsedMs: 0,
+    });
+
     if (apiClient.isMockMode()) {
       await apiClient.mockDelay(500);
       if (action === 'grade') {
-        return {
+        return wrap({
           readabilityScore: 85,
           estimatedGrade: gradeLevel || 'Lớp 10',
           matchesTargetGrade: true,
           verdict: 'Nội dung kiến thức phù hợp chuẩn sư phạm.',
           suggestions: ['Bổ sung thêm ví dụ thực tế để học sinh dễ liên hệ.'],
-        };
+        });
       }
       if (action === 'extract') {
-        return {
+        return wrap({
           concepts: [
             { name: 'Khái niệm trọng tâm', category: 'Cốt lõi', importance: 'Cao' },
           ],
-        };
+        });
       }
       if (action === 'terms') {
-        return { issues: [] };
+        return wrap({ issues: [] });
       }
-      return {
+      return wrap({
         scenes: [
-          { templateType: 'CONCEPT_OVERVIEW', suggestedDuration: 15, narrationText: 'Giới thiệu khái niệm cốt lõi.' },
-          { templateType: 'MATH_FORMULA', suggestedDuration: 20, narrationText: 'Khai triển công thức KaTeX.' },
+          { type: 'MATH_FORMULA', title: 'Khái niệm cốt lõi', narration: 'Giới thiệu khái niệm cốt lõi.', suggestedDurationSec: 15 },
+          { type: 'STEM_QUIZ', title: 'Kiểm tra nhanh', narration: 'Câu hỏi củng cố.', suggestedDurationSec: 20 },
         ],
-      };
+      });
     }
 
     const res = await apiClient.post<any>('/ai/script/action', {
@@ -53,7 +81,12 @@ export const scriptService = {
       subject: subject || 'Math',
       gradeLevel: gradeLevel || 'Lớp 10',
     });
-    return res?.result ?? res;
+    return {
+      action,
+      result: res?.result ?? res,
+      model: res?.model ?? 'unknown',
+      elapsedMs: res?.elapsedMs ?? 0,
+    };
   },
 
   async generateScriptWithAI(

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Series } from 'remotion';
+import { Audio, Series } from 'remotion';
 import { STEMScript, SceneData } from '@/types/stem';
 import { TitleHeroReveal } from './TitleHeroReveal';
 import { MathFormulaStep } from './MathFormulaStep';
@@ -82,16 +82,24 @@ export class SceneErrorBoundary extends React.Component<
 export const FullSTEMVideo: React.FC<{ script: STEMScript }> = ({ script }) => {
   return (
     <Series>
-      {script.scenes.map((scene) => (
-        <Series.Sequence
-          key={scene.id}
-          durationInFrames={scene.durationInFrames || 150}
-        >
-          <SceneErrorBoundary scene={scene}>
-            {renderSceneComponent(scene)}
-          </SceneErrorBoundary>
-        </Series.Sequence>
-      ))}
+      {script.scenes.map((scene) => {
+        // The render service attaches this after generating TTS narration.
+        // It is absent in the browser Player, where the clip stays silent.
+        const narrationUrl = (scene as SceneData & { narrationAudioUrl?: string })
+          .narrationAudioUrl;
+
+        return (
+          <Series.Sequence
+            key={scene.id}
+            durationInFrames={scene.durationInFrames || 150}
+          >
+            <SceneErrorBoundary scene={scene}>
+              {renderSceneComponent(scene)}
+            </SceneErrorBoundary>
+            {narrationUrl && <Audio src={narrationUrl} />}
+          </Series.Sequence>
+        );
+      })}
     </Series>
   );
 };
