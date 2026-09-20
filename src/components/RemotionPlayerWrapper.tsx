@@ -9,7 +9,12 @@ import { DataChartVisual } from '../remotion/compositions/DataChartVisual';
 import { AlgorithmWalkthrough } from '../remotion/compositions/AlgorithmWalkthrough';
 import { STEMQuizCard } from '../remotion/compositions/STEMQuizCard';
 import { OutroCard } from '../remotion/compositions/OutroCard';
-import { Play, Pause, RotateCcw } from 'lucide-react';
+import { ChemicalReaction } from '../remotion/compositions/ChemicalReaction';
+import { ComparisonSplit } from '../remotion/compositions/ComparisonSplit';
+import { ProcessTimeline } from '../remotion/compositions/ProcessTimeline';
+import { GeometrySpace } from '../remotion/compositions/GeometrySpace';
+import { Play, Pause, RotateCcw, Sparkles, Maximize, Minimize } from 'lucide-react';
+import { CanvaInteractiveOverlay } from './CanvaInteractiveOverlay';
 
 interface RemotionPlayerWrapperProps {
   script: STEMScript;
@@ -17,6 +22,7 @@ interface RemotionPlayerWrapperProps {
   onSceneChange?: (sceneId: string) => void;
   seekTimestampSec?: number | null;
   onFrameUpdate?: (currentFrame: number, currentSec: number) => void;
+  updateSceneProperty?: (updater: (s: any) => any) => void;
 }
 
 export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
@@ -25,11 +31,37 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
   onSceneChange,
   seekTimestampSec,
   onFrameUpdate,
+  updateSceneProperty,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<PlayerRef>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isCanvaModeEnabled, setIsCanvaModeEnabled] = useState(true);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [viewMode, setViewMode] = useState<'FULL' | 'SINGLE'>('FULL');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Lắng nghe sự kiện Fullscreen của trình duyệt
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const handleToggleFullscreen = () => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen?.().catch((err) => {
+        console.warn('Lỗi kích hoạt toàn màn hình:', err);
+      });
+    } else {
+      document.exitFullscreen?.().catch((err) => {
+        console.warn('Lỗi thoát toàn màn hình:', err);
+      });
+    }
+  };
 
   // Listen to frame update
   useEffect(() => {
@@ -114,13 +146,28 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
         return STEMQuizCard;
       case 'OUTRO':
         return OutroCard;
+      case 'CHEMICAL_REACTION':
+        return ChemicalReaction;
+      case 'COMPARISON_SPLIT':
+        return ComparisonSplit;
+      case 'PROCESS_TIMELINE':
+        return ProcessTimeline;
+      case 'GEOMETRY_SPACE':
+        return GeometrySpace;
       default:
         return TitleHeroReveal;
     }
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+    <div
+      ref={containerRef}
+      className={`transition-all ${
+        isFullscreen
+          ? 'fixed inset-0 z-50 bg-black flex flex-col justify-between'
+          : 'bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col'
+      }`}
+    >
       {/* Player Top Bar */}
       <div className="px-5 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -136,8 +183,24 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
           </span>
         </div>
 
-        {/* Switch Full Video vs Single Scene Mode */}
+        {/* Switch Full Video vs Single Scene Mode & Canva Mode */}
         <div className="flex items-center gap-2">
+          {/* Nút Bật/Tắt chế độ tương tác Canva WYSIWYG */}
+          {updateSceneProperty && (
+            <button
+              onClick={() => setIsCanvaModeEnabled(!isCanvaModeEnabled)}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                isCanvaModeEnabled
+                  ? 'bg-blue-600/20 text-blue-400 border-blue-500/50 shadow-xs'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+              }`}
+              title="Click trực tiếp lên video để sửa chữ, chỉnh cỡ như Canva"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+              <span>Canva Mode: {isCanvaModeEnabled ? 'BẬT' : 'TẮT'}</span>
+            </button>
+          )}
+
           <div className="bg-slate-900 p-0.5 rounded-lg border border-slate-800 flex items-center text-xs">
             <button
               onClick={() => setViewMode('FULL')}
@@ -196,6 +259,21 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
             inputProps={selectedScene as any}
             controls={false}
             loop
+          />
+        )}
+
+        {/* Lớp Tương Tác Trực Tiếp Canva WYSIWYG phủ lên Canvas */}
+        {isCanvaModeEnabled && updateSceneProperty && (
+          <CanvaInteractiveOverlay
+            scene={selectedScene}
+            updateSceneProperty={updateSceneProperty}
+            isPlaying={isPlaying}
+            onPauseVideo={() => {
+              if (playerRef.current?.isPlaying()) {
+                playerRef.current.pause();
+                setIsPlaying(false);
+              }
+            }}
           />
         )}
       </div>
@@ -282,9 +360,18 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
         </div>
 
         <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span className="px-2 py-1 bg-slate-900 rounded border border-slate-800 font-mono text-[11px]">
+          <span className="px-2 py-1 bg-slate-900 rounded border border-slate-800 font-mono text-[11px] hidden sm:inline-block">
             1080p • 30fps
           </span>
+          <button
+            type="button"
+            onClick={handleToggleFullscreen}
+            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg border border-slate-700 font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            title={isFullscreen ? 'Thu nhỏ màn hình (Esc)' : 'Phóng to toàn màn hình'}
+          >
+            {isFullscreen ? <Minimize className="w-3.5 h-3.5 text-blue-400" /> : <Maximize className="w-3.5 h-3.5 text-blue-400" />}
+            <span>{isFullscreen ? 'Thu Nhỏ' : 'Toàn Màn Hình'}</span>
+          </button>
         </div>
       </div>
     </div>

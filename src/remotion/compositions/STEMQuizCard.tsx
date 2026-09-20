@@ -10,9 +10,29 @@ export const STEMQuizCard: React.FC<STEMQuizProps> = ({
   options,
   correctIndex,
   explanation,
+  customFontSize,
+  cardScale: userCardScale = 1.0,
+  cardWidth = 'standard',
 }) => {
+  const baseSize = customFontSize || 30;
+  const questionFontSize = Math.round(baseSize * 0.9);
+  const optionFontSize = Math.max(14, Math.round(baseSize * 0.65));
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+
+  const getWidthClass = () => {
+    switch (cardWidth) {
+      case 'compact':
+        return 'max-w-3xl';
+      case 'wide':
+        return 'max-w-6xl';
+      case 'full':
+        return 'max-w-7xl';
+      case 'standard':
+      default:
+        return 'max-w-5xl';
+    }
+  };
 
   const cardScale = spring({
     frame,
@@ -41,7 +61,7 @@ export const STEMQuizCard: React.FC<STEMQuizProps> = ({
           <span className="px-3 py-1 rounded bg-rose-600/20 text-rose-400 font-mono text-xs font-bold uppercase tracking-wider border border-rose-500/30">
             CHECKPOINT QUIZ
           </span>
-          <h2 className="text-2xl font-bold text-slate-100">{title}</h2>
+          <h2 className="text-2xl font-bold text-slate-100" style={{ fontSize: `${Math.round(baseSize * 0.95)}px` }}>{title}</h2>
         </div>
         <span className="text-sm font-mono text-slate-400">
           {isAnswerRevealed ? 'Đáp án chính xác' : `Đếm ngược giải mã: ${Math.max(0, Math.ceil((answerRevealFrame - frame) / fps))}s`}
@@ -50,14 +70,14 @@ export const STEMQuizCard: React.FC<STEMQuizProps> = ({
 
       {/* Main Question & Option Cards */}
       <div 
-        style={{ transform: `scale(${cardScale})` }}
-        className="my-auto max-w-4xl w-full mx-auto relative z-10 flex flex-col gap-6"
+        style={{ transform: `scale(${cardScale * userCardScale})`, transformOrigin: 'center center' }}
+        className={`my-auto ${getWidthClass()} w-full mx-auto relative z-10 flex flex-col gap-6`}
       >
         <div className="bg-slate-900/90 border border-slate-700 rounded-2xl p-6 shadow-2xl">
           <span className="text-xs uppercase font-mono text-rose-400 font-bold tracking-wider mb-2 block">
             Câu hỏi kiểm tra nhận thức
           </span>
-          <p className="text-2xl font-semibold text-slate-100 leading-snug">
+          <p className="text-2xl font-semibold text-slate-100 leading-snug" style={{ fontSize: `${questionFontSize}px` }}>
             {question}
           </p>
         </div>
@@ -86,7 +106,7 @@ export const STEMQuizCard: React.FC<STEMQuizProps> = ({
                 }`}>
                   {String.fromCharCode(65 + idx)}
                 </span>
-                <span className="text-base font-medium">{option}</span>
+                <span className="text-base font-medium" style={{ fontSize: `${optionFontSize}px` }}>{option}</span>
               </div>
             );
           })}
@@ -98,7 +118,7 @@ export const STEMQuizCard: React.FC<STEMQuizProps> = ({
             <span className="text-emerald-400 font-bold font-mono uppercase text-xs px-2 py-0.5 bg-emerald-950 rounded border border-emerald-500/50">
               Giải thích
             </span>
-            <p className="text-slate-300">{explanation}</p>
+            <p className="text-slate-300" style={{ fontSize: `${Math.max(14, Math.round(baseSize * 0.6))}px` }}>{explanation}</p>
           </div>
         )}
       </div>

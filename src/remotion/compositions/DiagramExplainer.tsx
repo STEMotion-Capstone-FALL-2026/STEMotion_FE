@@ -8,7 +8,39 @@ export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
   title,
   diagramTitle,
   labels,
+  customFontSize,
+  cardScale,
+  cardTheme = 'dark',
+  cardWidth = 'standard',
 }) => {
+  const getWidthClass = () => {
+    switch (cardWidth) {
+      case 'compact':
+        return 'max-w-4xl';
+      case 'wide':
+        return 'max-w-6xl';
+      case 'full':
+        return 'max-w-7xl';
+      case 'standard':
+      default:
+        return 'max-w-5xl';
+    }
+  };
+
+  const getThemeClass = () => {
+    switch (cardTheme) {
+      case 'contrast':
+        return 'bg-slate-950/95 border-2 border-purple-400 shadow-[0_0_35px_rgba(168,85,247,0.25)]';
+      case 'glass':
+        return 'bg-slate-900/40 backdrop-blur-xl border border-white/20 shadow-2xl';
+      case 'light':
+        return 'bg-slate-800/90 border border-slate-600/70 shadow-xl';
+      default:
+        return 'bg-slate-900/80 border border-purple-500/30 shadow-2xl';
+    }
+  };
+
+  const baseSize = customFontSize || 30;
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -35,17 +67,24 @@ export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
           <span className="px-3 py-1 rounded bg-purple-600/20 text-purple-400 font-mono text-xs font-bold uppercase tracking-wider border border-purple-500/30">
             DIAGRAM EXPLAINER
           </span>
-          <h2 className="text-2xl font-bold text-slate-100">{title}</h2>
+          <h2 className="text-2xl font-bold text-slate-100" style={{ fontSize: `${Math.round(baseSize * 0.95)}px` }}>{title}</h2>
         </div>
-        <span className="text-sm text-slate-400 font-mono">{diagramTitle}</span>
+        <span className="text-sm text-slate-400 font-mono" style={{ fontSize: `${Math.max(12, Math.round(baseSize * 0.5))}px` }}>{diagramTitle}</span>
       </div>
 
       {/* Main Diagram Area with Interactive Pins / Annotations */}
-      <div className="my-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center relative z-10">
+      <div 
+        style={{
+          transform: `scale(${cardScale || 1.0})`,
+          transformOrigin: 'center center',
+          transition: 'transform 0.2s ease',
+        }}
+        className={`my-auto ${getWidthClass()} w-full mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center relative z-10`}
+      >
         {/* SVG Schematic Area */}
         <div 
           style={{ transform: `scale(${diagramScale})` }}
-          className="w-full h-80 bg-slate-900/80 rounded-2xl border border-purple-500/30 relative flex items-center justify-center p-6 shadow-2xl overflow-hidden"
+          className={`w-full h-80 ${getThemeClass()} rounded-2xl relative flex items-center justify-center p-6 shadow-2xl overflow-hidden`}
         >
           {/* Animated SVG Graphic (Simulating Physics Pendulum / Anatomy) */}
           <svg className="w-full h-full" viewBox="0 0 400 300">
@@ -103,8 +142,8 @@ export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
                   0{idx + 1}
                 </div>
                 <div>
-                  <h4 className="font-semibold text-slate-100 text-base">{item.name}</h4>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">{item.description}</p>
+                  <h4 className="font-semibold text-slate-100 text-base" style={{ fontSize: `${Math.round(baseSize * 0.65)}px` }}>{item.name}</h4>
+                  <p className="text-xs text-slate-400 mt-1 leading-relaxed" style={{ fontSize: `${Math.max(13, Math.round(baseSize * 0.5))}px` }}>{item.description}</p>
                 </div>
               </div>
             );

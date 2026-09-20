@@ -9,7 +9,39 @@ export const OutroCard: React.FC<OutroProps> = ({
   summaryPoints,
   nextLessonSuggestion,
   instructorName,
+  customFontSize,
+  cardScale,
+  cardTheme = 'dark',
+  cardWidth = 'standard',
 }) => {
+  const getWidthClass = () => {
+    switch (cardWidth) {
+      case 'compact':
+        return 'max-w-4xl';
+      case 'wide':
+        return 'max-w-6xl';
+      case 'full':
+        return 'max-w-7xl';
+      case 'standard':
+      default:
+        return 'max-w-5xl';
+    }
+  };
+
+  const getThemeClass = () => {
+    switch (cardTheme) {
+      case 'contrast':
+        return 'bg-slate-950/95 border-2 border-indigo-400 shadow-[0_0_35px_rgba(99,102,241,0.25)]';
+      case 'glass':
+        return 'bg-slate-900/40 backdrop-blur-xl border border-white/20 shadow-2xl';
+      case 'light':
+        return 'bg-slate-800/90 border border-slate-600/70 shadow-xl';
+      default:
+        return 'bg-slate-900/80 border border-indigo-500/30 shadow-2xl';
+    }
+  };
+
+  const baseSize = customFontSize || 30;
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -35,20 +67,27 @@ export const OutroCard: React.FC<OutroProps> = ({
           <span className="px-3 py-1 rounded bg-indigo-600/20 text-indigo-400 font-mono text-xs font-bold uppercase tracking-wider border border-indigo-500/30">
             SUMMARY & NEXT STEPS
           </span>
-          <h2 className="text-2xl font-bold text-slate-100">{title}</h2>
+          <h2 className="text-2xl font-bold text-slate-100" style={{ fontSize: `${Math.round(baseSize * 0.95)}px` }}>{title}</h2>
         </div>
         <span className="text-sm font-mono text-slate-400">Tóm tắt bài giảng</span>
       </div>
 
       {/* Main Content: Key Takeaways & Next Video Hook */}
-      <div className="my-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-stretch relative z-10">
+      <div 
+        style={{
+          transform: `scale(${cardScale || 1.0})`,
+          transformOrigin: 'center center',
+          transition: 'transform 0.2s ease',
+        }}
+        className={`my-auto ${getWidthClass()} w-full mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-stretch relative z-10`}
+      >
         {/* Key Takeaways */}
         <div 
           style={{ transform: `scale(${titleScale})` }}
-          className="bg-slate-900/80 border border-indigo-500/30 rounded-2xl p-6 shadow-2xl flex flex-col justify-between"
+          className={`${getThemeClass()} rounded-2xl p-6 shadow-2xl flex flex-col justify-between`}
         >
           <div>
-            <h3 className="text-lg font-bold text-indigo-300 mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-bold text-indigo-300 mb-4 flex items-center gap-2" style={{ fontSize: `${Math.round(baseSize * 0.65)}px` }}>
               <span className="w-2 h-2 rounded-full bg-indigo-400" />
               Điểm cốt lõi cần ghi nhớ
             </h3>
@@ -61,7 +100,7 @@ export const OutroCard: React.FC<OutroProps> = ({
                 return (
                   <div
                     key={idx}
-                    style={{ opacity: pointOpacity }}
+                    style={{ opacity: pointOpacity, fontSize: `${Math.max(13, Math.round(baseSize * 0.5))}px` }}
                     className="flex items-start gap-3 text-slate-200 text-sm leading-relaxed p-2.5 rounded-lg bg-slate-800/40 border border-slate-800"
                   >
                     <span className="text-indigo-400 font-bold font-mono">✓</span>
@@ -83,7 +122,7 @@ export const OutroCard: React.FC<OutroProps> = ({
             <span className="text-xs uppercase font-mono text-indigo-400 font-bold tracking-wider mb-2 block">
               Bài học tiếp theo
             </span>
-            <h4 className="text-2xl font-bold text-slate-100 mb-3">
+            <h4 className="text-2xl font-bold text-slate-100 mb-3" style={{ fontSize: `${Math.round(baseSize * 0.85)}px` }}>
               {nextLessonSuggestion}
             </h4>
             <p className="text-sm text-slate-400 leading-relaxed">

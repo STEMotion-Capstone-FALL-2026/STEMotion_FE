@@ -13,7 +13,41 @@ export const ChemicalReaction: React.FC<ChemicalReactionProps> = ({
   condition = 'Đốt nóng (t° > 500°C)',
   observation = 'Hỗn hợp phát nổ kèm nhiệt lượng lớn, thành bình xuất hiện hơi nước ngưng tụ.',
   flaskColor = '#38bdf8',
+  customFontSize,
+  cardScale: userCardScale = 1.0,
+  cardTheme = 'dark',
+  cardWidth = 'standard',
 }) => {
+  const getWidthClass = () => {
+    switch (cardWidth) {
+      case 'compact':
+        return 'max-w-4xl';
+      case 'wide':
+        return 'max-w-6xl';
+      case 'full':
+        return 'max-w-7xl';
+      case 'standard':
+      default:
+        return 'max-w-5xl';
+    }
+  };
+
+  const getThemeClass = () => {
+    switch (cardTheme) {
+      case 'contrast':
+        return 'bg-slate-950/95 border-2 border-rose-400 shadow-[0_0_40px_rgba(244,63,94,0.25)]';
+      case 'glass':
+        return 'bg-slate-900/40 backdrop-blur-xl border border-white/20 shadow-2xl';
+      case 'light':
+        return 'bg-slate-800/90 border border-slate-600/70 shadow-xl';
+      default:
+        return 'bg-slate-900/80 border border-slate-800/80 shadow-2xl';
+    }
+  };
+
+  const baseSize = customFontSize || 30;
+  const equationFontSize = Math.round(baseSize * 1.3);
+  const textFontSize = Math.max(13, Math.round(baseSize * 0.52));
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -23,6 +57,7 @@ export const ChemicalReaction: React.FC<ChemicalReactionProps> = ({
         __html: katex.renderToString(tex, {
           displayMode: true,
           throwOnError: false,
+          output: 'html',
         }),
       };
     } catch {
@@ -72,11 +107,11 @@ export const ChemicalReaction: React.FC<ChemicalReactionProps> = ({
 
       {/* Main Content Area */}
       <div
-        style={{ transform: `scale(${cardScale})` }}
-        className="flex-1 my-5 grid grid-cols-12 gap-8 items-center relative z-10"
+        style={{ transform: `scale(${cardScale * userCardScale})`, transformOrigin: 'center center' }}
+        className={`flex-1 my-5 ${getWidthClass()} mx-auto w-full grid grid-cols-12 gap-8 items-center relative z-10`}
       >
         {/* Left Column: Animated Flask Graphic */}
-        <div className="col-span-5 bg-slate-900/80 border border-slate-800/80 rounded-2xl p-6 flex flex-col items-center justify-center relative shadow-2xl backdrop-blur-md h-full">
+        <div className={`col-span-5 ${getThemeClass()} rounded-2xl p-6 flex flex-col items-center justify-center relative shadow-2xl backdrop-blur-md h-full`}>
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 font-mono">
             Mô Phỏng Ống Nghiệm / Bình Phản Ứng
           </span>
@@ -129,7 +164,8 @@ export const ChemicalReaction: React.FC<ChemicalReactionProps> = ({
               Phương Trình Hóa Học
             </span>
             <div
-              className="text-3xl text-indigo-100 font-bold py-2 font-serif overflow-x-auto"
+              style={{ fontSize: `${equationFontSize}px` }}
+              className="text-indigo-100 font-bold py-2 font-serif overflow-x-auto transition-all"
               dangerouslySetInnerHTML={renderLatex(equation)}
             />
           </div>
@@ -140,13 +176,23 @@ export const ChemicalReaction: React.FC<ChemicalReactionProps> = ({
               <span className="text-[11px] font-bold text-amber-400 block mb-1 font-mono uppercase">
                 Chất Tham Gia (Reactants)
               </span>
-              <p className="text-sm text-slate-200 font-medium leading-snug">{reactants}</p>
+              <p
+                style={{ fontSize: `${textFontSize}px` }}
+                className="text-slate-200 font-medium leading-snug transition-all"
+              >
+                {reactants}
+              </p>
             </div>
             <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
               <span className="text-[11px] font-bold text-emerald-400 block mb-1 font-mono uppercase">
                 Sản Phẩm Thu Được (Products)
               </span>
-              <p className="text-sm text-slate-200 font-medium leading-snug">{products}</p>
+              <p
+                style={{ fontSize: `${textFontSize}px` }}
+                className="text-slate-200 font-medium leading-snug transition-all"
+              >
+                {products}
+              </p>
             </div>
           </div>
 
@@ -157,7 +203,12 @@ export const ChemicalReaction: React.FC<ChemicalReactionProps> = ({
             </div>
             <div>
               <span className="text-xs font-bold text-rose-300 block">Hiện tượng thực nghiệm quan sát:</span>
-              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">{observation}</p>
+              <p
+                style={{ fontSize: `${textFontSize}px` }}
+                className="text-slate-300 mt-0.5 leading-relaxed transition-all"
+              >
+                {observation}
+              </p>
             </div>
           </div>
         </div>

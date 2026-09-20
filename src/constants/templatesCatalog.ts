@@ -1,0 +1,137 @@
+import { SceneData } from '../types/stem';
+
+export interface STEMTemplateCatalogItem {
+  type: SceneData['type'];
+  title: string;
+  subject: string;
+  category: 'ALL' | 'Math' | 'Physics' | 'Chemistry' | 'Biology' | 'ComputerScience';
+  badge: string;
+  duration: string;
+  description: string;
+  color: string;
+  bgBadge: string;
+}
+
+export const STEM_TEMPLATES_CATALOG: STEMTemplateCatalogItem[] = [
+  {
+    type: 'TITLE_HERO',
+    title: 'Tiêu Đề & Mở Đầu Bài Giảng',
+    subject: 'Đa Môn STEM',
+    category: 'ALL',
+    badge: 'Hook & Intro',
+    duration: '5 giây (150 frames)',
+    description: 'Mở đầu bài giảng với hiệu ứng chữ xuất hiện sống động, cấp học, môn học và lời dẫn.',
+    color: 'text-blue-600',
+    bgBadge: 'bg-blue-50 text-blue-700 border-blue-200',
+  },
+  {
+    type: 'MATH_FORMULA',
+    title: 'Khai Triển Công Thức KaTeX',
+    subject: 'Toán Học',
+    category: 'Math',
+    badge: 'Toán 9-12',
+    duration: '6 giây (180 frames)',
+    description: 'Biểu diễn công thức toán học sắc nét từng bước, giải thích tham số và điều kiện.',
+    color: 'text-indigo-600',
+    bgBadge: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  },
+  {
+    type: 'CHEMICAL_REACTION',
+    title: 'Phản Ứng & Ống Nghiệm Hóa Học',
+    subject: 'Hóa Học',
+    category: 'Chemistry',
+    badge: 'Hóa Học 8-12',
+    duration: '6 giây (180 frames)',
+    description: 'Bình tam giác sủi bọt khí đổi màu, phương trình hóa học KaTeX và hiện tượng quan sát.',
+    color: 'text-rose-600',
+    bgBadge: 'bg-rose-50 text-rose-700 border-rose-200',
+  },
+  {
+    type: 'COMPARISON_SPLIT',
+    title: 'So Sánh Đối Chiếu Chia Đôi Màn Hình',
+    subject: 'Đa Môn STEM',
+    category: 'ALL',
+    badge: 'Phân Tích 2 Chiều',
+    duration: '6 giây (180 frames)',
+    description: 'Màn hình 2 cột đối chiếu trực quan 2 khái niệm (DC vs AC, Nhân sơ vs Nhân thực, BFS vs DFS).',
+    color: 'text-amber-600',
+    bgBadge: 'bg-amber-50 text-amber-700 border-amber-200',
+  },
+  {
+    type: 'PROCESS_TIMELINE',
+    title: 'Tiến Trình & Chu Trình Sinh Học',
+    subject: 'Sinh Học',
+    category: 'Biology',
+    badge: 'Sinh Học & Tế Bào',
+    duration: '6 giây (180 frames)',
+    description: 'Quy trình theo dòng thời gian (nguyên phân, quang hợp) phát sáng theo từng giai đoạn.',
+    color: 'text-emerald-600',
+    bgBadge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  },
+  {
+    type: 'GEOMETRY_SPACE',
+    title: 'Hình Học Trực Quan & Định Lý',
+    subject: 'Toán Học',
+    category: 'Math',
+    badge: 'Hình Học & Định Lý',
+    duration: '6 giây (180 frames)',
+    description: 'Mô hình hình học SVG (định lý Pytago diện tích 3 hình vuông, tam giác vuông).',
+    color: 'text-cyan-600',
+    bgBadge: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  },
+  {
+    type: 'DIAGRAM_EXPLAINER',
+    title: 'Sơ Đồ Cơ Chế & Vật Lý Động',
+    subject: 'Vật Lý',
+    category: 'Physics',
+    badge: 'Vật Lý 9-12',
+    duration: '6 giây (180 frames)',
+    description: 'Sơ đồ con lắc đơn, mô hình nguyên tử, mạch điện có ghim nhãn tương tác.',
+    color: 'text-purple-600',
+    bgBadge: 'bg-purple-50 text-purple-700 border-purple-200',
+  },
+  {
+    type: 'DATA_CHART',
+    title: 'Biểu Đồ Trực Quan Số Liệu',
+    subject: 'Vật Lý / Toán',
+    category: 'Physics',
+    badge: 'Thực Nghiệm Số Liệu',
+    duration: '5 giây (150 frames)',
+    description: 'Biểu đồ cột/đường trực quan hóa mối tương quan số liệu thực nghiệm khoa học.',
+    color: 'text-teal-600',
+    bgBadge: 'bg-teal-50 text-teal-700 border-teal-200',
+  },
+  {
+    type: 'ALGORITHM_WALKTHROUGH',
+    title: 'Mô Phỏng Chạy Code Thuật Toán',
+    subject: 'Tin Học',
+    category: 'ComputerScience',
+    badge: 'Tin Học Lập Trình',
+    duration: '6 giây (180 frames)',
+    description: 'Chạy từng dòng code Python/C++, hiển thị trạng thái biến thiên bộ nhớ.',
+    color: 'text-slate-800',
+    bgBadge: 'bg-slate-100 text-slate-700 border-slate-300',
+  },
+  {
+    type: 'STEM_QUIZ',
+    title: 'Trắc Nghiệm Tương Tác Checkpoint',
+    subject: 'Đa Môn STEM',
+    category: 'ALL',
+    badge: 'Củng Cố Kiến Thức',
+    duration: '6 giây (180 frames)',
+    description: 'Câu hỏi trắc nghiệm kiểm tra độ hiểu bài kèm đồng hồ đếm ngược 5 giây.',
+    color: 'text-yellow-600',
+    bgBadge: 'bg-yellow-50 text-yellow-800 border-yellow-200',
+  },
+  {
+    type: 'OUTRO',
+    title: 'Tổng Kết Bài Học & Bài Tập LMS',
+    subject: 'Đa Môn STEM',
+    category: 'ALL',
+    badge: 'Tổng Kết & Về Nhà',
+    duration: '5 giây (150 frames)',
+    description: 'Tóm lược các điểm chính của bài học, bài tập thực hành trên Canvas/Moodle.',
+    color: 'text-sky-600',
+    bgBadge: 'bg-sky-50 text-sky-700 border-sky-200',
+  },
+];

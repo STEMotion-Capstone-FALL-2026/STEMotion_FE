@@ -10,9 +10,40 @@ export const TitleHeroReveal: React.FC<TitleHeroProps> = ({
   subject,
   gradeLevel,
   badgeText,
+  customFontSize,
+  cardScale,
+  cardTheme = 'dark',
+  cardWidth = 'standard',
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+
+  const getWidthClass = () => {
+    switch (cardWidth) {
+      case 'compact':
+        return 'max-w-3xl';
+      case 'wide':
+        return 'max-w-6xl';
+      case 'full':
+        return 'max-w-7xl';
+      case 'standard':
+      default:
+        return 'max-w-5xl';
+    }
+  };
+
+  const getThemeClass = () => {
+    switch (cardTheme) {
+      case 'contrast':
+        return 'bg-slate-950/95 border-2 border-blue-400 shadow-[0_0_40px_rgba(59,130,246,0.25)]';
+      case 'glass':
+        return 'bg-slate-900/40 backdrop-blur-xl border border-white/20 shadow-2xl';
+      case 'light':
+        return 'bg-slate-800/90 border border-slate-600/70 shadow-xl';
+      default:
+        return 'bg-slate-900/90 border border-slate-700/80 shadow-2xl';
+    }
+  };
 
   const badgeScale = spring({
     frame,
@@ -45,6 +76,11 @@ export const TitleHeroReveal: React.FC<TitleHeroProps> = ({
 
   const currentTheme = subjectColorMap[subject] || subjectColorMap.Math;
 
+  // Tính cỡ chữ theo customFontSize người dùng kéo slider
+  const baseSize = customFontSize || 30;
+  const heroTitleFontSize = Math.round(baseSize * 2.1); // e.g. 30px -> 63px, 38px -> 80px, 48px -> 101px
+  const subtitleFontSize = Math.round(baseSize * 0.85); // e.g. 30px -> 25px, 38px -> 32px
+
   return (
     <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden text-white font-sans p-16 select-none">
       {/* Dynamic Animated Grid Background */}
@@ -66,42 +102,56 @@ export const TitleHeroReveal: React.FC<TitleHeroProps> = ({
         }}
       />
 
-      {/* Top Badge: Subject & Grade */}
-      <div 
-        style={{ transform: `scale(${badgeScale})` }}
-        className="flex items-center gap-3 px-5 py-2 rounded-full border border-slate-700/80 bg-slate-900/90 backdrop-blur-md mb-8 shadow-2xl"
+      {/* Main Inner Hero Box with Card Scale & Theme */}
+      <div
+        style={{
+          transform: `scale(${cardScale || 1.0})`,
+          transformOrigin: 'center center',
+          transition: 'transform 0.2s ease',
+        }}
+        className={`flex flex-col items-center justify-center relative z-10 w-full ${getWidthClass()}`}
       >
-        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-        <span className="text-sm font-semibold tracking-wider uppercase text-slate-300">
-          {subject} • {gradeLevel}
-        </span>
-        <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-mono font-medium">
-          {badgeText || 'STEMotion Studio'}
-        </span>
+        {/* Top Badge: Subject & Grade */}
+        <div 
+          style={{ transform: `scale(${badgeScale})` }}
+          className={`flex items-center gap-3 px-5 py-2 rounded-full ${getThemeClass()} backdrop-blur-md mb-8`}
+        >
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-sm font-semibold tracking-wider uppercase text-slate-300">
+            {subject} • {gradeLevel}
+          </span>
+          <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-mono font-medium">
+            {badgeText || 'STEMotion Studio'}
+          </span>
+        </div>
+
+        {/* Main Title with Spring Slide */}
+        <h1
+          style={{
+            opacity: titleOpacity,
+            transform: `translateY(${titleY}px)`,
+            fontSize: `${heroTitleFontSize}px`,
+            lineHeight: 1.15,
+          }}
+          className="font-extrabold text-center tracking-tight w-full mb-6 transition-all"
+        >
+          <span className={`bg-clip-text text-transparent bg-gradient-to-r ${currentTheme.gradient}`}>
+            {title}
+          </span>
+        </h1>
+
+        {/* Subtitle / Key Concept Hook */}
+        <p
+          style={{
+            opacity: subtitleOpacity,
+            fontSize: `${subtitleFontSize}px`,
+            lineHeight: 1.5,
+          }}
+          className="text-slate-300 text-center max-w-3xl font-light transition-all"
+        >
+          {subtitle}
+        </p>
       </div>
-
-      {/* Main Title with Spring Slide */}
-      <h1
-        style={{
-          opacity: titleOpacity,
-          transform: `translateY(${titleY}px)`,
-        }}
-        className="text-6xl md:text-7xl font-extrabold text-center tracking-tight leading-tight max-w-5xl mb-6"
-      >
-        <span className={`bg-clip-text text-transparent bg-gradient-to-r ${currentTheme.gradient}`}>
-          {title}
-        </span>
-      </h1>
-
-      {/* Subtitle / Key Concept Hook */}
-      <p
-        style={{
-          opacity: subtitleOpacity,
-        }}
-        className="text-2xl text-slate-300 text-center max-w-3xl font-light leading-relaxed"
-      >
-        {subtitle}
-      </p>
 
       {/* Progress line indicator at bottom */}
       <div className="absolute bottom-10 left-16 right-16 flex items-center justify-between text-xs text-slate-500 border-t border-slate-800/80 pt-4">

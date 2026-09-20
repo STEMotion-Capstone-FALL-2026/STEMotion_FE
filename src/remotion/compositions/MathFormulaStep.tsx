@@ -9,9 +9,44 @@ export const MathFormulaStep: React.FC<MathFormulaProps> = ({
   title,
   latex,
   steps,
+  customFontSize,
+  cardScale,
+  cardTheme = 'dark',
+  cardWidth = 'standard',
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+
+  const getWidthClass = () => {
+    switch (cardWidth) {
+      case 'compact':
+        return 'max-w-3xl';
+      case 'wide':
+        return 'max-w-6xl';
+      case 'full':
+        return 'max-w-7xl';
+      case 'standard':
+      default:
+        return 'max-w-5xl';
+    }
+  };
+
+  const getThemeClass = () => {
+    switch (cardTheme) {
+      case 'contrast':
+        return 'bg-slate-950/95 border-2 border-blue-400 shadow-[0_0_40px_rgba(59,130,246,0.25)]';
+      case 'glass':
+        return 'bg-slate-900/40 backdrop-blur-xl border border-white/20 shadow-2xl';
+      case 'light':
+        return 'bg-slate-800/90 border border-slate-600/70 shadow-xl';
+      default:
+        return 'bg-slate-900/90 backdrop-blur-xl border border-blue-500/40 shadow-2xl';
+    }
+  };
+
+  const baseSize = customFontSize || 30;
+  const formulaFontSize = Math.round(baseSize * 1.4);
+  const stepTextFontSize = Math.max(12, Math.round(baseSize * 0.45));
 
   // Render LaTeX safely
   const renderLatex = (tex: string) => {
@@ -20,6 +55,7 @@ export const MathFormulaStep: React.FC<MathFormulaProps> = ({
         __html: katex.renderToString(tex, {
           displayMode: true,
           throwOnError: false,
+          output: 'html',
         }),
       };
     } catch {
@@ -32,6 +68,19 @@ export const MathFormulaStep: React.FC<MathFormulaProps> = ({
     fps,
     config: { damping: 14, stiffness: 90 },
   });
+
+  const getStepThemeClass = () => {
+    switch (cardTheme) {
+      case 'contrast':
+        return 'bg-slate-950/90 border border-blue-400/50 shadow-md';
+      case 'glass':
+        return 'bg-slate-900/40 backdrop-blur-md border border-white/15 shadow-md';
+      case 'light':
+        return 'bg-slate-800/80 border border-slate-600/60 shadow-md';
+      default:
+        return 'bg-slate-900/70 border border-slate-800 backdrop-blur-sm';
+    }
+  };
 
   return (
     <div className="w-full h-full bg-slate-950 flex flex-col justify-between text-white font-sans p-16 relative overflow-hidden select-none">
@@ -50,21 +99,22 @@ export const MathFormulaStep: React.FC<MathFormulaProps> = ({
           <span className="px-3 py-1 rounded bg-blue-600/20 text-blue-400 font-mono text-xs font-bold uppercase tracking-wider border border-blue-500/30">
             MATH FORMULA STEP
           </span>
-          <h2 className="text-2xl font-bold text-slate-100">{title}</h2>
+          <h2 className="text-3xl font-bold text-slate-100">{title}</h2>
         </div>
         <span className="text-sm text-slate-400 font-mono">KaTeX Realtime Engine</span>
       </div>
 
       {/* Main Core Formula Box */}
       <div 
-        style={{ transform: `scale(${mainFormulaScale})` }}
-        className="my-auto mx-auto max-w-4xl w-full bg-slate-900/90 backdrop-blur-xl border border-blue-500/40 rounded-2xl p-8 shadow-2xl relative z-10 flex flex-col items-center"
+        style={{ transform: `scale(${mainFormulaScale * (cardScale || 1.0)})`, transformOrigin: 'center center' }}
+        className={`my-auto mx-auto ${getWidthClass()} w-full ${getThemeClass()} rounded-2xl p-8 relative z-10 flex flex-col items-center`}
       >
         <div className="text-xs uppercase font-mono text-blue-400 font-semibold mb-3 tracking-widest">
           Công thức cốt lõi (Main Equation)
         </div>
         <div 
-          className="text-3xl md:text-5xl text-blue-300 font-serif py-2 overflow-x-auto max-w-full"
+          style={{ fontSize: `${formulaFontSize}px` }}
+          className="text-blue-300 font-serif py-2 overflow-x-auto max-w-full transition-all"
           dangerouslySetInnerHTML={renderLatex(latex)}
         />
       </div>
@@ -89,7 +139,7 @@ export const MathFormulaStep: React.FC<MathFormulaProps> = ({
                 opacity: stepOpacity,
                 transform: `translateY(${stepTranslateY}px)`,
               }}
-              className="bg-slate-900/70 border border-slate-800 rounded-xl p-5 backdrop-blur-sm relative"
+              className={`${getStepThemeClass()} rounded-xl p-5 relative transition-colors`}
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-amber-400 font-mono">BƯỚC {idx + 1}</span>
@@ -99,7 +149,10 @@ export const MathFormulaStep: React.FC<MathFormulaProps> = ({
                 className="text-lg text-slate-100 font-mono py-1.5"
                 dangerouslySetInnerHTML={renderLatex(step.latexSnippet)}
               />
-              <p className="text-xs text-slate-400 mt-2 line-clamp-2">
+              <p 
+                style={{ fontSize: `${stepTextFontSize}px` }}
+                className="text-slate-400 mt-2 line-clamp-2"
+              >
                 {step.explanation}
               </p>
             </div>

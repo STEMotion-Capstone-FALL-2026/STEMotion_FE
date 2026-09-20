@@ -19,6 +19,8 @@
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
+    "@remotion/cli": "^4.0.218",
+    "@remotion/tailwind": "^4.0.218",
     "@types/katex": "^0.16.7",
     "@types/node": "^20.17.0",
     "@types/react": "^18.3.11",

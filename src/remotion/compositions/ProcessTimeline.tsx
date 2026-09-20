@@ -33,7 +33,41 @@ export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
       badge: 'Giai Đoạn 4',
     },
   ],
+  customFontSize,
+  cardScale,
+  cardTheme = 'dark',
+  cardWidth = 'standard',
 }) => {
+  const getWidthClass = () => {
+    switch (cardWidth) {
+      case 'compact':
+        return 'max-w-4xl';
+      case 'wide':
+        return 'max-w-7xl';
+      case 'full':
+        return 'w-full px-2';
+      case 'standard':
+      default:
+        return 'max-w-6xl';
+    }
+  };
+
+  const getThemeClass = () => {
+    switch (cardTheme) {
+      case 'contrast':
+        return 'bg-slate-950/95 border-2 border-emerald-400 shadow-[0_0_35px_rgba(16,185,129,0.25)]';
+      case 'glass':
+        return 'bg-slate-900/40 backdrop-blur-xl border border-white/20 shadow-2xl';
+      case 'light':
+        return 'bg-slate-800/90 border border-slate-600/70 shadow-xl';
+      default:
+        return 'bg-slate-900/90 border border-emerald-500/40 shadow-xl shadow-emerald-950/30';
+    }
+  };
+
+  const baseSize = customFontSize || 30;
+  const stageTitleSize = Math.round(baseSize * 0.65);
+  const stageDescSize = Math.max(12, Math.round(baseSize * 0.48));
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -76,7 +110,14 @@ export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
       </div>
 
       {/* Timeline Pipeline */}
-      <div className="flex-1 my-3 flex flex-col justify-center relative z-10">
+      <div 
+        style={{
+          transform: `scale(${cardScale || 1.0})`,
+          transformOrigin: 'center center',
+          transition: 'transform 0.2s ease',
+        }}
+        className={`flex-1 my-3 ${getWidthClass()} mx-auto w-full flex flex-col justify-center relative z-10`}
+      >
         {/* Horizontal Connecting Bar */}
         <div className="relative mb-6">
           <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
@@ -107,7 +148,7 @@ export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
                 }}
                 className={`rounded-2xl p-5 border flex flex-col justify-between transition-all backdrop-blur-md ${
                   isActive
-                    ? 'bg-slate-900/90 border-emerald-500/40 shadow-xl shadow-emerald-950/30'
+                    ? getThemeClass()
                     : 'bg-slate-900/40 border-slate-800 opacity-60'
                 }`}
               >
@@ -120,10 +161,16 @@ export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
                       {stg.badge || `Pha ${idx + 1}`}
                     </span>
                   </div>
-                  <h4 className="text-base font-bold text-slate-100 mb-2 leading-snug">
+                  <h4
+                    style={{ fontSize: `${stageTitleSize}px` }}
+                    className="font-bold text-slate-100 mb-2 leading-snug transition-all"
+                  >
                     {stg.title}
                   </h4>
-                  <p className="text-xs text-slate-300 leading-relaxed">
+                  <p
+                    style={{ fontSize: `${stageDescSize}px` }}
+                    className="text-slate-300 leading-relaxed transition-all"
+                  >
                     {stg.description}
                   </p>
                 </div>

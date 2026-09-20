@@ -23,6 +23,11 @@ export interface SceneBase {
   title: string;
   narration: string;
   durationInFrames: number; // 30fps default
+  customFontSize?: number;
+  fontSizeScale?: 'normal' | 'large' | 'huge';
+  cardScale?: number; // 0.8 to 1.5 scale factor for inner component box
+  cardTheme?: 'dark' | 'contrast' | 'glass' | 'light' | 'emerald' | 'cyan' | 'purple' | 'amber';
+  cardWidth?: 'compact' | 'standard' | 'wide' | 'full';
 }
 
 export interface TitleHeroProps extends SceneBase {
@@ -71,6 +76,7 @@ export interface AlgorithmWalkthroughProps extends SceneBase {
   type: 'ALGORITHM_WALKTHROUGH';
   language: string;
   codeSnippet: string;
+  layoutSplit?: 'equal' | 'code-heavy' | 'memory-heavy';
   steps: {
     lineHighlight: number;
     variableState: string;
@@ -119,6 +125,8 @@ export interface ComparisonSplitProps extends SceneBase {
     color?: string;
   };
   conclusion: string;
+  fontSizeScale?: 'normal' | 'large' | 'huge';
+  customFontSize?: number;
 }
 
 export interface ProcessTimelineProps extends SceneBase {
