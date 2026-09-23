@@ -89,7 +89,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({
 
       // Polling kiểm tra tiến độ Render
       let attempts = 0;
-      const maxAttempts = 120;
+      const maxAttempts = 240;
       let videoUrl: string | null = null;
 
       while (attempts < maxAttempts) {

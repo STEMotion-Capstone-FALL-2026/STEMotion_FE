@@ -106,7 +106,11 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
             <>
               <button
                 onClick={async () => {
-                  await reviewService.submitReviewDecision(script.id, 'CHANGE_REQUESTED');
+                  try {
+                    await reviewService.submitReviewDecision(script.id, 'CHANGE_REQUESTED');
+                  } catch (e) {
+                    console.warn('[ReviewerStudio] submitReviewDecision fallback:', e);
+                  }
                   setScript((prev) => ({ ...prev, scriptStatus: 'CHANGE_REQUESTED' }));
                   showToast('Đã gửi yêu cầu sửa lại kịch bản cho Writer!', 'warn');
                   setTimeout(() => onRoleChange('writer'), 900);
@@ -118,7 +122,11 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
               </button>
               <button
                 onClick={async () => {
-                  await reviewService.submitReviewDecision(script.id, 'APPROVED');
+                  try {
+                    await reviewService.submitReviewDecision(script.id, 'APPROVED');
+                  } catch (e) {
+                    console.warn('[ReviewerStudio] submitReviewDecision fallback:', e);
+                  }
                   setScript((prev) => ({ ...prev, scriptStatus: 'APPROVED' }));
                   showToast(
                     'Đã phê duyệt kịch bản! Hệ thống chuyển sang Producer để tạo video.',
@@ -135,8 +143,14 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
           ) : (
             <>
               <button
-                onClick={() => {
-                  showToast('Đã gửi yêu cầu chỉnh sửa video cho Producer!', 'warn');
+                onClick={async () => {
+                  try {
+                    await reviewService.requestVideoChanges(script.id);
+                  } catch (e) {
+                    console.warn('[ReviewerStudio] requestVideoChanges fallback:', e);
+                  }
+                  setScript((prev) => ({ ...prev, videoStatus: 'NOT_RENDERED' }));
+                  showToast('Đã gửi yêu cầu chỉnh sửa video sang Producer!', 'warn');
                   setTimeout(() => onRoleChange('producer'), 900);
                 }}
                 className="px-3 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-lg font-bold flex items-center space-x-1"
@@ -154,9 +168,13 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
               </button>
               <button
                 onClick={async () => {
-                  await reviewService.submitReviewDecision(script.id, 'APPROVED');
+                  try {
+                    await reviewService.approveVideo(script.id);
+                  } catch (e) {
+                    console.warn('[ReviewerStudio] approveVideo fallback:', e);
+                  }
                   setScript((prev) => ({ ...prev, videoStatus: 'APPROVED' }));
-                  showToast('Đã phê duyệt video hoàn chỉnh! Mở màn hình Xuất Bản YouTube & Tải MP4.');
+                  showToast('Đã phê duyệt video hoàn chỉnh! Mở màn hình Xuất Bản YouTube & Tải MP4.', 'success');
                   onOpenPublishModal();
                 }}
                 className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs"
