@@ -66,31 +66,63 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   const [draggedSceneIdx, setDraggedSceneIdx] = useState<number | null>(null);
   const [dragOverSceneIdx, setDragOverSceneIdx] = useState<number | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const currentAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
   const handlePlayTts = (text: string) => {
-    if (!('speechSynthesis' in window)) {
-      showToast('Trình duyệt không hỗ trợ Web Speech API', 'warn');
-      return;
-    }
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      showToast('Đã dừng đọc lời thoại.');
-      return;
-    }
     if (!text?.trim()) {
       showToast('Vui lòng nhập lời thoại trước khi nghe thử!', 'warn');
       return;
     }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'vi-VN';
-    utterance.rate = 1.0;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+
+    if (isSpeaking) {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeaking(false);
+      showToast('Đã dừng phát giọng đọc.');
+      return;
+    }
+
     setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
-    showToast('Đang phát âm giọng đọc tiếng Việt...');
+    showToast('Đang phát giọng đọc AI thuyết minh tiếng Việt...');
+
+    try {
+      const audioUrl = `http://localhost:4000/tts-preview?text=${encodeURIComponent(text)}`;
+      const audio = new Audio(audioUrl);
+      currentAudioRef.current = audio;
+      audio.onended = () => {
+        setIsSpeaking(false);
+        currentAudioRef.current = null;
+      };
+      audio.onerror = () => {
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'vi-VN';
+          utterance.onend = () => setIsSpeaking(false);
+          utterance.onerror = () => setIsSpeaking(false);
+          window.speechSynthesis.speak(utterance);
+        } else {
+          setIsSpeaking(false);
+        }
+      };
+      audio.play().catch(() => {
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'vi-VN';
+          utterance.onend = () => setIsSpeaking(false);
+          utterance.onerror = () => setIsSpeaking(false);
+          window.speechSynthesis.speak(utterance);
+        } else {
+          setIsSpeaking(false);
+        }
+      });
+    } catch {
+      setIsSpeaking(false);
+    }
   };
 
   return (

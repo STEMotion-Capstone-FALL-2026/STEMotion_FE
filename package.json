@@ -14,8 +14,10 @@
   "dependencies": {
     "@remotion/player": "^4.0.218",
     "clsx": "^2.1.1",
+    "google-tts-api": "^2.0.2",
     "katex": "^0.16.11",
     "lucide-react": "^0.453.0",
+    "msedge-tts": "^2.0.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "remotion": "^4.0.218",

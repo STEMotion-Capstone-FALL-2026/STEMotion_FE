@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { bundle } from '@remotion/bundler';
 import { renderMedia, selectComposition } from '@remotion/renderer';
 import { enableTailwind } from '@remotion/tailwind';
+import * as googleTTS from 'google-tts-api';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -87,6 +88,54 @@ async function processQueue() {
     });
 
     const bundleLocation = await getOrCreateBundle();
+
+    // 1. Tự động tổng hợp giọng đọc tiếng Việt cho từng phân cảnh có lời thoại narration
+    const script = job.inputProps?.script;
+    if (script && Array.isArray(script.scenes)) {
+      console.log(`[RenderWorker] Đang tổng hợp giọng lồng tiếng cho ${script.scenes.length} phân cảnh...`);
+      jobStatuses.set(job.jobId, {
+        jobId: job.jobId,
+        status: 'RENDERING',
+        progress: 8,
+        stage: 'Đang tổng hợp giọng thuyết minh tiếng Việt AI...',
+        videoUrl: null,
+        errorMessage: null,
+      });
+
+      for (let i = 0; i < script.scenes.length; i++) {
+        const scene = script.scenes[i];
+        if (scene.narration && !scene.narrationAudioUrl) {
+          try {
+            console.log(`[RenderWorker] Tổng hợp audio cảnh ${i + 1}/${script.scenes.length}: "${scene.title || scene.id}"...`);
+            const results = await googleTTS.getAllAudioBase64(scene.narration, {
+              lang: 'vi',
+              slow: false,
+              host: 'https://translate.google.com',
+              timeout: 10000,
+            });
+            const audioBuffer = Buffer.concat(results.map(r => Buffer.from(r.base64, 'base64')));
+            
+            // Lưu file MP3 vào thư mục renders
+            const audioFileName = `tts_${job.jobId}_scene_${scene.id || i}.mp3`;
+            const audioFilePath = path.resolve(RENDERS_DIR, audioFileName);
+            fs.writeFileSync(audioFilePath, audioBuffer);
+            
+            // Gán data URL để Remotion load trực tiếp với độ tin cậy tuyệt đối
+            scene.narrationAudioUrl = `data:audio/mp3;base64,${audioBuffer.toString('base64')}`;
+
+            // Tự động điều chỉnh durationInFrames để đảm bảo phát trọn vẹn lời thoại
+            const wordCount = (scene.narration || '').trim().split(/\s+/).length;
+            const estimatedSeconds = Math.max(4, Math.ceil(wordCount / 2.6));
+            const minFramesNeeded = estimatedSeconds * (job.fps || 30);
+            if ((scene.durationInFrames || 150) < minFramesNeeded) {
+              scene.durationInFrames = minFramesNeeded;
+            }
+          } catch (ttsErr) {
+            console.warn(`[RenderWorker] Cảnh báo lỗi TTS cảnh ${i + 1}:`, ttsErr.message);
+          }
+        }
+      }
+    }
 
     console.log(`[RenderWorker] Lựa chọn Composition: ${job.composition || 'FullSTEMVideo'}`);
     const composition = await selectComposition({
@@ -242,6 +291,66 @@ const server = http.createServer((req, res) => {
         fs.createReadStream(filePath).pipe(res);
       }
     }
+    return;
+  }
+
+  // Tải và phát file audio MP3 (hỗ trợ nghe voiceover)
+  if ((req.method === 'GET' || req.method === 'HEAD') && pathname.startsWith('/audio/')) {
+    const filename = path.basename(pathname);
+    const filePath = path.resolve(RENDERS_DIR, filename);
+
+    if (!fs.existsSync(filePath)) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Audio file not found' }));
+      return;
+    }
+
+    const stat = fs.statSync(filePath);
+    res.writeHead(200, {
+      'Content-Length': stat.size,
+      'Content-Type': 'audio/mpeg',
+      'Accept-Ranges': 'bytes',
+      'Access-Control-Allow-Origin': '*',
+    });
+
+    if (req.method === 'HEAD') {
+      res.end();
+    } else {
+      fs.createReadStream(filePath).pipe(res);
+    }
+    return;
+  }
+
+  // Nghe thử giọng đọc AI TTS trực tiếp: GET /tts-preview?text=...
+  if (req.method === 'GET' && pathname === '/tts-preview') {
+    const text = parsedUrl.searchParams.get('text') || '';
+    if (!text.trim()) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing text parameter' }));
+      return;
+    }
+
+    (async () => {
+      try {
+        const results = await googleTTS.getAllAudioBase64(text, {
+          lang: 'vi',
+          slow: false,
+          host: 'https://translate.google.com',
+          timeout: 10000,
+        });
+        const buffer = Buffer.concat(results.map(r => Buffer.from(r.base64, 'base64')));
+        res.writeHead(200, {
+          'Content-Type': 'audio/mpeg',
+          'Content-Length': buffer.length,
+          'Cache-Control': 'public, max-age=3600',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(buffer);
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    })();
     return;
   }
 
