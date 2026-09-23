@@ -6,6 +6,7 @@ import { bundle } from '@remotion/bundler';
 import { renderMedia, selectComposition } from '@remotion/renderer';
 import { enableTailwind } from '@remotion/tailwind';
 import * as googleTTS from 'google-tts-api';
+import getMP3Duration from 'get-mp3-duration';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -123,18 +124,41 @@ async function processQueue() {
             // Gán data URL để Remotion load trực tiếp với độ tin cậy tuyệt đối
             scene.narrationAudioUrl = `data:audio/mp3;base64,${audioBuffer.toString('base64')}`;
 
-            // Tự động điều chỉnh durationInFrames để đảm bảo phát trọn vẹn lời thoại
-            const wordCount = (scene.narration || '').trim().split(/\s+/).length;
-            const estimatedSeconds = Math.max(4, Math.ceil(wordCount / 2.6));
-            const minFramesNeeded = estimatedSeconds * (job.fps || 30);
-            if ((scene.durationInFrames || 150) < minFramesNeeded) {
-              scene.durationInFrames = minFramesNeeded;
-            }
+            // Tự động tính toán chính xác độ dài file âm thanh (Audio-Driven Auto-Duration Sync)
+            const durationMs = getMP3Duration(audioBuffer);
+            const speechSeconds = durationMs > 0 ? (durationMs / 1000) : (wordCount / 2.5);
+            // Nghỉ nhẹ 0.6s sau khi dứt lời để chuyển cảnh tự nhiên, không ngắt cụt
+            const targetSeconds = Math.max(2.5, speechSeconds + 0.6);
+            const fps = job.fps || 30;
+            const syncedFrames = Math.round(targetSeconds * fps);
+            scene.durationInFrames = syncedFrames;
+
+            console.log(`[RenderWorker] Cảnh ${i + 1} (${scene.title || scene.id}): Lời thoại đọc ${speechSeconds.toFixed(2)}s -> Khớp chính xác thời lượng Scene: ${syncedFrames} frames (~${targetSeconds.toFixed(1)}s)`);
           } catch (ttsErr) {
             console.warn(`[RenderWorker] Cảnh báo lỗi TTS cảnh ${i + 1}:`, ttsErr.message);
           }
+        } else if (scene.narrationAudioUrl && scene.narrationAudioUrl.startsWith('data:audio/')) {
+          try {
+            const b64 = scene.narrationAudioUrl.split(',')[1];
+            const audioBuffer = Buffer.from(b64, 'base64');
+            const durationMs = getMP3Duration(audioBuffer);
+            if (durationMs > 0) {
+              const speechSeconds = durationMs / 1000;
+              const targetSeconds = Math.max(2.5, speechSeconds + 0.6);
+              const fps = job.fps || 30;
+              scene.durationInFrames = Math.round(targetSeconds * fps);
+              console.log(`[RenderWorker] Cảnh ${i + 1} (audio có sẵn): Lời đọc ${speechSeconds.toFixed(2)}s -> Khớp thời lượng Scene: ${scene.durationInFrames} frames (~${targetSeconds.toFixed(1)}s)`);
+            }
+          } catch (e) {
+            console.warn(`[RenderWorker] Không thể đo audio có sẵn của cảnh ${i + 1}:`, e.message);
+          }
         }
       }
+
+      // Cập nhật lại tổng thời lượng totalDurationSeconds của toàn bộ kịch bản
+      const totalFrames = script.scenes.reduce((sum, s) => sum + (s.durationInFrames || 150), 0);
+      script.totalDurationSeconds = Math.round(totalFrames / (job.fps || 30));
+      console.log(`[RenderWorker] Tổng thời lượng video đã đồng bộ hoàn hảo: ${script.totalDurationSeconds}s (${totalFrames} frames)`);
     }
 
     console.log(`[RenderWorker] Lựa chọn Composition: ${job.composition || 'FullSTEMVideo'}`);
@@ -351,11 +375,17 @@ const server = http.createServer((req, res) => {
           timeout: 10000,
         });
         const buffer = Buffer.concat(results.map(r => Buffer.from(r.base64, 'base64')));
+        const durationMs = getMP3Duration(buffer);
+        const durationSec = durationMs > 0 ? (durationMs / 1000).toFixed(2) : '0';
+        
         res.writeHead(200, {
           'Content-Type': 'audio/mpeg',
           'Content-Length': buffer.length,
           'Cache-Control': 'public, max-age=3600',
           'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'Content-Length, Content-Type, X-Audio-Duration-Ms, X-Audio-Duration-Sec',
+          'X-Audio-Duration-Ms': String(durationMs),
+          'X-Audio-Duration-Sec': durationSec,
         });
         res.end(buffer);
       } catch (err) {
@@ -363,6 +393,60 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({ error: err.message }));
       }
     })();
+    return;
+  }
+
+  // Đồng bộ nhanh thời lượng script theo AI TTS: POST /sync-durations
+  if (req.method === 'POST' && pathname === '/sync-durations') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const script = payload.script;
+        const fps = payload.fps || 30;
+        if (!script || !Array.isArray(script.scenes)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing or invalid script.scenes' }));
+          return;
+        }
+
+        for (let i = 0; i < script.scenes.length; i++) {
+          const sc = script.scenes[i];
+          if (sc.narration && sc.narration.trim()) {
+            try {
+              const results = await googleTTS.getAllAudioBase64(sc.narration, {
+                lang: 'vi',
+                slow: false,
+                host: 'https://translate.google.com',
+                timeout: 8000,
+              });
+              const buf = Buffer.concat(results.map(r => Buffer.from(r.base64, 'base64')));
+              const durationMs = getMP3Duration(buf);
+              const speechSec = durationMs > 0 ? (durationMs / 1000) : (sc.narration.trim().split(/\s+/).length / 2.5);
+              const targetSec = Math.max(2.5, speechSec + 0.6);
+              sc.durationInFrames = Math.round(targetSec * fps);
+            } catch (err) {
+              const words = sc.narration.trim().split(/\s+/).length;
+              const estSec = Math.max(2.5, Math.ceil(words / 2.3) + 0.6);
+              sc.durationInFrames = Math.round(estSec * fps);
+            }
+          }
+        }
+
+        const totalFrames = script.scenes.reduce((sum, s) => sum + (s.durationInFrames || 150), 0);
+        script.totalDurationSeconds = Math.round(totalFrames / fps);
+
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(JSON.stringify({ script, success: true }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
     return;
   }
 

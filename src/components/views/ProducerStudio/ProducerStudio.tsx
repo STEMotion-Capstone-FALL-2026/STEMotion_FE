@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlusCircle, Image, Play, Cpu } from 'lucide-react';
+import { PlusCircle, Image, Play, Cpu, Sparkles } from 'lucide-react';
 import { STEMScript, SceneData } from '../../../types/stem';
 import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
 import { SceneListColumn } from './SceneListColumn';
@@ -79,6 +79,22 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
           >
             <Image className="w-3.5 h-3.5 text-indigo-600" />
             <span>Đổi Tài Nguyên STEM</span>
+          </button>
+          <button
+            onClick={() => {
+              script.scenes.forEach((sc) => {
+                if (sc.narration && sc.narration.trim()) {
+                  const words = sc.narration.trim().split(/\s+/).filter(Boolean).length;
+                  const estSeconds = Math.max(3, Math.ceil(words / 2.3) + 1);
+                  handleChangeDuration(sc.id, estSeconds);
+                }
+              });
+            }}
+            className="px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 font-semibold rounded-lg border border-amber-200 flex items-center space-x-1 shadow-xs cursor-pointer"
+            title="Tự động tính toán & khớp thời lượng tất cả các cảnh theo độ dài lời thoại thuyết minh"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+            <span>Khớp Giọng Đọc</span>
           </button>
           <button
             onClick={onOpenPublishModal || startRenderMock}

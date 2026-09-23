@@ -162,23 +162,31 @@ export const SceneListColumn: React.FC<SceneListColumnProps> = ({
 
                 <div className="flex items-center gap-1">
                   {/* Sửa Thời Lượng Nhanh (Duration) */}
-                  <select
-                    value={Math.round((sc.durationInFrames || 150) / 30)}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      onChangeDuration(sc.id, parseInt(e.target.value));
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-[10px] font-mono font-bold text-slate-600 bg-white border border-slate-200 rounded px-1.5 py-0.5 hover:border-indigo-400 cursor-pointer focus:outline-none shadow-2xs"
-                    title="Thời lượng phân cảnh"
-                  >
-                    <option value={3}>3s</option>
-                    <option value={5}>5s</option>
-                    <option value={6}>6s</option>
-                    <option value={8}>8s</option>
-                    <option value={10}>10s</option>
-                    <option value={15}>15s</option>
-                  </select>
+                  {(() => {
+                    const currentSec = Math.round((sc.durationInFrames || 150) / 30);
+                    const standardOptions = [3, 4, 5, 6, 7, 8, 10, 12, 15, 20];
+                    return (
+                      <select
+                        value={currentSec}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          onChangeDuration(sc.id, parseInt(e.target.value));
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[10px] font-mono font-bold text-slate-600 bg-white border border-slate-200 rounded px-1.5 py-0.5 hover:border-indigo-400 cursor-pointer focus:outline-none shadow-2xs"
+                        title="Thời lượng phân cảnh"
+                      >
+                        {!standardOptions.includes(currentSec) && (
+                          <option value={currentSec}>{currentSec}s (Khớp giọng)</option>
+                        )}
+                        {standardOptions.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}s
+                          </option>
+                        ))}
+                      </select>
+                    );
+                  })()}
 
                   {/* Nhân bản Scene */}
                   <button
