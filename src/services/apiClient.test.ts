@@ -72,8 +72,8 @@ describe('apiClient', () => {
     expect(headers.Authorization).toBeUndefined();
   });
 
-  it('defaults to the real backend, not mock mode', () => {
-    expect(apiClient.isMockMode()).toBe(false);
+  it('points at the backend base URL, not a mock', () => {
+    expect(apiClient.getBaseUrl()).toContain('/api/v1');
   });
 
   it('builds the URL against the configured base', async () => {

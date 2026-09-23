@@ -2,7 +2,9 @@
  * STEMotion Front-End - Workspace Service
  *
  * Scripts live inside a workspace on the backend, so every create/list call
- * needs a workspace id. This service resolves and caches the active one.
+ * needs a workspace id. This service resolves the active one and caches it
+ * for the page load. Failures propagate: the studio would rather show an
+ * error than operate against a workspace that does not exist.
  */
 
 import { apiClient } from './apiClient';
@@ -27,13 +29,8 @@ export interface WorkspaceMemberDto {
 
 const ACTIVE_WORKSPACE_KEY = 'stemotion_active_workspace';
 
-const MOCK_WORKSPACE: WorkspaceSummary = {
-  id: 'ws_mock_001',
-  name: 'Nhóm STEM THCS Tân Bình',
-  department: 'Tổ Toán - Lý',
-  membersCount: 4,
-  activeProjects: 3,
-};
+/** Per-page-load cache; cleared on sign-out so the next user starts clean. */
+let cachedWorkspaces: WorkspaceSummary[] | null = null;
 
 export const workspaceService = {
   getCachedWorkspaceId(): string | null {
@@ -44,6 +41,11 @@ export const workspaceService = {
     }
   },
 
+  /** Drops the cache, e.g. after signing out or creating a workspace. */
+  clearCache(): void {
+    cachedWorkspaces = null;
+  },
+
   setActiveWorkspaceId(id: string): void {
     try {
       localStorage.setItem(ACTIVE_WORKSPACE_KEY, id);
@@ -52,18 +54,14 @@ export const workspaceService = {
     }
   },
 
+  /**
+   * Cached for the rest of the page load so a screen that asks twice does not
+   * cost two round trips.
+   */
   async getMyWorkspaces(): Promise<WorkspaceSummary[]> {
-    if (apiClient.isMockMode()) {
-      await apiClient.mockDelay(120);
-      return [MOCK_WORKSPACE];
-    }
-
-    try {
-      return await apiClient.get<WorkspaceSummary[]>('/workspaces/mine');
-    } catch (error) {
-      console.warn('[workspaceService] Backend unreachable, using mock workspace:', error);
-      return [MOCK_WORKSPACE];
-    }
+    if (cachedWorkspaces) return cachedWorkspaces;
+    cachedWorkspaces = await apiClient.get<WorkspaceSummary[]>('/workspaces/mine');
+    return cachedWorkspaces;
   },
 
   /**
@@ -74,80 +72,42 @@ export const workspaceService = {
     const cached = this.getCachedWorkspaceId();
     if (cached) return cached;
 
-    if (apiClient.isMockMode()) {
-      this.setActiveWorkspaceId(MOCK_WORKSPACE.id);
-      return MOCK_WORKSPACE.id;
+    const mine = await this.getMyWorkspaces();
+    if (mine.length > 0) {
+      this.setActiveWorkspaceId(mine[0].id);
+      return mine[0].id;
     }
 
-    try {
-      const mine = await apiClient.get<WorkspaceSummary[]>('/workspaces/mine');
-      if (mine.length > 0) {
-        this.setActiveWorkspaceId(mine[0].id);
-        return mine[0].id;
-      }
-      const created = await apiClient.post<WorkspaceSummary>('/workspaces', {
-        name: 'Nhóm STEM của tôi',
-        department: 'Chưa phân tổ',
-      });
-      this.setActiveWorkspaceId(created.id);
-      return created.id;
-    } catch (error) {
-      console.warn('[workspaceService] Could not resolve a workspace, using mock id:', error);
-      return MOCK_WORKSPACE.id;
-    }
+    const created = await apiClient.post<WorkspaceSummary>('/workspaces', {
+      name: 'Nhóm STEM của tôi',
+      department: 'Chưa phân tổ',
+    });
+    cachedWorkspaces = null;
+    this.setActiveWorkspaceId(created.id);
+    return created.id;
   },
 
   async getMembers(workspaceId: string): Promise<WorkspaceMemberDto[]> {
-    if (apiClient.isMockMode()) {
-      await apiClient.mockDelay(120);
-      return [];
-    }
-
-    try {
-      return await apiClient.get<WorkspaceMemberDto[]>(`/workspaces/${workspaceId}/members`);
-    } catch (error) {
-      console.warn('[workspaceService] Backend unreachable, no members returned:', error);
-      return [];
-    }
+    return apiClient.get<WorkspaceMemberDto[]>(`/workspaces/${workspaceId}/members`);
   },
 
+  /** Invites by email; the seat activates when that address registers. */
   async inviteMember(
     workspaceId: string,
     email: string,
     role: UserRole
   ): Promise<WorkspaceMemberDto> {
-    const optimistic: WorkspaceMemberDto = {
-      id: 'mem_' + Date.now().toString(36),
-      name: email,
-      email,
-      role,
-      status: 'INVITED',
-    };
-
-    if (apiClient.isMockMode()) {
-      await apiClient.mockDelay(150);
-      return optimistic;
-    }
-
-    try {
-      return await apiClient.post<WorkspaceMemberDto>(
-        `/workspaces/${workspaceId}/members`,
-        { email, role }
-      );
-    } catch (error) {
-      console.warn('[workspaceService] Backend unreachable, invitation kept locally:', error);
-      return optimistic;
-    }
+    const member = await apiClient.post<WorkspaceMemberDto>(
+      `/workspaces/${workspaceId}/members`,
+      { email, role }
+    );
+    cachedWorkspaces = null;
+    return member;
   },
 
   async removeMember(workspaceId: string, memberId: string): Promise<boolean> {
-    if (apiClient.isMockMode()) return true;
-
-    try {
-      await apiClient.delete(`/workspaces/${workspaceId}/members/${memberId}`);
-    } catch (error) {
-      console.warn('[workspaceService] Backend unreachable, member removed locally:', error);
-    }
+    await apiClient.delete(`/workspaces/${workspaceId}/members/${memberId}`);
+    cachedWorkspaces = null;
     return true;
   },
 };

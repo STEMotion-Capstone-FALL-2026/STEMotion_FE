@@ -1,3 +1,11 @@
+/**
+ * Fixture for the Remotion compositions.
+ *
+ * Remotion requires defaultProps on every <Composition> so a template can be
+ * opened and previewed on its own in Remotion Studio. This is the only place
+ * fixed data is allowed — the application itself renders whatever the backend
+ * returns and never falls back to this script.
+ */
 import { STEMScript, WorkspaceMember, FeedbackComment, Workspace } from '@/types/stem';
 
 export const DEFAULT_SAMPLE_SCRIPT: STEMScript = {
@@ -154,43 +162,3 @@ export const DEFAULT_SAMPLE_SCRIPT: STEMScript = {
     },
   ],
 };
-
-export const SAMPLE_WORKSPACES: Workspace[] = [
-  { id: 'ws_physics', name: 'Tổ Bộ Môn Vật Lý THPT', department: 'Khoa Học Tự Nhiên', membersCount: 8, activeProjects: 14 },
-  { id: 'ws_math', name: 'Tổ Toán & Xác Suất Thống Kê', department: 'Toán Ứng Dụng', membersCount: 12, activeProjects: 22 },
-  { id: 'ws_chemistry', name: 'Tổ Hóa Học & Thí Nghiệm Ảo', department: 'Khoa Học Tự Nhiên', membersCount: 6, activeProjects: 9 },
-  { id: 'ws_cs', name: 'Tổ Tin Học & AI Robotics', department: 'Công Nghệ Thông Tin', membersCount: 15, activeProjects: 31 },
-];
-
-export const SAMPLE_MEMBERS: WorkspaceMember[] = [
-  { id: 'u1', name: 'TS. Nguyễn Văn Đức', email: 'duc.nguyen@stemotion.edu.vn', role: 'Trưởng bộ môn (Admin)', avatar: '👨‍🏫', status: 'ACTIVE' },
-  { id: 'u2', name: 'ThS. Trần Thị Mai', email: 'mai.tran@stemotion.edu.vn', role: 'Writer (Biên kịch)', avatar: '👩‍💻', status: 'ACTIVE' },
-  { id: 'u3', name: 'GS. Lê Hoàng Nam', email: 'nam.le@stemotion.edu.vn', role: 'Reviewer (Chuyên gia)', avatar: '🧑‍🔬', status: 'ACTIVE' },
-  { id: 'u4', name: 'Kỹ sư Vũ Minh Trí', email: 'tri.vu@stemotion.edu.vn', role: 'Producer (Dựng video)', avatar: '🎬', status: 'ACTIVE' },
-  { id: 'u5', name: 'ThS. Phạm Thu Trang', email: 'trang.pham@stemotion.edu.vn', role: 'Reviewer (Chuyên gia)', avatar: '👩‍🏫', status: 'INVITED' },
-];
-
-export const SAMPLE_COMMENTS: FeedbackComment[] = [
-  {
-    id: 'c1',
-    author: 'GS. Lê Hoàng Nam (Reviewer)',
-    avatar: '🧑‍🔬',
-    role: 'Reviewer',
-    timestampSec: 6.5,
-    sceneId: 'scene_2',
-    content: 'Đoạn công thức KaTeX T = 2pi*sqrt(l/g) rất rõ ràng, chuẩn định dạng sách giáo khoa lớp 11 mới.',
-    status: 'RESOLVED',
-    createdAt: '10 phút trước',
-  },
-  {
-    id: 'c2',
-    author: 'TS. Nguyễn Văn Đức (Trưởng bộ môn)',
-    avatar: '👨‍🏫',
-    role: 'Admin',
-    timestampSec: 18.2,
-    sceneId: 'scene_5',
-    content: 'Phần code Python ở Scene 5 nên chú thích rõ biến dt = 0.01s để học sinh không bị bỡ ngỡ.',
-    status: 'OPEN',
-    createdAt: '3 phút trước',
-  },
-];

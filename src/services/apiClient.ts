@@ -1,6 +1,7 @@
 /**
  * STEMotion Front-End - Base API Client
- * Supports dual-mode: Real REST API (BE) & In-Memory Mock Mode
+ * Talks to the Spring Boot API. Failures surface as ApiError so the UI can
+ * tell the user what went wrong instead of showing invented data.
  */
 
 export interface ApiResponse<T = any> {
@@ -38,12 +39,6 @@ export const apiClient = {
     return (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
   },
 
-  // Defaults to the real backend; set VITE_USE_MOCK=true to work offline.
-  isMockMode(): boolean {
-    const mockEnv = (import.meta as any).env?.VITE_USE_MOCK;
-    return mockEnv === 'true' || mockEnv === true;
-  },
-
   getAuthToken(): string | null {
     try {
       return localStorage.getItem(TOKEN_KEY);
@@ -68,10 +63,6 @@ export const apiClient = {
     }
   },
 
-  async mockDelay(ms: number = 250): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  },
-
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.getBaseUrl()}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
     const token = this.getAuthToken();
@@ -91,6 +82,14 @@ export const apiClient = {
 
       const raw = await response.text();
       const json = raw ? JSON.parse(raw) : {};
+
+      // An expired or revoked token invalidates the whole session, so drop it
+      // and let the app fall back to the login screen instead of leaving the
+      // studio half-loaded and every later request failing the same way.
+      if (response.status === 401) {
+        this.removeAuthToken();
+        window.dispatchEvent(new CustomEvent('stemotion:unauthorized'));
+      }
 
       if (!response.ok || json.success === false) {
         throw new ApiError(
