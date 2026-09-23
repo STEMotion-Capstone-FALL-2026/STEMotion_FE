@@ -373,7 +373,13 @@ export default function App() {
     try {
       if (useAi) {
         showToast(`Đang kết nối Gemini 3.6 Flash để soạn kịch bản STEM: "${title}"...`, 'info');
-        const newScript = await scriptService.generateScriptWithAI(title, subject, grade, 60);
+        const aiDraft = await scriptService.generateScriptWithAI(title, subject, grade, 60);
+        const newScript = await projectService.createProject({
+          title: aiDraft.title,
+          subject,
+          gradeLevel: grade,
+          scenes: aiDraft.scenes
+        });
         setScript(newScript);
         setActiveSceneId(newScript.scenes[0]?.id || '');
         setCurrentRole('writer');
