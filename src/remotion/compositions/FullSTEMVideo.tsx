@@ -80,9 +80,10 @@ export class SceneErrorBoundary extends React.Component<
 }
 
 export const FullSTEMVideo: React.FC<{ script: STEMScript }> = ({ script }) => {
+  const scenes = script?.scenes || [];
   return (
     <Series>
-      {script.scenes.map((scene) => {
+      {scenes.map((scene) => {
         // The render service attaches this after generating TTS narration.
         // It is absent in the browser Player, where the clip stays silent.
         const narrationUrl = (scene as SceneData & { narrationAudioUrl?: string })

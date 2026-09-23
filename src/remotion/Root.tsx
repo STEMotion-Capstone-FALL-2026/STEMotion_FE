@@ -24,6 +24,17 @@ export const RemotionRoot: React.FC = () => {
         fps={30}
         width={1920}
         height={1080}
+        calculateMetadata={({ props }) => {
+          const script = (props as any)?.script;
+          const scenes = script?.scenes || [];
+          const totalFrames = scenes.reduce(
+            (acc: number, s: any) => acc + (Number(s?.durationInFrames) || 150),
+            0
+          );
+          return {
+            durationInFrames: Math.max(30, totalFrames || 1050),
+          };
+        }}
         defaultProps={{
           script: DEFAULT_SAMPLE_SCRIPT,
         }}

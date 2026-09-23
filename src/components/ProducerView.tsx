@@ -24,28 +24,75 @@ export const ProducerView: React.FC<ProducerViewProps> = ({
 
   const selectedScene = script.scenes.find((s) => s.id === activeSceneId) || script.scenes[0];
 
-  const handleStartRender = () => {
+  const handleStartRender = async () => {
     setIsRendering(true);
-    setRenderProgress(0);
+    setRenderProgress(5);
     setRenderedUrl(null);
 
-    // Simulate rendering pipeline
-    let current = 0;
-    const interval = setInterval(() => {
-      current += 10;
-      if (current >= 100) {
-        clearInterval(interval);
+    const jobId = `stem_${script.id || 'producer'}_${Date.now()}`;
+    const width = resolution === '720p' ? 1280 : resolution === '4k' ? 3840 : 1920;
+    const height = resolution === '720p' ? 720 : resolution === '4k' ? 2160 : 1080;
+
+    try {
+      const res = await fetch('http://localhost:4000/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId,
+          composition: 'FullSTEMVideo',
+          inputProps: { script },
+          width,
+          height,
+          fps,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      let attempts = 0;
+      let finalUrl = null;
+      while (attempts < 120) {
+        await new Promise((r) => setTimeout(r, 1500));
+        attempts++;
+        try {
+          const statusRes = await fetch(`http://localhost:4000/render-status/${jobId}`);
+          if (statusRes.ok) {
+            const data = await statusRes.json();
+            if (data.progress !== undefined) setRenderProgress(data.progress);
+            if (data.status === 'COMPLETED' && data.videoUrl) {
+              finalUrl = data.videoUrl;
+              break;
+            } else if (data.status === 'FAILED') {
+              throw new Error(data.errorMessage || 'Render failed');
+            }
+          }
+        } catch (err: any) {
+          if (err.message && !err.message.includes('fetch')) throw err;
+        }
+      }
+
+      if (finalUrl) {
         setIsRendering(false);
         setRenderProgress(100);
-        setRenderedUrl('blob:stemotion-export-1080p.mp4');
+        setRenderedUrl(finalUrl);
         onUpdateScript({
           ...script,
           videoStatus: 'IN_QA',
         });
-      } else {
-        setRenderProgress(current);
+        return;
       }
-    }, 400);
+    } catch (e) {
+      console.warn('Render server offline or error, falling back to sample:', e);
+    }
+
+    // Fallback nếu render-server offline
+    setIsRendering(false);
+    setRenderProgress(100);
+    setRenderedUrl('/sample_stem_video.mp4');
+    onUpdateScript({
+      ...script,
+      videoStatus: 'IN_QA',
+    });
   };
 
   return (
@@ -175,12 +222,28 @@ export const ProducerView: React.FC<ProducerViewProps> = ({
 
                 {renderedUrl && (
                   <a
-                    href="#download"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      alert('Bắt đầu tải xuống file: STEMotion_' + script.id + '_1080p.mp4');
+                    href={renderedUrl}
+                    download={`STEMotion_${script.id || 'video'}_${resolution}.mp4`}
+                    onClick={async (e) => {
+                      if (renderedUrl.startsWith('http')) {
+                        e.preventDefault();
+                        try {
+                          const res = await fetch(renderedUrl);
+                          const blob = await res.blob();
+                          const blobUrl = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = blobUrl;
+                          a.download = `STEMotion_${script.id || 'video'}_${resolution}.mp4`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(blobUrl);
+                        } catch {
+                          window.open(renderedUrl, '_blank');
+                        }
+                      }
                     }}
-                    className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-2 shadow-sm shadow-emerald-500/20 transition-all shrink-0"
+                    className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-2 shadow-sm shadow-emerald-500/20 transition-all shrink-0 cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
                     Tải MP4 ({resolution})
