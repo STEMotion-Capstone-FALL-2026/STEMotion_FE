@@ -270,6 +270,10 @@ const server = http.createServer((req, res) => {
         'Accept-Ranges': 'bytes',
         'Content-Length': chunksize,
         'Content-Type': 'video/mp4',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length, Content-Disposition',
       });
 
       if (req.method === 'HEAD') {
@@ -278,11 +282,19 @@ const server = http.createServer((req, res) => {
         fs.createReadStream(filePath, { start, end }).pipe(res);
       }
     } else {
+      const isDownload = parsedUrl.searchParams.get('download') === '1';
+      const customFileName = parsedUrl.searchParams.get('filename') || filename;
       res.writeHead(200, {
         'Content-Length': totalSize,
         'Content-Type': 'video/mp4',
         'Accept-Ranges': 'bytes',
-        'Content-Disposition': `inline; filename="${filename}"`,
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Expose-Headers': 'Content-Disposition, Content-Length',
+        'Content-Disposition': isDownload
+          ? `attachment; filename="${encodeURIComponent(customFileName)}"`
+          : `inline; filename="${filename}"`,
       });
 
       if (req.method === 'HEAD') {

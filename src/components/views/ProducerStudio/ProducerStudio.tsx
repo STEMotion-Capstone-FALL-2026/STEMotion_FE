@@ -25,6 +25,7 @@ interface ProducerStudioProps {
   renderStageText: string;
   renderPercentageText: string;
   startRenderMock: () => void;
+  onOpenPublishModal?: () => void;
 }
 
 export const ProducerStudio: React.FC<ProducerStudioProps> = ({
@@ -47,6 +48,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   renderStageText,
   renderPercentageText,
   startRenderMock,
+  onOpenPublishModal,
 }) => {
   return (
     <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -79,8 +81,8 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
             <span>Đổi Tài Nguyên STEM</span>
           </button>
           <button
-            onClick={startRenderMock}
-            className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg shadow-xs flex items-center space-x-1.5 transition-colors"
+            onClick={onOpenPublishModal || startRenderMock}
+            className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
           >
             <Play className="w-4 h-4 fill-current" />
             <span>Kết Xuất Toàn Bộ Video (MP4)</span>

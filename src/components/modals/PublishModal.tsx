@@ -125,20 +125,37 @@ export const PublishModal: React.FC<PublishModalProps> = ({
       }
 
       setDownloadStage('Đang tải file MP4 về máy...');
-      // Tải trực tiếp file MP4 đã render
-      const response = await fetch(videoUrl);
-      if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}`);
+
+      const downloadEndpoint = `${videoUrl}?download=1&filename=${encodeURIComponent(fileName)}`;
+
+      let downloadSucceeded = false;
+      try {
+        const response = await fetch(downloadEndpoint);
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+          downloadSucceeded = true;
+        }
+      } catch (fetchErr) {
+        console.warn('Fetch blob download warning, falling back to direct link trigger:', fetchErr);
       }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+
+      if (!downloadSucceeded) {
+        const link = document.createElement('a');
+        link.href = downloadEndpoint;
+        link.download = fileName;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
 
       setIsDownloading(false);
       setIsDownloadDone(true);
@@ -150,35 +167,12 @@ export const PublishModal: React.FC<PublishModalProps> = ({
         setDownloadStage('');
       }, 3000);
     } catch (err: any) {
-      console.warn('Direct render service warning, fallback to sample video:', err);
-      // Fallback nếu render-server chưa bật hoặc gặp lỗi
-      try {
-        const response = await fetch('/sample_stem_video.mp4');
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      } catch {
-        const link = document.createElement('a');
-        link.href = '/sample_stem_video.mp4';
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
+      console.error('Lỗi khi kết xuất/tải video:', err);
       setIsDownloading(false);
-      setIsDownloadDone(true);
-      onNotify(`🎉 Đã tải file bài giảng STEM "${fileName}" về máy tính thành công!`, 'success');
-      setTimeout(() => {
-        setIsDownloadDone(false);
-        setDownloadProgress(0);
-        setDownloadStage('');
-      }, 3000);
+      setIsDownloadDone(false);
+      setDownloadProgress(0);
+      setDownloadStage('');
+      onNotify(`❌ Không thể kết xuất video: ${err.message || 'Lỗi kết nối máy chủ render'}`, 'warn');
     }
   };
 

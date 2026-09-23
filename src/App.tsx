@@ -552,6 +552,7 @@ export default function App() {
           renderStageText={renderStageText}
           renderPercentageText={renderPercentageText}
           startRenderMock={startRenderMock}
+          onOpenPublishModal={() => setIsPublishModalOpen(true)}
         />
       )}
 
