@@ -41,7 +41,20 @@ export const renderService = {
     const resolution = options.resolution || '1080p';
     const fps = options.fps || 60;
 
-try {
+    if (apiClient.isMockMode()) {
+      await apiClient.mockDelay(300);
+      return {
+        id: 'render_job_' + Date.now().toString(36),
+        projectId,
+        status: 'RENDERING',
+        progressPercentage: 25,
+        resolution,
+        fps,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    try {
       const job = await apiClient.post<any>(`/render/projects/${projectId}/start`, {
         resolution,
         fps,
@@ -62,7 +75,21 @@ try {
   },
 
   async getRenderStatus(renderId: string): Promise<RenderJobStatus> {
-try {
+    if (apiClient.isMockMode()) {
+      await apiClient.mockDelay(150);
+      return {
+        id: renderId,
+        projectId: 'proj_mock',
+        status: 'COMPLETED',
+        progressPercentage: 100,
+        outputUrl: '/sample_stem_video.mp4',
+        resolution: '1080p',
+        fps: 60,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    try {
       const job = await apiClient.get<any>(`/render/status/${renderId}`);
       return this._toRenderJobStatus(job);
     } catch (error) {
@@ -72,7 +99,7 @@ try {
         projectId: 'proj_mock',
         status: 'COMPLETED',
         progressPercentage: 100,
-        outputUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        outputUrl: '/sample_stem_video.mp4',
         resolution: '1080p',
         fps: 60,
         createdAt: new Date().toISOString(),
@@ -81,7 +108,10 @@ try {
   },
 
   async cancelRender(renderId: string): Promise<boolean> {
-await apiClient.delete(`/render/jobs/${renderId}`);
+    if (apiClient.isMockMode()) {
+      return true;
+    }
+    await apiClient.delete(`/render/jobs/${renderId}`);
     return true;
   },
 };

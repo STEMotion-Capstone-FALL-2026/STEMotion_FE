@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlusCircle, Image, Play, Cpu } from 'lucide-react';
+import { PlusCircle, Image, Play, Cpu, Sparkles, Send } from 'lucide-react';
 import { STEMScript, SceneData } from '../../../types/stem';
 import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
 import { SceneListColumn } from './SceneListColumn';
@@ -25,6 +25,8 @@ interface ProducerStudioProps {
   renderStageText: string;
   renderPercentageText: string;
   startRenderMock: () => void;
+  onOpenPublishModal?: () => void;
+  onSubmitForReview?: () => void;
 }
 
 export const ProducerStudio: React.FC<ProducerStudioProps> = ({
@@ -47,6 +49,8 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   renderStageText,
   renderPercentageText,
   startRenderMock,
+  onOpenPublishModal,
+  onSubmitForReview,
 }) => {
   return (
     <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -79,11 +83,50 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
             <span>Đổi Tài Nguyên STEM</span>
           </button>
           <button
-            onClick={startRenderMock}
-            className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg shadow-xs flex items-center space-x-1.5 transition-colors"
+            onClick={() => {
+              script.scenes.forEach((sc) => {
+                if (sc.narration && sc.narration.trim()) {
+                  const words = sc.narration.trim().split(/\s+/).filter(Boolean).length;
+                  const estSeconds = Math.max(3, Math.ceil(words / 2.3) + 1);
+                  handleChangeDuration(sc.id, estSeconds);
+                }
+              });
+            }}
+            className="px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 font-semibold rounded-lg border border-amber-200 flex items-center space-x-1 shadow-xs cursor-pointer"
+            title="Tự động tính toán & khớp thời lượng tất cả các cảnh theo độ dài lời thoại thuyết minh"
           >
-            <Play className="w-4 h-4 fill-current" />
-            <span>Kết Xuất Toàn Bộ Video (MP4)</span>
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+            <span>Khớp Giọng Đọc</span>
+          </button>
+          {onSubmitForReview && (
+            <button
+              onClick={onSubmitForReview}
+              className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
+              title="Hoàn tất tạo video và chuyển sang Bước 4 để Reviewer thẩm định chất lượng"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Gửi Reviewer Duyệt Video</span>
+            </button>
+          )}
+          <button
+            onClick={onOpenPublishModal || startRenderMock}
+            className={`px-3.5 py-1.5 font-bold rounded-lg border flex items-center space-x-1.5 transition-colors cursor-pointer ${
+              script.videoStatus === 'APPROVED'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs border-emerald-500'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+            }`}
+            title={
+              script.videoStatus === 'APPROVED'
+                ? 'Video đã được duyệt - Kết xuất MP4 Full HD hoặc xuất bản YouTube'
+                : 'Video chưa qua bước Reviewer duyệt (Bước 4) - Kết xuất bản nháp test'
+            }
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>
+              {script.videoStatus === 'APPROVED'
+                ? 'Kết Xuất MP4 (Đã Duyệt)'
+                : 'Kết Xuất Bản Nháp (MP4)'}
+            </span>
           </button>
         </div>
       </div>

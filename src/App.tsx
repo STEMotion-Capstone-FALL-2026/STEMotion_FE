@@ -607,6 +607,16 @@ export default function App() {
           renderStageText={renderStageText}
           renderPercentageText={renderPercentageText}
           startRenderMock={startRenderMock}
+          onOpenPublishModal={() => setIsPublishModalOpen(true)}
+          onSubmitForReview={() => {
+            setScript((prev) => ({
+              ...prev,
+              videoStatus: 'IN_QA',
+            }));
+            setReviewerMode('video');
+            handleRoleChange('reviewer');
+            showToast('Đã gửi video sang Bước 4: Reviewer Duyệt Video!', 'success');
+          }}
         />
       )}
 

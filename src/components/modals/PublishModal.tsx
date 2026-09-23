@@ -34,6 +34,8 @@ export const PublishModal: React.FC<PublishModalProps> = ({
   const [downloadFps, setDownloadFps] = useState<'60' | '30'>('60');
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadDone, setIsDownloadDone] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadStage, setDownloadStage] = useState('');
 
   const [youtubeForm, setYoutubeForm] = useState({
     title: 'Định luật Ohm & Mạch Điện Cơ Bản - Bài Giảng STEM Vật Lý Lớp 9',
@@ -47,55 +49,130 @@ export const PublishModal: React.FC<PublishModalProps> = ({
 
   const handleDownloadMp4 = async () => {
     setIsDownloading(true);
-    onNotify('Đang tải file video bài giảng MP4 Full HD 1080p về máy...', 'info');
+    setDownloadProgress(5);
+    setDownloadStage('Đang khởi tạo tiến trình kết xuất Remotion...');
+    onNotify('Bắt đầu kết xuất video MP4 bài giảng STEM...', 'info');
+
+    const cleanTitle = (script.title || 'stem_video')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/gi, '_')
+      .replace(/_+/g, '_');
+    const fileName = `${cleanTitle}_${downloadQuality}_${downloadFps}fps.mp4`;
 
     try {
-      const cleanTitle = script.title
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]/gi, '_')
-        .replace(/_+/g, '_');
-      const fileName = `${cleanTitle}_${downloadQuality}_${downloadFps}fps.mp4`;
+      const width = downloadQuality === '720p' ? 1280 : 1920;
+      const height = downloadQuality === '720p' ? 720 : 1080;
+      const fps = Number(downloadFps) || 30;
+      const jobId = `stem_${script.id || 'export'}_${Date.now()}`;
 
-      // Fetch file video MP4 bài giảng STEM thật chuẩn container H.264 / AAC
-      const response = await fetch('/sample_stem_video.mp4');
-      if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}`);
+      // Gọi Render Service qua port 4000
+      const renderRes = await fetch('http://localhost:4000/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId,
+          composition: 'FullSTEMVideo',
+          inputProps: { script },
+          width,
+          height,
+          fps,
+        }),
+      });
+
+      if (!renderRes.ok) {
+        throw new Error(`Render server error: HTTP ${renderRes.status}`);
       }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+
+      setDownloadStage('Đang kết xuất từng khung hình video...');
+
+      // Polling kiểm tra tiến độ Render
+      let attempts = 0;
+      const maxAttempts = 120;
+      let videoUrl: string | null = null;
+
+      while (attempts < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1500));
+        attempts++;
+
+        try {
+          const statusRes = await fetch(`http://localhost:4000/render-status/${jobId}`);
+          if (statusRes.ok) {
+            const data = await statusRes.json();
+            if (data.progress !== undefined) {
+              setDownloadProgress(data.progress);
+            }
+            if (data.stage) {
+              setDownloadStage(data.stage);
+            }
+            if (data.status === 'COMPLETED' && data.videoUrl) {
+              videoUrl = data.videoUrl;
+              break;
+            } else if (data.status === 'FAILED') {
+              throw new Error(data.errorMessage || 'Lỗi xử lý render video');
+            }
+          }
+        } catch (pollErr: any) {
+          if (pollErr.message && !pollErr.message.includes('fetch')) {
+            throw pollErr;
+          }
+        }
+      }
+
+      if (!videoUrl) {
+        throw new Error('Hết thời gian chờ kết xuất video');
+      }
+
+      setDownloadStage('Đang tải file MP4 về máy...');
+
+      const downloadEndpoint = `${videoUrl}?download=1&filename=${encodeURIComponent(fileName)}`;
+
+      let downloadSucceeded = false;
+      try {
+        const response = await fetch(downloadEndpoint);
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+          downloadSucceeded = true;
+        }
+      } catch (fetchErr) {
+        console.warn('Fetch blob download warning, falling back to direct link trigger:', fetchErr);
+      }
+
+      if (!downloadSucceeded) {
+        const link = document.createElement('a');
+        link.href = downloadEndpoint;
+        link.download = fileName;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
 
       setIsDownloading(false);
       setIsDownloadDone(true);
+      setDownloadProgress(100);
       onNotify(`🎉 Đã tải file bài giảng STEM "${fileName}" về máy tính thành công!`, 'success');
-      setTimeout(() => setIsDownloadDone(false), 3000);
-    } catch (err) {
-      console.warn('Direct fetch download error, fallback to static link:', err);
-      const cleanTitle = script.title
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]/gi, '_')
-        .replace(/_+/g, '_');
-      const fileName = `${cleanTitle}_${downloadQuality}_${downloadFps}fps.mp4`;
-      const link = document.createElement('a');
-      link.href = '/sample_stem_video.mp4';
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      setTimeout(() => {
+        setIsDownloadDone(false);
+        setDownloadProgress(0);
+        setDownloadStage('');
+      }, 3000);
+    } catch (err: any) {
+      console.error('Lỗi khi kết xuất/tải video:', err);
       setIsDownloading(false);
-      setIsDownloadDone(true);
-      onNotify(`🎉 Đã tải file bài giảng STEM "${fileName}" về máy tính thành công!`, 'success');
-      setTimeout(() => setIsDownloadDone(false), 3000);
+      setIsDownloadDone(false);
+      setDownloadProgress(0);
+      setDownloadStage('');
+      onNotify(`❌ Không thể kết xuất video: ${err.message || 'Lỗi kết nối máy chủ render'}`, 'warn');
     }
   };
 
@@ -196,6 +273,15 @@ export const PublishModal: React.FC<PublishModalProps> = ({
             </span>
           </div>
         </div>
+
+        {script.videoStatus !== 'APPROVED' && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded text-[10px]">LƯU Ý</span>
+              <span>Video đang ở giai đoạn dựng (chưa qua Bước 4: Reviewer Duyệt). Bạn đang kết xuất bản nháp (Draft) để kiểm tra nội bộ.</span>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex border-b border-slate-200 gap-2">
@@ -491,6 +577,25 @@ export const PublishModal: React.FC<PublishModalProps> = ({
                 </div>
               </div>
 
+              {/* Tiến trình render nếu đang xử lý */}
+              {isDownloading && (
+                <div className="pt-2 space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-mono text-slate-300">
+                    <span className="flex items-center gap-1.5 text-blue-400">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      {downloadStage || 'Đang kết xuất video...'}
+                    </span>
+                    <span className="font-bold text-white">{downloadProgress}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300 rounded-full"
+                      style={{ width: `${downloadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Nút hành động Download lớn */}
               <div className="flex justify-end pt-3 border-t border-slate-800">
                 <button
@@ -502,7 +607,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({
                   {isDownloading ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Đang Tải File MP4 Về Máy...</span>
+                      <span>{downloadStage || `Đang kết xuất Remotion (${downloadProgress}%)...`}</span>
                     </>
                   ) : isDownloadDone ? (
                     <>
@@ -512,7 +617,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({
                   ) : (
                     <>
                       <Download className="w-4 h-4" />
-                      <span>Tải Video MP4 Về Máy Luôn (1080p Full HD)</span>
+                      <span>Tải Video MP4 Về Máy ({downloadQuality} • {downloadFps}fps)</span>
                     </>
                   )}
                 </button>

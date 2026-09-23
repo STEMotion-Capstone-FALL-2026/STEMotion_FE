@@ -66,31 +66,74 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   const [draggedSceneIdx, setDraggedSceneIdx] = useState<number | null>(null);
   const [dragOverSceneIdx, setDragOverSceneIdx] = useState<number | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const currentAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
   const handlePlayTts = (text: string) => {
-    if (!('speechSynthesis' in window)) {
-      showToast('Trình duyệt không hỗ trợ Web Speech API', 'warn');
-      return;
-    }
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      showToast('Đã dừng đọc lời thoại.');
-      return;
-    }
     if (!text?.trim()) {
       showToast('Vui lòng nhập lời thoại trước khi nghe thử!', 'warn');
       return;
     }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'vi-VN';
-    utterance.rate = 1.0;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+
+    if (isSpeaking) {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeaking(false);
+      showToast('Đã dừng phát giọng đọc.');
+      return;
+    }
+
     setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
-    showToast('Đang phát âm giọng đọc tiếng Việt...');
+    showToast('Đang phát giọng đọc AI thuyết minh tiếng Việt...');
+
+    try {
+      const audioUrl = `http://localhost:4000/tts-preview?text=${encodeURIComponent(text)}`;
+      const audio = new Audio(audioUrl);
+      currentAudioRef.current = audio;
+      audio.onloadedmetadata = () => {
+        if (audio.duration && !isNaN(audio.duration) && audio.duration > 0) {
+          const speechSec = audio.duration;
+          const targetSec = Math.max(3, Math.round(speechSec + 0.6));
+          updateSceneProperty((s) => ({
+            ...s,
+            durationInFrames: targetSec * 30,
+          }));
+          showToast(`Đã đồng bộ thời lượng phân cảnh: ${targetSec}s (khớp giọng đọc ${speechSec.toFixed(1)}s)`);
+        }
+      };
+      audio.onended = () => {
+        setIsSpeaking(false);
+        currentAudioRef.current = null;
+      };
+      audio.onerror = () => {
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'vi-VN';
+          utterance.onend = () => setIsSpeaking(false);
+          utterance.onerror = () => setIsSpeaking(false);
+          window.speechSynthesis.speak(utterance);
+        } else {
+          setIsSpeaking(false);
+        }
+      };
+      audio.play().catch(() => {
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'vi-VN';
+          utterance.onend = () => setIsSpeaking(false);
+          utterance.onerror = () => setIsSpeaking(false);
+          window.speechSynthesis.speak(utterance);
+        } else {
+          setIsSpeaking(false);
+        }
+      });
+    } catch {
+      setIsSpeaking(false);
+    }
   };
 
   return (
@@ -339,20 +382,33 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               <textarea
                 rows={5}
                 value={selectedScene.narration}
-                onChange={(e) => updateSceneProperty((s) => ({ ...s, narration: e.target.value }))}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const words = val.trim().split(/\s+/).filter(Boolean).length;
+                  const estSeconds = words > 0 ? Math.max(3, Math.ceil(words / 2.3) + 1) : 5;
+                  updateSceneProperty((s) => ({
+                    ...s,
+                    narration: val,
+                    durationInFrames: estSeconds * 30,
+                  }));
+                }}
                 placeholder="Nhập lời giảng sư phạm để AI đọc thuyết minh cho phân cảnh này..."
                 className="w-full text-sm text-slate-800 p-3.5 border border-slate-200 rounded-xl focus:border-brand-500 focus:outline-none leading-relaxed shadow-2xs"
               />
 
               {/* AI Quick Helpers cho Lời Thoại */}
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2 mt-2 flex-wrap">
                 <button
                   onClick={() => {
+                    const newText = `${selectedScene.narration || ''} Các em hãy quan sát kỹ hiện tượng trên màn hình để rút ra kết luận khoa học quan trọng nhất.`;
+                    const words = newText.trim().split(/\s+/).filter(Boolean).length;
+                    const estSeconds = Math.max(3, Math.ceil(words / 2.3) + 1);
                     updateSceneProperty((s) => ({
                       ...s,
-                      narration: `${s.narration} Các em hãy quan sát kỹ hiện tượng trên màn hình để rút ra kết luận khoa học quan trọng nhất.`,
+                      narration: newText,
+                      durationInFrames: estSeconds * 30,
                     }));
-                    showToast('AI: Đã mở rộng thêm lời dẫn dắt sư phạm!');
+                    showToast('AI: Đã mở rộng thêm lời dẫn dắt sư phạm & khớp thời lượng!');
                   }}
                   className="text-[11px] px-2.5 py-1 rounded-lg bg-blue-50 text-brand-700 hover:bg-blue-100 font-semibold border border-blue-200 flex items-center gap-1"
                 >
@@ -361,11 +417,15 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                 </button>
                 <button
                   onClick={() => {
+                    const newText = (selectedScene.narration || '').replace(/rất là|hoàn toàn là/g, '');
+                    const words = newText.trim().split(/\s+/).filter(Boolean).length;
+                    const estSeconds = Math.max(3, Math.ceil(words / 2.3) + 1);
                     updateSceneProperty((s) => ({
                       ...s,
-                      narration: s.narration.replace(/rất là|hoàn toàn là/g, ''),
+                      narration: newText,
+                      durationInFrames: estSeconds * 30,
                     }));
-                    showToast('AI: Đã tối ưu câu văn súc tích, dễ hiểu!');
+                    showToast('AI: Đã tối ưu câu văn súc tích & khớp thời lượng!');
                   }}
                   className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold border border-emerald-200 flex items-center gap-1"
                 >
@@ -383,6 +443,22 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                 >
                   <Volume2 className="w-3.5 h-3.5 text-purple-600" />
                   <span>{isSpeaking ? 'Dừng Đọc' : '🔊 Nghe Thử Giọng Đọc'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const words = (selectedScene.narration || '').trim().split(/\s+/).filter(Boolean).length;
+                    const estSeconds = words > 0 ? Math.max(3, Math.ceil(words / 2.3) + 1) : 5;
+                    updateSceneProperty((s) => ({
+                      ...s,
+                      durationInFrames: estSeconds * 30,
+                    }));
+                    showToast(`⚡ Đã khớp thời lượng phân cảnh: ${estSeconds}s!`);
+                  }}
+                  className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold border border-amber-200 flex items-center gap-1"
+                  title="Tự động tính toán lại thời lượng phân cảnh theo độ dài lời thoại"
+                >
+                  <span>⚡ Khớp Thời Lượng</span>
                 </button>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Player, PlayerRef } from '@remotion/player';
+import { Audio } from 'remotion';
 import { STEMScript, SceneData } from '../types/stem';
 import { FullSTEMVideo, SceneErrorBoundary } from '../remotion/compositions/FullSTEMVideo';
 import { TitleHeroReveal } from '../remotion/compositions/TitleHeroReveal';
@@ -13,7 +14,7 @@ import { ChemicalReaction } from '../remotion/compositions/ChemicalReaction';
 import { ComparisonSplit } from '../remotion/compositions/ComparisonSplit';
 import { ProcessTimeline } from '../remotion/compositions/ProcessTimeline';
 import { GeometrySpace } from '../remotion/compositions/GeometrySpace';
-import { Play, Pause, RotateCcw, Sparkles, Maximize, Minimize } from 'lucide-react';
+import { Play, Pause, RotateCcw, Sparkles, Maximize, Minimize, Volume2, VolumeX } from 'lucide-react';
 import { CanvaInteractiveOverlay } from './CanvaInteractiveOverlay';
 
 interface RemotionPlayerWrapperProps {
@@ -40,6 +41,18 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
   const [currentFrame, setCurrentFrame] = useState(0);
   const [viewMode, setViewMode] = useState<'FULL' | 'SINGLE'>('FULL');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+
+  const toggleMute = () => {
+    if (!playerRef.current) return;
+    if (isMuted) {
+      playerRef.current.unmute();
+      setIsMuted(false);
+    } else {
+      playerRef.current.mute();
+      setIsMuted(true);
+    }
+  };
 
   // Lắng nghe sự kiện Fullscreen của trình duyệt
   useEffect(() => {
@@ -161,9 +174,16 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
 
   const SingleSceneRenderer: React.FC<{ scene: SceneData }> = ({ scene }) => {
     const Comp = getSingleComponent(scene);
+    const narrationUrl =
+      (scene as any).narrationAudioUrl ||
+      (scene.narration && scene.narration.trim()
+        ? `http://localhost:4000/tts-preview?text=${encodeURIComponent(scene.narration.trim())}`
+        : undefined);
+
     return (
       <SceneErrorBoundary scene={scene}>
         <Comp {...(scene as any)} />
+        {narrationUrl && <Audio src={narrationUrl} />}
       </SceneErrorBoundary>
     );
   };
@@ -186,9 +206,12 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
               REMOTION 4.0 LIVE PLAYER
             </span>
           </div>
-          <span className="text-xs text-slate-500">•</span>
           <span className="text-xs text-slate-400 truncate max-w-md font-medium">
             {script.title}
+          </span>
+          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
+            <Volume2 className="w-3 h-3 text-emerald-400" />
+            <span>Voiceover: BẬT</span>
           </span>
         </div>
 
@@ -335,6 +358,18 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
             title="Xem lại từ đầu"
           >
             <RotateCcw className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={toggleMute}
+            className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
+            title={isMuted ? 'Bật âm thanh thuyết minh (Unmute)' : 'Tắt âm thanh (Mute)'}
+          >
+            {isMuted ? (
+              <VolumeX className="w-4 h-4 text-rose-400" />
+            ) : (
+              <Volume2 className="w-4 h-4 text-emerald-400" />
+            )}
           </button>
 
           {/* Timecode */}
