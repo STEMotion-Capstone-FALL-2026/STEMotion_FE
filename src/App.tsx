@@ -372,13 +372,18 @@ export default function App() {
   ) => {
     try {
       if (useAi) {
-        showToast(`Đang kết nối Gemini 3.6 Flash để soạn kịch bản STEM: "${title}"...`, 'info');
-        const newScript = await scriptService.generateScriptWithAI(title, subject, grade, 60);
-        setScript(newScript);
-        setActiveSceneId(newScript.scenes[0]?.id || '');
-        setCurrentRole('writer');
-        showToast(`AI đã soạn kịch bản hoàn tất: "${newScript.title}" (${newScript.scenes.length} phân cảnh)!`, 'success');
-        return;
+        showToast(`Đang kết nối Gemini để soạn kịch bản STEM: "${title}"...`, 'info');
+        try {
+          const newScript = await scriptService.generateScriptWithAI(title, subject, grade, 60);
+          setScript(newScript);
+          setActiveSceneId(newScript.scenes[0]?.id || '');
+          setCurrentRole('writer');
+          showToast(`AI đã soạn kịch bản hoàn tất: "${newScript.title}" (${newScript.scenes.length} phân cảnh)!`, 'success');
+          return;
+        } catch (aiErr: any) {
+          console.warn('[handleCreateNewProject] AI generation error, falling back to starter project:', aiErr);
+          showToast(`AI tạm thời gián đoạn. Đang tạo dự án với các phân cảnh STEM chuẩn để bạn soạn thảo...`, 'warn');
+        }
       }
       const newScript = await projectService.createProject({
         title,
@@ -390,8 +395,6 @@ export default function App() {
       setCurrentRole('writer');
       showToast(`Đã tạo dự án mới: "${title}"! Đang mở Writer Studio.`);
     } catch (err: any) {
-      // No local fallback: a project that only exists in the browser would be
-      // lost on reload and hide the real failure.
       console.error('Error creating project:', err);
       showToast('Không tạo được dự án: ' + (err?.message || 'lỗi máy chủ'), 'warn');
     }
