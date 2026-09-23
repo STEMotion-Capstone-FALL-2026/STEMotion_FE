@@ -46,36 +46,7 @@ export const scriptService = {
       elapsedMs: 0,
     });
 
-    if (apiClient.isMockMode()) {
-      await apiClient.mockDelay(500);
-      if (action === 'grade') {
-        return wrap({
-          readabilityScore: 85,
-          estimatedGrade: gradeLevel || 'Lớp 10',
-          matchesTargetGrade: true,
-          verdict: 'Nội dung kiến thức phù hợp chuẩn sư phạm.',
-          suggestions: ['Bổ sung thêm ví dụ thực tế để học sinh dễ liên hệ.'],
-        });
-      }
-      if (action === 'extract') {
-        return wrap({
-          concepts: [
-            { name: 'Khái niệm trọng tâm', category: 'Cốt lõi', importance: 'Cao' },
-          ],
-        });
-      }
-      if (action === 'terms') {
-        return wrap({ issues: [] });
-      }
-      return wrap({
-        scenes: [
-          { type: 'MATH_FORMULA', title: 'Khái niệm cốt lõi', narration: 'Giới thiệu khái niệm cốt lõi.', suggestedDurationSec: 15 },
-          { type: 'STEM_QUIZ', title: 'Kiểm tra nhanh', narration: 'Câu hỏi củng cố.', suggestedDurationSec: 20 },
-        ],
-      });
-    }
-
-    const res = await apiClient.post<any>('/ai/script/action', {
+const res = await apiClient.post<any>('/ai/script/action', {
       action,
       scriptText,
       subject: subject || 'Math',
@@ -95,17 +66,7 @@ export const scriptService = {
     gradeLevel: string,
     targetDurationSec: number = 60
   ): Promise<STEMScript> {
-    if (apiClient.isMockMode()) {
-      await apiClient.mockDelay(500);
-      return projectService.createProject({
-        title: topic || `Khám phá ${subject} - ${gradeLevel}`,
-        subject,
-        gradeLevel,
-        topicPrompt: topic,
-      });
-    }
-
-    const res = await apiClient.post<any>('/ai/script/generate', {
+const res = await apiClient.post<any>('/ai/script/generate', {
       topic,
       subject,
       gradeLevel,
@@ -250,11 +211,7 @@ export const scriptService = {
     // Always update local cache for smooth instantaneous interaction
     projectService.updateProject(currentScript.id, updatedScript);
 
-    if (apiClient.isMockMode()) {
-      return updatedScript;
-    }
-
-    try {
+try {
       const res = await apiClient.put<STEMScript>(`/scripts/${currentScript.id}`, {
         scenes: updatedScenes,
       });
@@ -447,11 +404,7 @@ export const scriptService = {
 
     projectService.updateProject(currentScript.id, updatedScript);
 
-    if (apiClient.isMockMode()) {
-      return { updatedScript, newScene };
-    }
-
-    try {
+try {
       const res = await apiClient.put<STEMScript>(`/scripts/${currentScript.id}`, {
         scenes: updatedScript.scenes,
       });
@@ -483,11 +436,7 @@ export const scriptService = {
 
     projectService.updateProject(currentScript.id, updatedScript);
 
-    if (apiClient.isMockMode()) {
-      return updatedScript;
-    }
-
-    try {
+try {
       await apiClient.put(`/scripts/${currentScript.id}`, { scenes: filtered });
     } catch (error) {
       console.warn('[scriptService] Backend delete scene failed, deleted locally:', error);

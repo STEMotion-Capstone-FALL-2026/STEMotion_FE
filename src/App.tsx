@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { DEFAULT_SAMPLE_SCRIPT, SAMPLE_COMMENTS } from './lib/sampleData';
 import { STEMScript, FeedbackComment, SceneData, STEMSubject } from './types/stem';
 import { LoginScreen } from './components/LoginScreen';
 import {
@@ -31,17 +30,32 @@ import { CreateProjectModal } from './components/modals/CreateProjectModal';
 import { InviteWorkspaceModal } from './components/modals/InviteWorkspaceModal';
 import { VersionDiffModal } from './components/modals/VersionDiffModal';
 
+/** Shape the studio renders before the first script arrives. */
+const EMPTY_SCRIPT: STEMScript = {
+  id: '',
+  title: '',
+  subject: 'Math',
+  gradeLevel: '',
+  totalDurationSeconds: 0,
+  scriptStatus: 'DRAFT',
+  videoStatus: 'NOT_RENDERED',
+  fps: 30,
+  scenes: [],
+  createdAt: new Date().toISOString(),
+};
+
 export default function App() {
   // Navigation Role: 'producer' | 'writer' | 'reviewer' | 'admin' | 'library'
   // ---- Session -----------------------------------------------------------
   // In mock mode the studio opens straight away; against a real backend the
   // user must sign in first so every request carries a JWT.
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
-    () => apiClient.isMockMode() || Boolean(apiClient.getAuthToken())
+    () => Boolean(apiClient.getAuthToken())
   );
   const [isBootstrapping, setIsBootstrapping] = useState<boolean>(false);
 
   const [currentRole, setCurrentRole] = useState<UserRole>(() => authService.getCurrentUser().role);
+  const [currentUser, setCurrentUser] = useState(() => authService.getCurrentUser());
 
   const handleRoleChange = (role: UserRole) => {
     authService.switchRole(role);
@@ -52,27 +66,26 @@ export default function App() {
   const [workspaces, setWorkspaces] = useState<any[]>([]);
   const [activeGroup, setActiveGroup] = useState({ name: 'Nhóm STEM THCS Tân Bình', code: 'Gr-01' });
 
-  // Central Dynamic Script State (Single Source of Truth)
-  const [script, setScript] = useState<STEMScript>(DEFAULT_SAMPLE_SCRIPT);
-  const [activeSceneId, setActiveSceneId] = useState<string>(script.scenes[0]?.id || 'scene_1');
-  const [comments, setComments] = useState<FeedbackComment[]>(SAMPLE_COMMENTS);
+  // Central Dynamic Script State (Single Source of Truth).
+  // Starts empty: everything on screen comes from the backend, so an empty
+  // workspace shows an empty studio rather than somebody else's lesson.
+  const [script, setScript] = useState<STEMScript>(EMPTY_SCRIPT);
+  const [activeSceneId, setActiveSceneId] = useState<string>('');
+  const [comments, setComments] = useState<FeedbackComment[]>([]);
   const [seekTimestampSec, setSeekTimestampSec] = useState<number | null>(null);
   const [currentSec, setCurrentSec] = useState(0);
 
   // AI Assistant Output State in Writer Studio
+  // Empty until the writer actually runs an analysis; the panel used to open
+  // on a fixed readability report that had never been computed.
   const [aiAnalysisResult, setAiAnalysisResult] = useState<{
     type: 'resegment' | 'grade' | 'extract' | 'terms' | null;
     title: string;
     details: string[];
   }>({
-    type: 'grade',
-    title: 'Độ khó sư phạm (Readability Analysis)',
-    details: [
-      'Chỉ số Flesch-Kincaid: 7.8 (Phù hợp học sinh lớp 9 THCS)',
-      'Tốc độ đọc trung bình: 130 từ/phút (Chuẩn bài giảng video ngắn)',
-      'Thuật ngữ chuyên ngành: 8 từ (Định lý, Biệt thức Delta, Hệ thức Vi-ét, Parabol...)',
-      'Đánh giá: ĐẠT TIÊU CHUẨN SƯ PHẠM GDPT MỚI',
-    ],
+    type: null,
+    title: 'AI Script Intelligence',
+    details: ['Chọn một tác vụ AI bên dưới để phân tích kịch bản này.'],
   });
 
   // Render Hub state
@@ -94,8 +107,12 @@ export default function App() {
   // Toast notifications
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
+  const toastSeq = React.useRef(0);
+
   const showToast = (message: string, type: 'success' | 'info' | 'warn' = 'success') => {
-    const id = Date.now();
+    // Date.now() alone collided when two toasts fired in the same millisecond,
+    // which React reported as duplicate keys.
+    const id = Date.now() * 1000 + (toastSeq.current++ % 1000);
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -109,19 +126,20 @@ export default function App() {
    * account opens on a usable studio instead of a blank screen.
    */
   const bootstrapFromApi = useCallback(async () => {
-    if (apiClient.isMockMode()) return;
-
     setIsBootstrapping(true);
     try {
       const profile = await authService.fetchCurrentUser();
       setCurrentRole(profile.role);
+      setCurrentUser(profile);
 
       // Resolve first: a brand-new account has no workspace yet and this
-      // creates the default one, so the list below is never empty.
-      await workspaceService.resolveActiveWorkspaceId();
+      // creates the default one. It already caches the active id, so the list
+      // below is fetched once rather than twice.
+      const activeId = await workspaceService.resolveActiveWorkspaceId();
       const myWorkspaces = await workspaceService.getMyWorkspaces();
       if (myWorkspaces.length > 0) {
-        workspaceService.setActiveWorkspaceId(myWorkspaces[0].id);
+        const active = myWorkspaces.find((w) => w.id === activeId) ?? myWorkspaces[0];
+        workspaceService.setActiveWorkspaceId(active.id);
         setWorkspaces(
           myWorkspaces.map((w) => ({
             id: w.id,
@@ -131,7 +149,7 @@ export default function App() {
             activeProjects: w.activeProjects,
           }))
         );
-        setActiveGroup({ name: myWorkspaces[0].name, code: myWorkspaces[0].id.slice(0, 6) });
+        setActiveGroup({ name: active.name, code: active.id.slice(0, 6) });
       }
 
       const list = await projectService.getProjects();
@@ -140,17 +158,17 @@ export default function App() {
         // Player and the scene editor have the actual scenes to work with.
         const full = await projectService.getProjectById(list[0].id);
         setScript(full);
-        setActiveSceneId(full.scenes?.[0]?.id || 'scene_1');
+        setActiveSceneId(full.scenes?.[0]?.id || '');
 
         const qa = await reviewService.getComments(full.id);
         setComments(qa);
         showToast(`Đã tải ${list.length} kịch bản từ máy chủ`, 'success');
       } else {
-        showToast('Workspace chưa có kịch bản nào — đang dùng bản mẫu', 'info');
+        showToast('Workspace chưa có kịch bản nào. Hãy tạo kịch bản đầu tiên.', 'info');
       }
     } catch (error: any) {
       console.error('[bootstrap] Không tải được dữ liệu từ backend:', error);
-      showToast('Không tải được dữ liệu từ máy chủ, đang dùng bản mẫu', 'warn');
+      showToast('Không tải được dữ liệu từ máy chủ. Kiểm tra backend đã chạy chưa.', 'warn');
     } finally {
       setIsBootstrapping(false);
     }
@@ -162,11 +180,23 @@ export default function App() {
     }
   }, [isAuthenticated, bootstrapFromApi]);
 
+  // apiClient raises this the moment any request comes back 401, so an expired
+  // session sends the user to the login screen instead of a broken studio.
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setIsAuthenticated(false);
+      workspaceService.clearCache();
+    };
+    window.addEventListener('stemotion:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('stemotion:unauthorized', onUnauthorized);
+  }, []);
+
   // Active scene pointer
   const selectedScene = script.scenes.find((s) => s.id === activeSceneId) || script.scenes[0];
 
   // Dynamic Scene Updater (Live Props Binding via Service Layer)
   const updateSceneProperty = (updater: (s: any) => any) => {
+    if (!selectedScene) return;
     setScript((prev) => {
       const updatedScenes = prev.scenes.map((sc) => {
         if (sc.id === selectedScene.id) {
@@ -360,16 +390,10 @@ export default function App() {
       setCurrentRole('writer');
       showToast(`Đã tạo dự án mới: "${title}"! Đang mở Writer Studio.`);
     } catch (err: any) {
+      // No local fallback: a project that only exists in the browser would be
+      // lost on reload and hide the real failure.
       console.error('Error creating project:', err);
-      const fallbackScript = projectService._generateNewProject({
-        title,
-        subject,
-        gradeLevel: grade,
-      });
-      setScript(fallbackScript);
-      setActiveSceneId(fallbackScript.scenes[0]?.id || '');
-      setCurrentRole('writer');
-      showToast(`Đã tạo dự án mới: "${title}"!`);
+      showToast('Không tạo được dự án: ' + (err?.message || 'lỗi máy chủ'), 'warn');
     }
   };
 
@@ -494,6 +518,7 @@ export default function App() {
       <LoginScreen
         onAuthenticated={(user) => {
           setCurrentRole(user.role);
+          setCurrentUser(user);
           setIsAuthenticated(true);
         }}
       />
@@ -513,6 +538,12 @@ export default function App() {
       {/* Top Header Navigation */}
       <HeaderNav
         currentRole={currentRole}
+        userName={currentUser.name}
+        userEmail={currentUser.email}
+        onLogout={() => {
+          authService.logout();
+          setIsAuthenticated(false);
+        }}
         onRoleChange={handleRoleChange}
         activeGroup={activeGroup}
         onSelectGroup={setActiveGroup}
@@ -531,7 +562,31 @@ export default function App() {
       />
 
       {/* Main Role View Container */}
-      {currentRole === 'producer' && (
+      {script.scenes.length === 0 && currentRole !== 'admin' && currentRole !== 'library' && (
+        <main className="flex-1 bg-slate-50 flex items-center justify-center p-6">
+          <div className="max-w-md text-center space-y-3">
+            <div className="text-4xl">📄</div>
+            <h2 className="text-lg font-bold text-slate-800">
+              {isBootstrapping ? 'Đang tải kịch bản...' : 'Chưa có kịch bản nào'}
+            </h2>
+            <p className="text-xs text-slate-500">
+              {isBootstrapping
+                ? 'Đang lấy dữ liệu từ máy chủ.'
+                : 'Tổ bộ môn này chưa có kịch bản. Tạo kịch bản đầu tiên để bắt đầu.'}
+            </p>
+            {!isBootstrapping && currentRole === 'writer' && (
+              <button
+                onClick={() => setIsCreateProjectModalOpen(true)}
+                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold"
+              >
+                + Tạo kịch bản đầu tiên
+              </button>
+            )}
+          </div>
+        </main>
+      )}
+
+      {script.scenes.length > 0 && currentRole === 'producer' && (
         <ProducerStudio
           script={script}
           selectedScene={selectedScene}
@@ -565,7 +620,7 @@ export default function App() {
         />
       )}
 
-      {currentRole === 'reviewer' && (
+      {script.scenes.length > 0 && currentRole === 'reviewer' && (
         <ReviewerStudio
           script={script}
           setScript={setScript}
@@ -587,7 +642,7 @@ export default function App() {
         />
       )}
 
-      {currentRole === 'writer' && (
+      {script.scenes.length > 0 && currentRole === 'writer' && (
         <WriterStudio
           script={script}
           setScript={setScript}

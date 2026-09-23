@@ -10,13 +10,7 @@ import { projectService } from './projectService';
 export const reviewService = {
   /** Review notes pinned to a clip, in timecode order. */
   async getComments(projectId: string): Promise<FeedbackComment[]> {
-    if (apiClient.isMockMode()) {
-      await apiClient.mockDelay(100);
-      const project = await projectService.getProjectById(projectId);
-      return project.reviewComments || [];
-    }
-
-    try {
+try {
       const raw = await apiClient.get<any[]>(`/scripts/${projectId}/qa-comments`);
       return raw.map((c) => ({
         id: c.id,
@@ -41,18 +35,7 @@ export const reviewService = {
     decision: 'APPROVED' | 'CHANGE_REQUESTED',
     feedbackNote?: string
   ): Promise<{ status: 'APPROVED' | 'CHANGE_REQUESTED'; message: string }> {
-    if (apiClient.isMockMode()) {
-      await apiClient.mockDelay(200);
-      await projectService.updateProject(projectId, { scriptStatus: decision });
-      return {
-        status: decision,
-        message: decision === 'APPROVED' 
-          ? 'Kịch bản đã được phê duyệt chính thức!' 
-          : 'Đã gửi yêu cầu chỉnh sửa đến đạo diễn sản xuất.',
-      };
-    }
-
-    try {
+try {
       // The backend exposes the two decisions as separate transitions.
       const path = decision === 'APPROVED' ? 'approve' : 'request-changes';
       const updated = await apiClient.post<{ scriptStatus: string }>(
@@ -86,15 +69,7 @@ export const reviewService = {
       ...comment,
     };
 
-    if (apiClient.isMockMode()) {
-      await apiClient.mockDelay(100);
-      const project = await projectService.getProjectById(projectId);
-      const updatedComments = [...(project.reviewComments || []), fullComment];
-      await projectService.updateProject(projectId, { reviewComments: updatedComments });
-      return fullComment;
-    }
-
-    try {
+try {
       const saved = await apiClient.post<any>(`/scripts/${projectId}/qa-comments`, {
         timestampSec: comment.timestampSec,
         sceneId: comment.sceneId,
@@ -117,11 +92,7 @@ export const reviewService = {
     );
     await projectService.updateProject(projectId, { reviewComments: updatedComments });
 
-    if (apiClient.isMockMode()) {
-      return true;
-    }
-
-    try {
+try {
       await apiClient.put(`/qa-comments/${commentId}/resolve`, {});
     } catch (error) {
       console.warn('[reviewService] Backend unreachable, resolved locally:', error);

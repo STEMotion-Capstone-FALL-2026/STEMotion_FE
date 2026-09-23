@@ -5,6 +5,7 @@
  */
 
 import { apiClient } from './apiClient';
+import { workspaceService } from './workspaceService';
 import { UserRole } from '../types/stem';
 
 export interface UserProfile {
@@ -13,20 +14,20 @@ export interface UserProfile {
   email: string;
   avatarUrl?: string;
   role: UserRole;
-  workspaceId: string;
-  workspaceName: string;
 }
 
 const USER_STORAGE_KEY = 'stemotion_user_profile';
 
-const DEFAULT_MOCK_USER: UserProfile = {
-  id: 'usr_mock_001',
-  name: 'Thầy Hoàng Nam (STEM Lead)',
-  email: 'hoangnam.stem@edu.vn',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces',
-  role: 'producer',
-  workspaceId: 'ws_stem_lab_01',
-  workspaceName: 'Tổ Chuyên Môn STEM THPT',
+/**
+ * Placeholder used only before the first /auth/me answers. It carries no
+ * invented identity: the fields stay blank so a half-loaded header is obvious
+ * rather than showing somebody who does not exist.
+ */
+const EMPTY_USER: UserProfile = {
+  id: '',
+  name: '',
+  email: '',
+  role: 'writer',
 };
 
 export const authService = {
@@ -39,7 +40,7 @@ export const authService = {
     } catch (e) {
       console.warn('Failed to parse cached user profile', e);
     }
-    return DEFAULT_MOCK_USER;
+    return EMPTY_USER;
   },
 
   setCurrentUser(user: UserProfile): void {
@@ -58,19 +59,7 @@ export const authService = {
   },
 
   async login(email: string, pass: string): Promise<UserProfile> {
-    if (apiClient.isMockMode()) {
-      await apiClient.mockDelay(200);
-      apiClient.setAuthToken('mock_jwt_token_stemotion_' + Date.now());
-      const user: UserProfile = {
-        ...DEFAULT_MOCK_USER,
-        email,
-        name: email.split('@')[0].toUpperCase() + ' (STEM)',
-      };
-      this.setCurrentUser(user);
-      return user;
-    }
-
-    const response = await apiClient.post<any>('/auth/login', {
+const response = await apiClient.post<any>('/auth/login', {
       email,
       password: pass,
     });
@@ -93,12 +82,7 @@ export const authService = {
     pass: string,
     role: UserRole = 'writer'
   ): Promise<UserProfile> {
-    if (apiClient.isMockMode()) {
-      await apiClient.mockDelay(200);
-      return this.login(email, pass);
-    }
-
-    const response = await apiClient.post<any>('/auth/register', {
+const response = await apiClient.post<any>('/auth/register', {
       fullName,
       email,
       password: pass,
@@ -115,7 +99,7 @@ export const authService = {
 
   /** Re-reads the signed-in user from the backend, e.g. after a reload. */
   async fetchCurrentUser(): Promise<UserProfile> {
-    if (apiClient.isMockMode() || !apiClient.getAuthToken()) {
+    if (!apiClient.getAuthToken()) {
       return this.getCurrentUser();
     }
     try {
@@ -138,11 +122,10 @@ export const authService = {
       ADMIN: 'admin',
     };
     return {
-      ...DEFAULT_MOCK_USER,
-      id: raw?.id ?? DEFAULT_MOCK_USER.id,
-      name: raw?.fullName ?? raw?.name ?? DEFAULT_MOCK_USER.name,
-      email: raw?.email ?? DEFAULT_MOCK_USER.email,
-      role: roleMap[raw?.role] ?? (raw?.role as UserRole) ?? DEFAULT_MOCK_USER.role,
+      id: raw?.id ?? '',
+      name: raw?.fullName ?? raw?.name ?? '',
+      email: raw?.email ?? '',
+      role: roleMap[raw?.role] ?? (raw?.role as UserRole) ?? 'writer',
     };
   },
 
@@ -151,6 +134,7 @@ export const authService = {
   },
 
   logout(): void {
+    workspaceService.clearCache();
     apiClient.removeAuthToken();
     try {
       localStorage.removeItem(USER_STORAGE_KEY);

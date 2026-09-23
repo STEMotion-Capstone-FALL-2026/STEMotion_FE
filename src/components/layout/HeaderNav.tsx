@@ -10,12 +10,37 @@ import {
   CheckSquare,
   Clapperboard,
   Shield,
+  LogOut,
   Library,
 } from 'lucide-react';
 import { UserRole } from '../../services';
 
+/**
+ * Studios the signed-in user may open.
+ *
+ * The backend authorises every request from the role inside the JWT, so a tab
+ * the user cannot use would only lead to a screen full of 403s. Admin is the
+ * exception: the API grants it every role's endpoints, so it keeps all tabs.
+ */
+const allowedStudios = (role: UserRole): UserRole[] =>
+  role === 'admin'
+    ? ['writer', 'reviewer', 'producer', 'admin', 'library']
+    : [role, 'library'];
+
+/** Falls back to a question mark so the avatar is never blank. */
+const initialsOf = (fullName: string): string => {
+  if (!fullName || !fullName.trim()) return '?';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 interface HeaderNavProps {
   currentRole: UserRole;
+  /** The signed-in user, so the header shows who is actually logged in. */
+  userName: string;
+  userEmail: string;
+  onLogout: () => void;
   onRoleChange: (role: UserRole) => void;
   activeGroup: { name: string; code: string };
   onSelectGroup: (group: { name: string; code: string }) => void;
@@ -25,6 +50,9 @@ interface HeaderNavProps {
 
 export const HeaderNav: React.FC<HeaderNavProps> = ({
   currentRole,
+  userName,
+  userEmail,
+  onLogout,
   onRoleChange,
   activeGroup,
   onSelectGroup,
@@ -33,11 +61,13 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 }) => {
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
 
+  const studios = allowedStudios(currentRole);
+
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-6 py-2.5 flex items-center justify-between shadow-xs">
       <div className="flex items-center space-x-4">
         <div
-          onClick={() => onRoleChange('producer')}
+          onClick={() => onRoleChange(studios[0])}
           className="flex items-center space-x-2.5 cursor-pointer"
         >
           <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm">
@@ -139,53 +169,61 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
       {/* Quick Switch Role Tabs */}
       <div className="flex items-center space-x-2">
         <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-medium space-x-1">
+          {studios.includes('writer') && (
           <button
-            onClick={() => onRoleChange('writer')}
-            className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
-              currentRole === 'writer'
-                ? 'bg-white text-brand-600 shadow-xs ring-2 ring-blue-500/20'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <PenTool className="w-3.5 h-3.5" />
-            <span>Writer</span>
-          </button>
+              onClick={() => onRoleChange('writer')}
+              className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
+                currentRole === 'writer'
+                  ? 'bg-white text-brand-600 shadow-xs ring-2 ring-blue-500/20'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <PenTool className="w-3.5 h-3.5" />
+              <span>Writer</span>
+            </button>
+          )}
 
+          {studios.includes('reviewer') && (
           <button
-            onClick={() => onRoleChange('reviewer')}
-            className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
-              currentRole === 'reviewer'
-                ? 'bg-white text-amber-600 shadow-xs ring-2 ring-amber-500/20'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <CheckSquare className="w-3.5 h-3.5" />
-            <span>Reviewer</span>
-          </button>
+              onClick={() => onRoleChange('reviewer')}
+              className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
+                currentRole === 'reviewer'
+                  ? 'bg-white text-amber-600 shadow-xs ring-2 ring-amber-500/20'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              <span>Reviewer</span>
+            </button>
+          )}
 
+          {studios.includes('producer') && (
           <button
-            onClick={() => onRoleChange('producer')}
-            className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
-              currentRole === 'producer'
-                ? 'bg-white text-indigo-600 shadow-xs ring-2 ring-indigo-500/20'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Clapperboard className="w-3.5 h-3.5" />
-            <span>Producer (Tạo Video)</span>
-          </button>
+              onClick={() => onRoleChange('producer')}
+              className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
+                currentRole === 'producer'
+                  ? 'bg-white text-indigo-600 shadow-xs ring-2 ring-indigo-500/20'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Clapperboard className="w-3.5 h-3.5" />
+              <span>Producer (Tạo Video)</span>
+            </button>
+          )}
 
+          {studios.includes('admin') && (
           <button
-            onClick={() => onRoleChange('admin')}
-            className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
-              currentRole === 'admin'
-                ? 'bg-white text-rose-600 shadow-xs ring-2 ring-rose-500/20'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Shield className="w-3.5 h-3.5 text-rose-500" />
-            <span>Admin Portal</span>
-          </button>
+              onClick={() => onRoleChange('admin')}
+              className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
+                currentRole === 'admin'
+                  ? 'bg-white text-rose-600 shadow-xs ring-2 ring-rose-500/20'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-rose-500" />
+              <span>Admin Portal</span>
+            </button>
+          )}
         </div>
 
         <button
@@ -220,12 +258,21 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 
         <div className="flex items-center space-x-2 pl-2 border-l border-slate-200">
           <div className="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">
-            NA
+            {initialsOf(userName)}
           </div>
-          <div className="text-left hidden lg:block">
-            <div className="text-xs font-bold text-slate-800 leading-tight">Nguyễn Văn A</div>
-            <div className="text-[10px] text-slate-400">nguyen.vana@edtech.vn</div>
+          <div className="text-left hidden md:block">
+            <div className="text-xs font-bold text-slate-800 leading-tight">{userName}</div>
+            <div className="text-[10px] text-slate-400">{userEmail}</div>
           </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            title="Đăng xuất khỏi STEMotion"
+            className="ml-2 flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 text-xs font-bold hover:bg-rose-100 hover:border-rose-300 transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Đăng xuất</span>
+          </button>
         </div>
       </div>
     </header>
