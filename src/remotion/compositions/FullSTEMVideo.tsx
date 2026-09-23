@@ -84,10 +84,12 @@ export const FullSTEMVideo: React.FC<{ script: STEMScript }> = ({ script }) => {
   return (
     <Series>
       {scenes.map((scene) => {
-        // The render service attaches this after generating TTS narration.
-        // It is absent in the browser Player, where the clip stays silent.
-        const narrationUrl = (scene as SceneData & { narrationAudioUrl?: string })
-          .narrationAudioUrl;
+        // Tự động phát âm thanh giọng đọc: nếu đã có narrationAudioUrl (khi render) hoặc gọi qua service preview port 4000 (khi Producer/Reviewer test)
+        const narrationUrl =
+          (scene as SceneData & { narrationAudioUrl?: string }).narrationAudioUrl ||
+          (scene.narration && scene.narration.trim()
+            ? `http://localhost:4000/tts-preview?text=${encodeURIComponent(scene.narration.trim())}`
+            : undefined);
 
         return (
           <Series.Sequence

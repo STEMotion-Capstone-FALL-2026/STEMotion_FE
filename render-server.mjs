@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { bundle } from '@remotion/bundler';
 import { renderMedia, selectComposition } from '@remotion/renderer';
@@ -357,10 +358,10 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Nghe thử giọng đọc AI TTS trực tiếp: GET /tts-preview?text=...
-  if (req.method === 'GET' && pathname === '/tts-preview') {
-    const text = parsedUrl.searchParams.get('text') || '';
-    if (!text.trim()) {
+  // Nghe thử giọng đọc AI TTS: GET /tts-preview?text=... (hỗ trợ cache đĩa & range streaming cho Remotion Player)
+  if ((req.method === 'GET' || req.method === 'HEAD') && pathname === '/tts-preview') {
+    const text = (parsedUrl.searchParams.get('text') || '').trim();
+    if (!text) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Missing text parameter' }));
       return;
@@ -368,27 +369,61 @@ const server = http.createServer((req, res) => {
 
     (async () => {
       try {
-        const results = await googleTTS.getAllAudioBase64(text, {
-          lang: 'vi',
-          slow: false,
-          host: 'https://translate.google.com',
-          timeout: 10000,
-        });
-        const buffer = Buffer.concat(results.map(r => Buffer.from(r.base64, 'base64')));
-        const durationMs = getMP3Duration(buffer);
-        const durationSec = durationMs > 0 ? (durationMs / 1000).toFixed(2) : '0';
-        
-        res.writeHead(200, {
-          'Content-Type': 'audio/mpeg',
-          'Content-Length': buffer.length,
-          'Cache-Control': 'public, max-age=3600',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Expose-Headers': 'Content-Length, Content-Type, X-Audio-Duration-Ms, X-Audio-Duration-Sec',
-          'X-Audio-Duration-Ms': String(durationMs),
-          'X-Audio-Duration-Sec': durationSec,
-        });
-        res.end(buffer);
+        const hash = crypto.createHash('md5').update(text).digest('hex');
+        const cachedFilePath = path.resolve(RENDERS_DIR, `tts_cache_${hash}.mp3`);
+
+        if (!fs.existsSync(cachedFilePath)) {
+          const results = await googleTTS.getAllAudioBase64(text, {
+            lang: 'vi',
+            slow: false,
+            host: 'https://translate.google.com',
+            timeout: 10000,
+          });
+          const buffer = Buffer.concat(results.map(r => Buffer.from(r.base64, 'base64')));
+          fs.writeFileSync(cachedFilePath, buffer);
+        }
+
+        const stat = fs.statSync(cachedFilePath);
+        const totalSize = stat.size;
+        const range = req.headers.range;
+
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', '*');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type, Content-Range, Accept-Ranges');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+
+        if (range) {
+          const parts = range.replace(/bytes=/, '').split('-');
+          const start = parseInt(parts[0], 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+          const chunksize = (end - start) + 1;
+
+          res.writeHead(206, {
+            'Content-Range': `bytes ${start}-${end}/${totalSize}`,
+            'Content-Length': chunksize,
+          });
+
+          if (req.method === 'HEAD') {
+            res.end();
+          } else {
+            fs.createReadStream(cachedFilePath, { start, end }).pipe(res);
+          }
+        } else {
+          res.writeHead(200, {
+            'Content-Length': totalSize,
+          });
+
+          if (req.method === 'HEAD') {
+            res.end();
+          } else {
+            fs.createReadStream(cachedFilePath).pipe(res);
+          }
+        }
       } catch (err) {
+        console.warn('[TTS Preview Error]:', err.message);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
       }

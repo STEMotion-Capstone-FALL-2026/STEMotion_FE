@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlusCircle, Image, Play, Cpu, Sparkles } from 'lucide-react';
+import { PlusCircle, Image, Play, Cpu, Sparkles, Send } from 'lucide-react';
 import { STEMScript, SceneData } from '../../../types/stem';
 import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
 import { SceneListColumn } from './SceneListColumn';
@@ -26,6 +26,7 @@ interface ProducerStudioProps {
   renderPercentageText: string;
   startRenderMock: () => void;
   onOpenPublishModal?: () => void;
+  onSubmitForReview?: () => void;
 }
 
 export const ProducerStudio: React.FC<ProducerStudioProps> = ({
@@ -49,6 +50,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   renderPercentageText,
   startRenderMock,
   onOpenPublishModal,
+  onSubmitForReview,
 }) => {
   return (
     <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -96,12 +98,35 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
             <Sparkles className="w-3.5 h-3.5 text-amber-600" />
             <span>Khớp Giọng Đọc</span>
           </button>
+          {onSubmitForReview && (
+            <button
+              onClick={onSubmitForReview}
+              className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
+              title="Hoàn tất tạo video và chuyển sang Bước 4 để Reviewer thẩm định chất lượng"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Gửi Reviewer Duyệt Video</span>
+            </button>
+          )}
           <button
             onClick={onOpenPublishModal || startRenderMock}
-            className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
+            className={`px-3.5 py-1.5 font-bold rounded-lg border flex items-center space-x-1.5 transition-colors cursor-pointer ${
+              script.videoStatus === 'APPROVED'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs border-emerald-500'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+            }`}
+            title={
+              script.videoStatus === 'APPROVED'
+                ? 'Video đã được duyệt - Kết xuất MP4 Full HD hoặc xuất bản YouTube'
+                : 'Video chưa qua bước Reviewer duyệt (Bước 4) - Kết xuất bản nháp test'
+            }
           >
-            <Play className="w-4 h-4 fill-current" />
-            <span>Kết Xuất Toàn Bộ Video (MP4)</span>
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>
+              {script.videoStatus === 'APPROVED'
+                ? 'Kết Xuất MP4 (Đã Duyệt)'
+                : 'Kết Xuất Bản Nháp (MP4)'}
+            </span>
           </button>
         </div>
       </div>

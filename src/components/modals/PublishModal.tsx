@@ -274,6 +274,15 @@ export const PublishModal: React.FC<PublishModalProps> = ({
           </div>
         </div>
 
+        {script.videoStatus !== 'APPROVED' && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded text-[10px]">LƯU Ý</span>
+              <span>Video đang ở giai đoạn dựng (chưa qua Bước 4: Reviewer Duyệt). Bạn đang kết xuất bản nháp (Draft) để kiểm tra nội bộ.</span>
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex border-b border-slate-200 gap-2">
           <button
