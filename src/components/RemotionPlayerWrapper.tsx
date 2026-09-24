@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Player, PlayerRef } from '@remotion/player';
 import { Audio } from 'remotion';
 import { STEMScript, SceneData } from '../types/stem';
@@ -16,6 +16,52 @@ import { ProcessTimeline } from '../remotion/compositions/ProcessTimeline';
 import { GeometrySpace } from '../remotion/compositions/GeometrySpace';
 import { Play, Pause, RotateCcw, Sparkles, Maximize, Minimize, Volume2, VolumeX } from 'lucide-react';
 import { CanvaInteractiveOverlay } from './CanvaInteractiveOverlay';
+
+// Determine active single scene component (defined outside to avoid re-mounting on every frame)
+const getSingleComponent = (scene: SceneData) => {
+  switch (scene.type) {
+    case 'TITLE_HERO':
+      return TitleHeroReveal;
+    case 'MATH_FORMULA':
+      return MathFormulaStep;
+    case 'DIAGRAM_EXPLAINER':
+      return DiagramExplainer;
+    case 'DATA_CHART':
+      return DataChartVisual;
+    case 'ALGORITHM_WALKTHROUGH':
+      return AlgorithmWalkthrough;
+    case 'STEM_QUIZ':
+      return STEMQuizCard;
+    case 'OUTRO':
+      return OutroCard;
+    case 'CHEMICAL_REACTION':
+      return ChemicalReaction;
+    case 'COMPARISON_SPLIT':
+      return ComparisonSplit;
+    case 'PROCESS_TIMELINE':
+      return ProcessTimeline;
+    case 'GEOMETRY_SPACE':
+      return GeometrySpace;
+    default:
+      return TitleHeroReveal;
+  }
+};
+
+const SingleSceneRenderer: React.FC<{ scene: SceneData }> = ({ scene }) => {
+  const Comp = getSingleComponent(scene);
+  const narrationUrl =
+    (scene as any).narrationAudioUrl ||
+    (scene.narration && scene.narration.trim()
+      ? `http://localhost:4000/tts-preview?text=${encodeURIComponent(scene.narration.trim())}`
+      : undefined);
+
+  return (
+    <SceneErrorBoundary scene={scene}>
+      <Comp {...(scene as any)} />
+      {narrationUrl && <Audio src={narrationUrl} />}
+    </SceneErrorBoundary>
+  );
+};
 
 interface RemotionPlayerWrapperProps {
   script: STEMScript;
@@ -87,6 +133,11 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
       if (onFrameUpdate) {
         onFrameUpdate(frame, frame / 30);
       }
+      const maxF = viewMode === 'FULL' ? totalFrames : (selectedScene.durationInFrames || 150);
+      if (frame >= maxF - 1 && current.isPlaying()) {
+        current.pause();
+        setIsPlaying(false);
+      }
     };
 
     const onPlayState = () => {
@@ -142,51 +193,17 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Determine active single scene component
-  const getSingleComponent = (scene: SceneData) => {
-    switch (scene.type) {
-      case 'TITLE_HERO':
-        return TitleHeroReveal;
-      case 'MATH_FORMULA':
-        return MathFormulaStep;
-      case 'DIAGRAM_EXPLAINER':
-        return DiagramExplainer;
-      case 'DATA_CHART':
-        return DataChartVisual;
-      case 'ALGORITHM_WALKTHROUGH':
-        return AlgorithmWalkthrough;
-      case 'STEM_QUIZ':
-        return STEMQuizCard;
-      case 'OUTRO':
-        return OutroCard;
-      case 'CHEMICAL_REACTION':
-        return ChemicalReaction;
-      case 'COMPARISON_SPLIT':
-        return ComparisonSplit;
-      case 'PROCESS_TIMELINE':
-        return ProcessTimeline;
-      case 'GEOMETRY_SPACE':
-        return GeometrySpace;
-      default:
-        return TitleHeroReveal;
+  const fullInputProps = useMemo(() => ({ script }), [script]);
+  const singleInputProps = useMemo(() => ({ scene: selectedScene }), [selectedScene]);
+
+  // Reset player when switching mode or scene to prevent audio overlap
+  useEffect(() => {
+    if (playerRef.current) {
+      playerRef.current.seekTo(0);
+      setCurrentFrame(0);
+      setIsPlaying(false);
     }
-  };
-
-  const SingleSceneRenderer: React.FC<{ scene: SceneData }> = ({ scene }) => {
-    const Comp = getSingleComponent(scene);
-    const narrationUrl =
-      (scene as any).narrationAudioUrl ||
-      (scene.narration && scene.narration.trim()
-        ? `http://localhost:4000/tts-preview?text=${encodeURIComponent(scene.narration.trim())}`
-        : undefined);
-
-    return (
-      <SceneErrorBoundary scene={scene}>
-        <Comp {...(scene as any)} />
-        {narrationUrl && <Audio src={narrationUrl} />}
-      </SceneErrorBoundary>
-    );
-  };
+  }, [viewMode, activeSceneId]);
 
   return (
     <div
@@ -272,9 +289,9 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
               width: '100%',
               height: '100%',
             }}
-            inputProps={{ script }}
+            inputProps={fullInputProps}
             controls={false}
-            loop
+            loop={false}
           />
         ) : (
           <Player
@@ -288,9 +305,9 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
               width: '100%',
               height: '100%',
             }}
-            inputProps={{ scene: selectedScene }}
+            inputProps={singleInputProps}
             controls={false}
-            loop
+            loop={false}
           />
         )}
 

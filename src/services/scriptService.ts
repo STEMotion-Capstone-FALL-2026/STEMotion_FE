@@ -77,7 +77,10 @@ const res = await apiClient.post<any>('/ai/script/generate', {
 
     const scenes: SceneData[] = rawScenes.map((sc, idx) => {
       const type = sc.type || 'TITLE_HERO';
-      const durationInFrames = sc.durationInFrames || 300;
+      const narrationText = sc.narration || '';
+      const wordCount = narrationText.trim().split(/\s+/).filter(Boolean).length;
+      const minSpeechFrames = wordCount > 0 ? Math.ceil(wordCount / 2.2 + 1) * 30 : 150;
+      const durationInFrames = Math.max(sc.durationInFrames || 150, minSpeechFrames);
 
       const base: any = {
         id: `scene_ai_${Date.now()}_${idx}`,

@@ -77,6 +77,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
     if (isSpeaking) {
       if (currentAudioRef.current) {
         currentAudioRef.current.pause();
+        currentAudioRef.current.src = '';
         currentAudioRef.current = null;
       }
       if ('speechSynthesis' in window) {
@@ -87,13 +88,45 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
       return;
     }
 
+    // Stop any previously playing speech
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.src = '';
+      currentAudioRef.current = null;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
     setIsSpeaking(true);
     showToast('Đang phát giọng đọc AI thuyết minh tiếng Việt...');
+
+    let fallbackTriggered = false;
+    const playFallback = () => {
+      if (fallbackTriggered) return;
+      fallbackTriggered = true;
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.src = '';
+        currentAudioRef.current = null;
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'vi-VN';
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = () => setIsSpeaking(false);
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setIsSpeaking(false);
+      }
+    };
 
     try {
       const audioUrl = `http://localhost:4000/tts-preview?text=${encodeURIComponent(text)}`;
       const audio = new Audio(audioUrl);
       currentAudioRef.current = audio;
+
       audio.onloadedmetadata = () => {
         if (audio.duration && !isNaN(audio.duration) && audio.duration > 0) {
           const speechSec = audio.duration;
@@ -105,34 +138,21 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           showToast(`Đã đồng bộ thời lượng phân cảnh: ${targetSec}s (khớp giọng đọc ${speechSec.toFixed(1)}s)`);
         }
       };
+
       audio.onended = () => {
         setIsSpeaking(false);
         currentAudioRef.current = null;
       };
+
       audio.onerror = () => {
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'vi-VN';
-          utterance.onend = () => setIsSpeaking(false);
-          utterance.onerror = () => setIsSpeaking(false);
-          window.speechSynthesis.speak(utterance);
-        } else {
-          setIsSpeaking(false);
-        }
+        playFallback();
       };
+
       audio.play().catch(() => {
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'vi-VN';
-          utterance.onend = () => setIsSpeaking(false);
-          utterance.onerror = () => setIsSpeaking(false);
-          window.speechSynthesis.speak(utterance);
-        } else {
-          setIsSpeaking(false);
-        }
+        playFallback();
       });
     } catch {
-      setIsSpeaking(false);
+      playFallback();
     }
   };
 
