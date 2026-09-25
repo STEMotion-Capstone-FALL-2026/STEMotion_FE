@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Youtube,
   Code,
@@ -31,11 +31,28 @@ export const PublishModal: React.FC<PublishModalProps> = ({
 }) => {
   const [publishTarget, setPublishTarget] = useState<'youtube' | 'download' | 'lms'>('youtube');
   const [downloadQuality, setDownloadQuality] = useState<'1080p' | '720p'>('1080p');
-  const [downloadFps, setDownloadFps] = useState<'60' | '30'>('60');
+  const [downloadFps, setDownloadFps] = useState<'60' | '30'>('30');
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadDone, setIsDownloadDone] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadStage, setDownloadStage] = useState('');
+  const [existingVideo, setExistingVideo] = useState<{ url: string; filename: string; size: number } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !script.id) return;
+    fetch(`http://localhost:4000/videos/for-script/${script.id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.exists && data.video) {
+          setExistingVideo(data.video);
+        } else {
+          setExistingVideo(null);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not check existing video:', err);
+      });
+  }, [isOpen, script.id]);
 
   const [youtubeForm, setYoutubeForm] = useState({
     title: 'Định luật Ohm & Mạch Điện Cơ Bản - Bài Giảng STEM Vật Lý Lớp 9',
@@ -46,6 +63,45 @@ export const PublishModal: React.FC<PublishModalProps> = ({
     isPublishing: false,
     publishedUrl: '',
   });
+
+  const handleDirectDownload = async (url: string, targetName?: string) => {
+    const cleanTitle = (script.title || 'stem_video')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/gi, '_')
+      .replace(/_+/g, '_');
+    const finalName = targetName || `${cleanTitle}_${downloadQuality}_${downloadFps}fps.mp4`;
+    const downloadEndpoint = `${url}?download=1&filename=${encodeURIComponent(finalName)}`;
+
+    try {
+      const response = await fetch(downloadEndpoint);
+      if (response.ok) {
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = finalName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        onNotify(`🎉 Đã tải file bài giảng STEM "${finalName}" về máy tính thành công!`, 'success');
+        return;
+      }
+    } catch (err) {
+      console.warn('Fetch blob download warning, falling back to direct link trigger:', err);
+    }
+
+    const link = document.createElement('a');
+    link.href = downloadEndpoint;
+    link.download = finalName;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    onNotify(`🎉 Đang tải video "${finalName}" về máy tính!`, 'success');
+  };
 
   const handleDownloadMp4 = async () => {
     setIsDownloading(true);
@@ -87,9 +143,9 @@ export const PublishModal: React.FC<PublishModalProps> = ({
 
       setDownloadStage('Đang kết xuất từng khung hình video...');
 
-      // Polling kiểm tra tiến độ Render
+      // Polling kiểm tra tiến độ Render (tối đa 15 phút cho các clip dài / 60fps)
       let attempts = 0;
-      const maxAttempts = 240;
+      const maxAttempts = 600;
       let videoUrl: string | null = null;
 
       while (attempts < maxAttempts) {
@@ -108,6 +164,11 @@ export const PublishModal: React.FC<PublishModalProps> = ({
             }
             if (data.status === 'COMPLETED' && data.videoUrl) {
               videoUrl = data.videoUrl;
+              setExistingVideo({
+                url: data.videoUrl,
+                filename: fileName,
+                size: 0,
+              });
               break;
             } else if (data.status === 'FAILED') {
               throw new Error(data.errorMessage || 'Lỗi xử lý render video');
@@ -121,7 +182,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({
       }
 
       if (!videoUrl) {
-        throw new Error('Hết thời gian chờ kết xuất video');
+        throw new Error('Hết thời gian chờ kết xuất video. Vui lòng kiểm tra lại dịch vụ render.');
       }
 
       setDownloadStage('Đang tải file MP4 về máy...');
@@ -517,6 +578,29 @@ export const PublishModal: React.FC<PublishModalProps> = ({
                   <span className="text-emerald-400 font-bold">✓ Đã Phê Duyệt</span>
                 </div>
               </div>
+
+              {/* PHÁT HIỆN VIDEO ĐÃ ĐƯỢC RENDER HOÀN TẤT */}
+              {existingVideo && !isDownloading && (
+                <div className="p-3 bg-emerald-950/70 border border-emerald-500/50 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-emerald-400 font-bold text-xs flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      Video thành phẩm đã được kết xuất sẵn sàng ({existingVideo.size > 0 ? `${(existingVideo.size / (1024 * 1024)).toFixed(1)} MB` : 'MP4'})!
+                    </span>
+                    <span className="text-[10px] text-emerald-300 font-mono bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-700">
+                      Tải ngay không cần đợi
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDirectDownload(existingVideo.url, existingVideo.filename)}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all text-xs"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>⚡ TẢI NGAY FILE MP4 VỀ MÁY (Bản vừa render xong)</span>
+                  </button>
+                </div>
+              )}
 
               {/* Tùy chọn chất lượng xuất file */}
               <div className="grid grid-cols-2 gap-3 pt-2">

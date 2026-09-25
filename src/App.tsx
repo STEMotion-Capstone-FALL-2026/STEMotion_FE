@@ -374,11 +374,28 @@ export default function App() {
       if (useAi) {
         showToast(`Đang kết nối Gemini để soạn kịch bản STEM: "${title}"...`, 'info');
         try {
-          const newScript = await scriptService.generateScriptWithAI(title, subject, grade, 60);
-          setScript(newScript);
-          setActiveSceneId(newScript.scenes[0]?.id || '');
+          const aiScript = await scriptService.generateScriptWithAI(title, subject, grade, 60);
+          let finalScript = aiScript;
+          try {
+            const savedProject = await projectService.createProject({
+              title: aiScript.title || title,
+              subject,
+              gradeLevel: grade,
+              scenes: aiScript.scenes,
+            });
+            if (savedProject && savedProject.id) {
+              finalScript = {
+                ...aiScript,
+                id: savedProject.id,
+              };
+            }
+          } catch (saveErr) {
+            console.warn('[handleCreateNewProject] Backend persist skipped or failed, using local script:', saveErr);
+          }
+          setScript(finalScript);
+          setActiveSceneId(finalScript.scenes[0]?.id || '');
           setCurrentRole('writer');
-          showToast(`AI đã soạn kịch bản hoàn tất: "${newScript.title}" (${newScript.scenes.length} phân cảnh)!`, 'success');
+          showToast(`AI đã soạn kịch bản hoàn tất: "${finalScript.title}" (${finalScript.scenes.length} phân cảnh)!`, 'success');
           return;
         } catch (aiErr: any) {
           console.warn('[handleCreateNewProject] AI generation error, falling back to starter project:', aiErr);
