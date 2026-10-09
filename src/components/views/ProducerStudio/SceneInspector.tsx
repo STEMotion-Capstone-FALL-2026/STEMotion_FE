@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mic, Send, Type, Maximize2, BarChart2, Plus, Trash2, Palette, Code2, HelpCircle, Layers, CheckCircle2, Award, Sparkles, X, Save, Check, Volume2 } from 'lucide-react';
 import { SceneData } from '../../../types/stem';
+import { IllustratedExplainerInspector } from './IllustratedExplainerInspector';
 
 interface SceneInspectorProps {
   selectedScene: SceneData;
@@ -627,6 +628,13 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
               ))}
             </div>
           </div>
+        )}
+
+        {selectedScene.type === 'ILLUSTRATED_EXPLAINER' && (
+          <IllustratedExplainerInspector
+            scene={selectedScene}
+            updateSceneProperty={updateSceneProperty}
+          />
         )}
 
         {/* Sửa Hình Học nếu là GEOMETRY_SPACE */}

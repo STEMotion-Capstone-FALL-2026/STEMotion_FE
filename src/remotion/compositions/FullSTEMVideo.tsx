@@ -14,6 +14,7 @@ import { ChemicalReaction } from './ChemicalReaction';
 import { ComparisonSplit } from './ComparisonSplit';
 import { ProcessTimeline } from './ProcessTimeline';
 import { GeometrySpace } from './GeometrySpace';
+import { IllustratedExplainer } from './IllustratedExplainer';
 
 export const renderSceneComponent = (scene: SceneData) => {
   switch (scene.type) {
@@ -39,6 +40,8 @@ export const renderSceneComponent = (scene: SceneData) => {
       return <ProcessTimeline {...scene} />;
     case 'GEOMETRY_SPACE':
       return <GeometrySpace {...scene} />;
+    case 'ILLUSTRATED_EXPLAINER':
+      return <IllustratedExplainer {...scene} />;
     default:
       return null;
   }

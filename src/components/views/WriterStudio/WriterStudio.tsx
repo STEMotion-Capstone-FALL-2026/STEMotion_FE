@@ -752,6 +752,52 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               </div>
             )}
 
+            {selectedScene.type === 'ILLUSTRATED_EXPLAINER' && (
+              <div className="p-4 bg-fuchsia-50/70 border border-fuchsia-200 rounded-2xl space-y-3">
+                <label className="text-xs font-bold text-fuchsia-950 block">Minh Họa Flat Explainer:</label>
+                <div>
+                  <span className="text-[10px] text-slate-600 font-bold block mb-1">Tiêu đề lớn trên màn hình:</span>
+                  <input
+                    type="text"
+                    value={(selectedScene as any).headline || ''}
+                    onChange={(e) => updateSceneProperty((s) => ({ ...s, headline: e.target.value }))}
+                    className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white font-semibold"
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-600 font-bold block mb-1">Dòng phụ:</span>
+                  <textarea
+                    rows={2}
+                    value={(selectedScene as any).caption || ''}
+                    onChange={(e) => updateSceneProperty((s) => ({ ...s, caption: e.target.value }))}
+                    className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-[10px] text-slate-600 font-bold block">
+                    Nhãn của từng biểu tượng (Producer chọn hình biểu tượng):
+                  </span>
+                  {((selectedScene as any).icons || []).map((ic: any, i: number) => (
+                    <input
+                      key={i}
+                      type="text"
+                      value={ic.label || ''}
+                      placeholder={ic.name}
+                      onChange={(e) =>
+                        updateSceneProperty((s) => ({
+                          ...s,
+                          icons: (s as any).icons.map((x: any, j: number) =>
+                            j === i ? { ...x, label: e.target.value } : x
+                          ),
+                        }))
+                      }
+                      className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {selectedScene.type === 'GEOMETRY_SPACE' && (
               <div className="p-4 bg-cyan-50/70 border border-cyan-200 rounded-2xl space-y-3">
                 <label className="text-xs font-bold text-cyan-950 block">Hình Học Trực Quan & Định Lý:</label>

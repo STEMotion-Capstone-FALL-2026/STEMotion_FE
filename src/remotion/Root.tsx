@@ -12,7 +12,9 @@ import { ChemicalReaction } from './compositions/ChemicalReaction';
 import { ComparisonSplit } from './compositions/ComparisonSplit';
 import { ProcessTimeline } from './compositions/ProcessTimeline';
 import { GeometrySpace } from './compositions/GeometrySpace';
+import { IllustratedExplainer } from './compositions/IllustratedExplainer';
 import { DEFAULT_SAMPLE_SCRIPT } from '../lib/sampleData';
+import { FLAT_DEMO_SCENES, FLAT_DEMO_SCRIPT } from '../lib/flatDemo';
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -207,6 +209,27 @@ export const RemotionRoot: React.FC = () => {
           narration: 'Định lý Pytago là một trong những định lý nền tảng của hình học Euclid.',
           durationInFrames: 180,
         }}
+      />
+
+      <Composition
+        id="IllustratedExplainer"
+        component={IllustratedExplainer as unknown as React.FC<Record<string, unknown>>}
+        durationInFrames={150}
+        fps={30}
+        width={1920}
+        height={1080}
+        defaultProps={FLAT_DEMO_SCENES[0] as any}
+      />
+
+      {/* 20-second showcase of the flat-explainer style, four scenes. */}
+      <Composition
+        id="FlatExplainerDemo"
+        component={FullSTEMVideo}
+        durationInFrames={FLAT_DEMO_SCENES.reduce((acc, sc) => acc + sc.durationInFrames, 0)}
+        fps={30}
+        width={1920}
+        height={1080}
+        defaultProps={{ script: FLAT_DEMO_SCRIPT }}
       />
     </>
   );

@@ -304,6 +304,23 @@ try {
         narration: 'Mô hình hình học trực quan giúp học sinh ghi nhớ bản chất diện tích của định lý Pytago.',
         durationInFrames: 180,
       };
+    } else if (type === 'ILLUSTRATED_EXPLAINER') {
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'ILLUSTRATED_EXPLAINER',
+        title: `Scene ${sceneNum}: Minh họa phong cách flat explainer`,
+        headline: 'Bên trong một nguyên tử',
+        caption: 'Hạt nhân ở giữa, electron chuyển động xung quanh',
+        ambience: 'space',
+        layout: 'focus',
+        icons: [
+          { name: 'atom', label: 'Nguyên tử' },
+          { name: 'lightning', label: 'Electron' },
+          { name: 'sparkle', label: 'Năng lượng' },
+        ],
+        narration: 'Mọi vật chất quanh ta đều được tạo nên từ những nguyên tử nhỏ bé.',
+        durationInFrames: 150,
+      };
     } else if (type === 'DIAGRAM_EXPLAINER') {
       newScene = {
         id: `scene_${Date.now()}`,

@@ -403,6 +403,28 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                 </div>
               )}
 
+              {selectedScene.type === 'ILLUSTRATED_EXPLAINER' && (
+                <div className="p-4 bg-fuchsia-50/60 rounded-xl border border-fuchsia-200 space-y-2">
+                  <label className="text-xs font-bold text-fuchsia-900 block">
+                    Thẩm Định Minh Họa Flat Explainer:
+                  </label>
+                  <p className="font-bold text-slate-800 text-sm">{(selectedScene as any).headline}</p>
+                  {(selectedScene as any).caption && (
+                    <p className="text-xs text-slate-600">{(selectedScene as any).caption}</p>
+                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {((selectedScene as any).icons || []).map((ic: any, i: number) => (
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 rounded-full bg-white border border-fuchsia-200 text-[11px] text-slate-700"
+                      >
+                        {ic.label || ic.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {selectedScene.type === 'GEOMETRY_SPACE' && (
                 <div className="p-4 bg-cyan-50/60 rounded-xl border border-cyan-200 space-y-2">
                   <label className="text-xs font-bold text-cyan-900 block">

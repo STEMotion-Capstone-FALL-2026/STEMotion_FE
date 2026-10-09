@@ -14,6 +14,7 @@ import { ChemicalReaction } from '../remotion/compositions/ChemicalReaction';
 import { ComparisonSplit } from '../remotion/compositions/ComparisonSplit';
 import { ProcessTimeline } from '../remotion/compositions/ProcessTimeline';
 import { GeometrySpace } from '../remotion/compositions/GeometrySpace';
+import { IllustratedExplainer } from '../remotion/compositions/IllustratedExplainer';
 import { Play, Pause, RotateCcw, Sparkles, Maximize, Minimize, Volume2, VolumeX } from 'lucide-react';
 import { CanvaInteractiveOverlay } from './CanvaInteractiveOverlay';
 
@@ -167,6 +168,8 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
         return ProcessTimeline;
       case 'GEOMETRY_SPACE':
         return GeometrySpace;
+      case 'ILLUSTRATED_EXPLAINER':
+        return IllustratedExplainer;
       default:
         return TitleHeroReveal;
     }

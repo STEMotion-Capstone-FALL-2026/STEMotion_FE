@@ -25,6 +25,17 @@ export const STEM_TEMPLATES_CATALOG: STEMTemplateCatalogItem[] = [
     bgBadge: 'bg-blue-50 text-blue-700 border-blue-200',
   },
   {
+    type: 'ILLUSTRATED_EXPLAINER',
+    title: 'Minh Họa Flat Explainer',
+    subject: 'Đa Môn STEM',
+    category: 'ALL',
+    badge: 'Phong Cách Minh Họa',
+    duration: '5 giây (150 frames)',
+    description: 'Biểu tượng STEM phát sáng trên nền chuyển động nhiều lớp (vũ trụ, tế bào, phòng thí nghiệm, đại dương), camera trôi chậm.',
+    color: 'text-fuchsia-600',
+    bgBadge: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+  },
+  {
     type: 'MATH_FORMULA',
     title: 'Khai Triển Công Thức KaTeX',
     subject: 'Toán Học',

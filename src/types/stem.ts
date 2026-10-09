@@ -13,7 +13,8 @@ export type SceneType =
   | 'CHEMICAL_REACTION'
   | 'COMPARISON_SPLIT'
   | 'PROCESS_TIMELINE'
-  | 'GEOMETRY_SPACE';
+  | 'GEOMETRY_SPACE'
+  | 'ILLUSTRATED_EXPLAINER';
 
 export type STEMTemplateType = SceneType;
 
@@ -158,6 +159,28 @@ export interface GeometrySpaceProps extends SceneBase {
   explanation: string;
 }
 
+export type FlatAmbience = 'space' | 'cell' | 'lab' | 'ocean' | 'lilac' | 'sky';
+export type FlatLayout = 'focus' | 'row' | 'cluster' | 'swarm';
+/** minimal: one colour field and a few specks; rich: adds drifting shapes. */
+export type FlatDetail = 'minimal' | 'rich';
+
+export interface IllustratedIcon {
+  /** A name from the approved STEM icon set (src/remotion/flat/stemIcons.ts). */
+  name: string;
+  label?: string;
+}
+
+/** Flat-design explainer: a few icons composed as an illustration. */
+export interface IllustratedExplainerProps extends SceneBase {
+  type: 'ILLUSTRATED_EXPLAINER';
+  headline: string;
+  caption?: string;
+  ambience: FlatAmbience;
+  layout: FlatLayout;
+  detail?: FlatDetail;
+  icons: IllustratedIcon[];
+}
+
 export type SceneData =
   | TitleHeroProps
   | MathFormulaProps
@@ -169,7 +192,8 @@ export type SceneData =
   | ChemicalReactionProps
   | ComparisonSplitProps
   | ProcessTimelineProps
-  | GeometrySpaceProps;
+  | GeometrySpaceProps
+  | IllustratedExplainerProps;
 
 export type STEMScene = SceneData;
 
