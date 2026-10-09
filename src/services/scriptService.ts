@@ -155,6 +155,23 @@ const res = await apiClient.post<any>('/ai/script/generate', {
           ],
         } as SceneData;
       }
+      if (type === 'ILLUSTRATED_EXPLAINER') {
+        const icons = sc.icons ?? sc.props?.icons;
+        return {
+          ...sc.props,
+          ...sc,
+          ...base,
+          headline: sc.headline || sc.props?.headline || base.title,
+          caption: sc.caption ?? sc.props?.caption ?? '',
+          ambience: sc.ambience || sc.props?.ambience || 'sky',
+          layout: sc.layout || sc.props?.layout || 'focus',
+          // A neutral lesson icon keeps an omitted illustration renderable
+          // without inventing scientific content or dropping the narration.
+          icons: Array.isArray(icons) && icons.length > 0
+            ? icons
+            : [{ name: 'book', label: 'Bài học' }],
+        } as SceneData;
+      }
       if (type === 'OUTRO') {
         return {
           ...base,
