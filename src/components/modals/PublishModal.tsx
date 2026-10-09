@@ -30,7 +30,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({
   onNotify,
 }) => {
   const [publishTarget, setPublishTarget] = useState<'youtube' | 'download' | 'lms'>('youtube');
-  const [downloadQuality, setDownloadQuality] = useState<'1080p' | '720p'>('1080p');
+  const [downloadQuality, setDownloadQuality] = useState<'1440p' | '1080p' | '720p'>('1080p');
   const [downloadFps, setDownloadFps] = useState<'60' | '30'>('60');
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadDone, setIsDownloadDone] = useState(false);
@@ -62,8 +62,9 @@ export const PublishModal: React.FC<PublishModalProps> = ({
     const fileName = `${cleanTitle}_${downloadQuality}_${downloadFps}fps.mp4`;
 
     try {
-      const width = downloadQuality === '720p' ? 1280 : 1920;
-      const height = downloadQuality === '720p' ? 720 : 1080;
+      // The render service keeps the 1920x1080 canvas and scales the output.
+      const width = downloadQuality === '720p' ? 1280 : downloadQuality === '1440p' ? 2560 : 1920;
+      const height = downloadQuality === '720p' ? 720 : downloadQuality === '1440p' ? 1440 : 1080;
       const fps = Number(downloadFps) || 30;
       const jobId = `stem_${script.id || 'export'}_${Date.now()}`;
 
@@ -510,7 +511,10 @@ export const PublishModal: React.FC<PublishModalProps> = ({
                 </div>
                 <div className="bg-slate-950 p-2 rounded-lg text-center">
                   <span className="text-slate-500 block text-[10px]">Dung lượng:</span>
-                  <span className="text-emerald-400 font-bold">{downloadQuality === '1080p' ? '~28.4 MB' : '~14.2 MB'}</span>
+                  <span className="text-emerald-400 font-bold">
+                    {/* Measured on flat-explainer scenes at CRF 16: about 16 MB/min at 1080p and 24 MB/min at 1440p. */}
+                    ~{(((script.totalDurationSeconds || 35) / 60) * (downloadQuality === '1440p' ? 24 : downloadQuality === '1080p' ? 16.5 : 9)).toFixed(1)} MB
+                  </span>
                 </div>
                 <div className="bg-slate-950 p-2 rounded-lg text-center">
                   <span className="text-slate-500 block text-[10px]">Trạng thái:</span>
@@ -522,7 +526,19 @@ export const PublishModal: React.FC<PublishModalProps> = ({
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <div>
                   <label className="font-bold text-slate-300 block mb-1 text-[11px]">Độ phân giải video:</label>
-                  <div className="grid grid-cols-2 gap-1.5">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setDownloadQuality('1440p')}
+                      title="Nét hơn khi đăng YouTube; render lâu hơn khoảng 1,6 lần"
+                      className={`py-1.5 px-2 rounded-lg font-bold text-xs border text-center transition-all cursor-pointer ${
+                        downloadQuality === '1440p'
+                          ? 'bg-blue-600 border-blue-400 text-white shadow-xs'
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      1440p (Chất lượng cao)
+                    </button>
                     <button
                       type="button"
                       onClick={() => setDownloadQuality('1080p')}
