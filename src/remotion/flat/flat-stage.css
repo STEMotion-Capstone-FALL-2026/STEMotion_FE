@@ -1,0 +1,77 @@
+/*
+ * Remaps the charcoal palette the original templates were drawn in onto the
+ * flat-explainer palette. Scoped to .flat-stage, so the rest of the app is
+ * untouched; accent colours (emerald, rose, indigo...) are kept as they are.
+ */
+
+/* Panels: deep violet glass instead of charcoal. */
+.flat-stage .bg-slate-950,
+.flat-stage .bg-slate-950\/95,
+.flat-stage .bg-slate-950\/90 {
+  background-color: rgba(20, 4, 58, 0.72);
+}
+.flat-stage .bg-slate-950\/40 {
+  background-color: rgba(20, 4, 58, 0.36);
+}
+.flat-stage .bg-slate-900,
+.flat-stage .bg-slate-900\/90,
+.flat-stage .bg-slate-900\/85,
+.flat-stage .bg-slate-900\/80 {
+  background-color: rgba(44, 14, 110, 0.62);
+}
+.flat-stage .bg-slate-900\/70,
+.flat-stage .bg-slate-900\/60 {
+  background-color: rgba(44, 14, 110, 0.48);
+}
+.flat-stage .bg-slate-900\/40 {
+  background-color: rgba(44, 14, 110, 0.32);
+}
+.flat-stage .bg-slate-800,
+.flat-stage .bg-slate-800\/90,
+.flat-stage .bg-slate-800\/80 {
+  background-color: rgba(86, 44, 168, 0.55);
+}
+.flat-stage .bg-slate-800\/40 {
+  background-color: rgba(86, 44, 168, 0.3);
+}
+
+/* Lines: soft lavender instead of grey. */
+.flat-stage .border-slate-900,
+.flat-stage .border-slate-800,
+.flat-stage .border-slate-800\/80,
+.flat-stage .border-slate-800\/50,
+.flat-stage .border-slate-700,
+.flat-stage .border-slate-700\/80 {
+  border-color: rgba(205, 180, 255, 0.24);
+}
+.flat-stage .border-slate-600\/70,
+.flat-stage .border-slate-600\/60 {
+  border-color: rgba(225, 205, 255, 0.38);
+}
+
+/* Type: warm and lavender tints that stay readable on the violet fields. */
+.flat-stage .text-slate-100 { color: #fff8e8; }
+.flat-stage .text-slate-200 { color: #f4ecff; }
+.flat-stage .text-slate-300 { color: #e4d8ff; }
+.flat-stage .text-slate-400 { color: #cfc0f7; }
+.flat-stage .text-slate-500 { color: #b9a8ea; }
+.flat-stage .text-slate-600 { color: #a08edb; }
+
+/* Chunkier corners, closer to the rounded flat look. */
+.flat-stage .rounded-2xl { border-radius: 1.6rem; }
+.flat-stage .rounded-xl { border-radius: 1.1rem; }
+
+/* Header titles read at video size, not dashboard size. */
+.flat-stage h2.text-2xl {
+  font-size: 2.15rem;
+  line-height: 1.15;
+}
+
+/*
+ * Gradient headlines (title card) are recoloured cream to yellow to pink so
+ * they stand out on the violet fields instead of blending into them.
+ */
+.flat-stage .bg-clip-text {
+  background-image: linear-gradient(90deg, #fff3c4 0%, #ffd23f 45%, #ff7ab8 100%);
+  text-shadow: none;
+}

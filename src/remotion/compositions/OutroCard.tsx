@@ -3,6 +3,7 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { OutroProps } from '@/types/stem';
+import { FlatStage } from '../flat/FlatStage';
 
 export const OutroCard: React.FC<OutroProps> = ({
   title = 'Tổng Kết Bài Học',
@@ -57,7 +58,7 @@ export const OutroCard: React.FC<OutroProps> = ({
   });
 
   return (
-    <div className="w-full h-full bg-slate-950 flex flex-col justify-between text-white font-sans p-16 relative overflow-hidden select-none">
+    <FlatStage ambience="space" className="flex flex-col justify-between p-16">
       {/* Background Radial Glow */}
       <div 
         className="absolute w-[500px] h-[500px] rounded-full blur-3xl opacity-20 pointer-events-none -bottom-20 -right-20"
@@ -144,11 +145,6 @@ export const OutroCard: React.FC<OutroProps> = ({
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500 relative z-10">
-        <span>Cảm ơn bạn đã theo dõi bài giảng</span>
-        <span className="font-mono">STEMotion LMS Ready</span>
-      </div>
-    </div>
+    </FlatStage>
   );
 };

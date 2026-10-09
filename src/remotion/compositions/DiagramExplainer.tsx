@@ -3,6 +3,7 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { DiagramExplainerProps } from '@/types/stem';
+import { FlatStage } from '../flat/FlatStage';
 
 export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
   title = 'Sơ đồ cơ chế khoa học',
@@ -55,15 +56,7 @@ export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
   });
 
   return (
-    <div className="w-full h-full bg-slate-950 flex flex-col justify-between text-white font-sans p-16 relative overflow-hidden select-none">
-      {/* Background visual grid */}
-      <div 
-        className="absolute inset-0 opacity-15 pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(#6366f1 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
-        }}
-      />
+    <FlatStage ambience="lab" className="flex flex-col justify-between p-16">
 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4 relative z-10">
@@ -155,11 +148,6 @@ export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500 relative z-10">
-        <span>Sơ đồ giải phẫu & cơ chế dao động tuần hoàn</span>
-        <span className="font-mono">Motion Diagram Engine</span>
-      </div>
-    </div>
+    </FlatStage>
   );
 };

@@ -3,6 +3,7 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { ProcessTimelineProps } from '@/types/stem';
+import { FlatStage } from '../flat/FlatStage';
 
 export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
   title,
@@ -84,17 +85,7 @@ export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
   });
 
   return (
-    <div className="w-full h-full bg-slate-950 flex flex-col justify-between text-white font-sans p-14 relative overflow-hidden select-none">
-      {/* Background Bio Grid */}
-      <div
-        className="absolute inset-0 opacity-10 pointer-events-none"
-        style={{
-          backgroundImage:
-            'radial-gradient(#10b981 1px, transparent 1px), radial-gradient(#6366f1 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-          backgroundPosition: '0 0, 20px 20px',
-        }}
-      />
+    <FlatStage ambience="ocean" className="flex flex-col justify-between p-14">
 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 relative z-10">
@@ -191,11 +182,6 @@ export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="flex justify-between items-center text-xs text-slate-500 border-t border-slate-900 pt-3 relative z-10 font-mono">
-        <span>STEMotion • Chu Trình Khoa Học Tự Nhiên</span>
-        <span>Phân Cảnh Tiến Trình Tương Tác</span>
-      </div>
-    </div>
+    </FlatStage>
   );
 };

@@ -4,6 +4,7 @@ import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { ChemicalReactionProps } from '@/types/stem';
 import katex from 'katex';
+import { FlatStage } from '../flat/FlatStage';
 
 export const ChemicalReaction: React.FC<ChemicalReactionProps> = ({
   title,
@@ -82,17 +83,7 @@ export const ChemicalReaction: React.FC<ChemicalReactionProps> = ({
   };
 
   return (
-    <div className="w-full h-full bg-slate-950 flex flex-col justify-between text-white font-sans p-14 relative overflow-hidden select-none">
-      {/* Background Chemistry Grid Pattern */}
-      <div
-        className="absolute inset-0 opacity-10 pointer-events-none"
-        style={{
-          backgroundImage:
-            'radial-gradient(#ec4899 1px, transparent 1px), radial-gradient(#38bdf8 1px, transparent 1px)',
-          backgroundSize: '48px 48px',
-          backgroundPosition: '0 0, 24px 24px',
-        }}
-      />
+    <FlatStage ambience="cell" className="flex flex-col justify-between p-14">
 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 relative z-10">
@@ -214,11 +205,6 @@ export const ChemicalReaction: React.FC<ChemicalReactionProps> = ({
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="flex justify-between items-center text-xs text-slate-500 border-t border-slate-900 pt-3 relative z-10 font-mono">
-        <span>STEMotion • Chuẩn Khoa Học GDPT 2018</span>
-        <span>Phân Cảnh Hóa Học Tương Tác</span>
-      </div>
-    </div>
+    </FlatStage>
   );
 };

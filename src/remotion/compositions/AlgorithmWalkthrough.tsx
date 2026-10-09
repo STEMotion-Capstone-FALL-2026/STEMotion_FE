@@ -3,6 +3,7 @@
 import React from 'react';
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { AlgorithmWalkthroughProps } from '@/types/stem';
+import { FlatStage } from '../flat/FlatStage';
 
 export const AlgorithmWalkthrough: React.FC<AlgorithmWalkthroughProps> = ({
   title,
@@ -76,15 +77,7 @@ export const AlgorithmWalkthrough: React.FC<AlgorithmWalkthroughProps> = ({
   const colSpans = getColSpanClass();
 
   return (
-    <div className="w-full h-full bg-slate-950 flex flex-col justify-between text-white font-sans p-16 relative overflow-hidden select-none">
-      {/* Background Matrix/Hex pattern */}
-      <div 
-        className="absolute inset-0 opacity-10 pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(#f59e0b 1px, transparent 1px)',
-          backgroundSize: '36px 36px',
-        }}
-      />
+    <FlatStage ambience="space" className="flex flex-col justify-between p-16">
 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4 relative z-10">
@@ -160,11 +153,6 @@ export const AlgorithmWalkthrough: React.FC<AlgorithmWalkthroughProps> = ({
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500 relative z-10">
-        <span>Mô phỏng từng bước thực thi thuật toán tin học</span>
-        <span className="font-mono">Code Trace Engine</span>
-      </div>
-    </div>
+    </FlatStage>
   );
 };

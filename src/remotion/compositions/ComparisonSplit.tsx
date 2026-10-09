@@ -3,6 +3,7 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { ComparisonSplitProps } from '@/types/stem';
+import { FlatStage } from '../flat/FlatStage';
 
 export const ComparisonSplit: React.FC<ComparisonSplitProps> = (props) => {
   const {
@@ -117,16 +118,7 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = (props) => {
   const conclusionFontSize = Math.max(14, Math.round(baseFontSize * 0.7));
 
   return (
-    <div className="w-full h-full bg-slate-950 flex flex-col justify-between text-white font-sans p-12 relative overflow-hidden select-none">
-      {/* Background Subtle Grid */}
-      <div
-        className="absolute inset-0 opacity-10 pointer-events-none"
-        style={{
-          backgroundImage:
-            'linear-gradient(to right, #6366f1 1px, transparent 1px), linear-gradient(to bottom, #6366f1 1px, transparent 1px)',
-          backgroundSize: '54px 54px',
-        }}
-      />
+    <FlatStage ambience="lab" className="flex flex-col justify-between p-12">
 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 relative z-10">
@@ -289,11 +281,6 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = (props) => {
         </p>
       </div>
 
-      {/* Footer */}
-      <div className="flex justify-between items-center text-xs text-slate-500 border-t border-slate-900 pt-2 relative z-10 font-mono">
-        <span>STEMotion • Phương Pháp So Sánh Đối Chiếu</span>
-        <span>Phân Cảnh Phân Tích Khái Niệm</span>
-      </div>
-    </div>
+    </FlatStage>
   );
 };

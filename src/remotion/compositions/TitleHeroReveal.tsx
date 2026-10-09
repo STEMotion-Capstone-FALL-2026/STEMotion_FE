@@ -3,6 +3,7 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { TitleHeroProps } from '@/types/stem';
+import { FlatStage } from '../flat/FlatStage';
 
 export const TitleHeroReveal: React.FC<TitleHeroProps> = ({
   title,
@@ -82,16 +83,7 @@ export const TitleHeroReveal: React.FC<TitleHeroProps> = ({
   const subtitleFontSize = Math.round(baseSize * 0.85); // e.g. 30px -> 25px, 38px -> 32px
 
   return (
-    <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden text-white font-sans p-16 select-none">
-      {/* Dynamic Animated Grid Background */}
-      <div 
-        className="absolute inset-0 opacity-20 pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(#38bdf8 1px, transparent 1px), radial-gradient(#6366f1 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-          backgroundPosition: '0 0, 20px 20px',
-        }}
-      />
+    <FlatStage ambience="space" className="flex flex-col items-center justify-center p-16">
 
       {/* Glowing Orb */}
       <div 
@@ -153,11 +145,6 @@ export const TitleHeroReveal: React.FC<TitleHeroProps> = ({
         </p>
       </div>
 
-      {/* Progress line indicator at bottom */}
-      <div className="absolute bottom-10 left-16 right-16 flex items-center justify-between text-xs text-slate-500 border-t border-slate-800/80 pt-4">
-        <span>STEM Video Lesson • Section 01: Hook & Core Idea</span>
-        <span className="font-mono">FPS: {fps} • Frame {frame}</span>
-      </div>
-    </div>
+    </FlatStage>
   );
 };

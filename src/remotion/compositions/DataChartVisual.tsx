@@ -3,6 +3,7 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { DataChartProps } from '@/types/stem';
+import { FlatStage } from '../flat/FlatStage';
 
 export const DataChartVisual: React.FC<DataChartProps> = ({
   title = 'Biểu Đồ Số Liệu Trực Quan',
@@ -64,15 +65,7 @@ export const DataChartVisual: React.FC<DataChartProps> = ({
   };
 
   return (
-    <div className="w-full h-full bg-slate-950 flex flex-col justify-between text-white font-sans p-16 relative overflow-hidden select-none">
-      {/* Background Grid */}
-      <div 
-        className="absolute inset-0 opacity-10 pointer-events-none"
-        style={{
-          backgroundImage: 'linear-gradient(to right, #10b981 1px, transparent 1px), linear-gradient(to bottom, #10b981 1px, transparent 1px)',
-          backgroundSize: '50px 50px',
-        }}
-      />
+    <FlatStage ambience="ocean" className="flex flex-col justify-between p-16">
 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4 relative z-10">
@@ -141,11 +134,6 @@ export const DataChartVisual: React.FC<DataChartProps> = ({
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500 relative z-10">
-        <span>Biểu đồ trực quan hóa dữ liệu thống kê khoa học</span>
-        <span className="font-mono">Real-time Data Visualizer</span>
-      </div>
-    </div>
+    </FlatStage>
   );
 };

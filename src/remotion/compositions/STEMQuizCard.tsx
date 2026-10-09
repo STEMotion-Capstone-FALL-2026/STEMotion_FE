@@ -3,6 +3,7 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { STEMQuizProps } from '@/types/stem';
+import { FlatStage } from '../flat/FlatStage';
 
 export const STEMQuizCard: React.FC<STEMQuizProps> = ({
   title = 'Câu Hỏi Trắc Nghiệm',
@@ -51,15 +52,7 @@ export const STEMQuizCard: React.FC<STEMQuizProps> = ({
   const isAnswerRevealed = frame >= answerRevealFrame;
 
   return (
-    <div className="w-full h-full bg-slate-950 flex flex-col justify-between text-white font-sans p-16 relative overflow-hidden select-none">
-      {/* Background Visual */}
-      <div 
-        className="absolute inset-0 opacity-15 pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(#ec4899 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-        }}
-      />
+    <FlatStage ambience="cell" className="flex flex-col justify-between p-16">
 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4 relative z-10">
@@ -129,11 +122,6 @@ export const STEMQuizCard: React.FC<STEMQuizProps> = ({
         )}
       </div>
 
-      {/* Footer */}
-      <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500 relative z-10">
-        <span>Tương tác kiểm tra kiến thức video STEM</span>
-        <span className="font-mono">Adaptive Assessment Engine</span>
-      </div>
-    </div>
+    </FlatStage>
   );
 };

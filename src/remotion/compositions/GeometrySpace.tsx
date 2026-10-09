@@ -4,6 +4,7 @@ import React from 'react';
 import { spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { GeometrySpaceProps } from '@/types/stem';
 import katex from 'katex';
+import { FlatStage } from '../flat/FlatStage';
 
 export const GeometrySpace: React.FC<GeometrySpaceProps> = ({
   title,
@@ -74,16 +75,7 @@ export const GeometrySpace: React.FC<GeometrySpaceProps> = ({
   });
 
   return (
-    <div className="w-full h-full bg-slate-950 flex flex-col justify-between text-white font-sans p-14 relative overflow-hidden select-none">
-      {/* Background Math Geometry Grid */}
-      <div
-        className="absolute inset-0 opacity-10 pointer-events-none"
-        style={{
-          backgroundImage:
-            'linear-gradient(to right, #0ea5e9 1px, transparent 1px), linear-gradient(to bottom, #0ea5e9 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-        }}
-      />
+    <FlatStage ambience="lab" className="flex flex-col justify-between p-14">
 
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 relative z-10">
@@ -220,11 +212,6 @@ export const GeometrySpace: React.FC<GeometrySpaceProps> = ({
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="flex justify-between items-center text-xs text-slate-500 border-t border-slate-900 pt-3 relative z-10 font-mono">
-        <span>STEMotion • Toán Học Trực Quan GDPT 2018</span>
-        <span>Phân Cảnh Hình Học Không Gian</span>
-      </div>
-    </div>
+    </FlatStage>
   );
 };
