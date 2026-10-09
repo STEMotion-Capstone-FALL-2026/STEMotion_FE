@@ -5,7 +5,7 @@
 
 import { apiClient } from './apiClient';
 import { STEMScript, STEMSubject, SceneData, SceneType } from '../types/stem';
-import { projectService } from './projectService';
+import { sceneSaveQueue } from './sceneSaveQueue';
 
 export type AiAction = 'resegment' | 'grade' | 'extract' | 'terms';
 
@@ -208,18 +208,9 @@ const res = await apiClient.post<any>('/ai/script/generate', {
       scenes: updatedScenes,
     };
 
-    // Always update local cache for smooth instantaneous interaction
-    projectService.updateProject(currentScript.id, updatedScript);
-
-try {
-      const res = await apiClient.put<STEMScript>(`/scripts/${currentScript.id}`, {
-        scenes: updatedScenes,
-      });
-      return res || updatedScript;
-    } catch (error) {
-      console.warn('[scriptService] Backend sync failed, keeping local update:', error);
-      return updatedScript;
-    }
+    // Debounced and serialised: one save per pause in editing, never two at once.
+    sceneSaveQueue.schedule(currentScript.id, updatedScenes);
+    return updatedScript;
   },
 
   async addScene(
@@ -419,12 +410,8 @@ try {
       totalDurationSeconds,
     };
 
-    projectService.updateProject(currentScript.id, updatedScript);
-
-try {
-      const res = await apiClient.put<STEMScript>(`/scripts/${currentScript.id}`, {
-        scenes: updatedScript.scenes,
-      });
+    try {
+      const res = await sceneSaveQueue.saveNow(currentScript.id, updatedScript.scenes);
       return { updatedScript: res || updatedScript, newScene };
     } catch (error) {
       console.warn('[scriptService] Backend add scene failed, added locally:', error);
@@ -451,10 +438,8 @@ try {
       totalDurationSeconds,
     };
 
-    projectService.updateProject(currentScript.id, updatedScript);
-
-try {
-      await apiClient.put(`/scripts/${currentScript.id}`, { scenes: filtered });
+    try {
+      await sceneSaveQueue.saveNow(currentScript.id, filtered);
     } catch (error) {
       console.warn('[scriptService] Backend delete scene failed, deleted locally:', error);
     }
