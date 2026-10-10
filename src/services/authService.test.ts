@@ -78,17 +78,6 @@ describe('authService', () => {
     expect(user.role).toBe(uiRole);
   });
 
-  it('sends the role in upper case when registering', async () => {
-    const fetchMock = mockJson(201, loginPayload);
-    global.fetch = fetchMock as typeof fetch;
-
-    await authService.register('Nguyen Van A', 'writer@stemotion.vn', 'password123', 'writer');
-
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-    expect(body.role).toBe('WRITER');
-    expect(body.fullName).toBe('Nguyen Van A');
-  });
-
   it('propagates a rejected login instead of signing the user in', async () => {
     global.fetch = mockJson(400, {
       status: 400,

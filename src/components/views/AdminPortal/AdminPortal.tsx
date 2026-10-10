@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { workspaceService, WorkspaceMemberDto } from '../../../services';
+import { AccountProvisionForm } from './AccountProvisionForm';
 import { UserPlus } from 'lucide-react';
 
 
@@ -58,9 +59,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenInviteModal }) =
             className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center space-x-2"
           >
             <UserPlus className="w-4 h-4" />
-            <span>+ Cấp Quyền Thành Viên Mới</span>
+            <span>+ Mời vào tổ bộ môn</span>
           </button>
         </div>
+
+        <AccountProvisionForm />
 
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
           <h2 className="text-sm font-bold text-slate-900">

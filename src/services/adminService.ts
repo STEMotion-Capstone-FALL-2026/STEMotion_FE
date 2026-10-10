@@ -22,7 +22,17 @@ export interface STEMAssetTemplate {
   tags: string[];
 }
 
+export interface ProvisionUserRequest {
+  fullName: string;
+  email: string;
+  password: string;
+  role: 'WRITER' | 'REVIEWER' | 'PRODUCER' | 'ADMIN';
+}
+
 export const adminService = {
+  async provisionUser(request: ProvisionUserRequest): Promise<{ id: string; email: string }> {
+    return apiClient.post('/users', request);
+  },
   async getSystemMetrics(): Promise<SystemMetrics> {
 return apiClient.get<SystemMetrics>('/admin/metrics');
   },

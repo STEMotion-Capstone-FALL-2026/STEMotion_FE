@@ -75,28 +75,6 @@ const response = await apiClient.post<any>('/auth/login', {
     return this.getCurrentUser();
   },
 
-  /** Creates an account and signs in with the returned token. */
-  async register(
-    fullName: string,
-    email: string,
-    pass: string,
-    role: UserRole = 'writer'
-  ): Promise<UserProfile> {
-const response = await apiClient.post<any>('/auth/register', {
-      fullName,
-      email,
-      password: pass,
-      role: this._toBackendRole(role),
-    });
-
-    if (response?.accessToken) {
-      apiClient.setAuthToken(response.accessToken);
-    }
-    const user = this._toProfile(response.user);
-    this.setCurrentUser(user);
-    return user;
-  },
-
   /** Re-reads the signed-in user from the backend, e.g. after a reload. */
   async fetchCurrentUser(): Promise<UserProfile> {
     if (!apiClient.getAuthToken()) {
