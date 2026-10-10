@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   frontend:
-    name: Frontend (Node 20)
+    name: Frontend (Node 24)
     runs-on: ubuntu-latest
 
     steps:
@@ -20,7 +20,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
 
       - name: Install
