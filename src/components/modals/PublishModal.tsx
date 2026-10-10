@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Download, X, Youtube, Code } from 'lucide-react';
 import { STEMScript } from '../../types/stem';
 import { projectService } from '../../services/projectService';
+import { publicationService } from '../../services/publicationService';
 
 interface PublishModalProps {
   isOpen: boolean;
@@ -9,12 +10,37 @@ interface PublishModalProps {
   script: STEMScript;
   onNotify: (message: string, type?: 'success' | 'info' | 'warn') => void;
   selectedScene?: any;
+  canPublish?: boolean;
+  onPublished?: () => Promise<void>;
 }
 
 /** Download the existing server artifact. Rendering is requested in Producer. */
-export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, script, onNotify }) => {
+export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, script, onNotify, canPublish = false, onPublished }) => {
   const [busy, setBusy] = useState(false);
+  const [embedCode, setEmbedCode] = useState<string | null>(null);
+  const [published, setPublished] = useState(false);
+  const activeProject = useRef(script.id);
+  activeProject.current = script.id;
+  useEffect(() => { setEmbedCode(null); setPublished(false); }, [script.id]);
   if (!isOpen) return null;
+
+  const publish = async () => {
+    if (busy || published) return;
+    const projectId = script.id;
+    setBusy(true);
+    try {
+      const result = await publicationService.publishInternal(script.id, script.title);
+      if (activeProject.current === projectId) {
+        setEmbedCode(result.lmsEmbedCode);
+        setPublished(true);
+      }
+      onNotify('Đã xuất bản video vào thư viện nội bộ.', 'success');
+      try { await onPublished?.(); }
+      catch { onNotify('Đã xuất bản; hãy tải lại trang để cập nhật trạng thái.', 'info'); }
+    } catch (error: any) {
+      onNotify(error.message || 'Không xuất bản được video.', 'warn');
+    } finally { setBusy(false); }
+  };
 
   const download = async () => {
     if (busy) return;
@@ -54,7 +80,14 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
         {!script.videoUrl && <p className="text-sm text-amber-700">Chưa có video. Dịch vụ kết xuất phải được cấu hình trước.</p>}
         <div className="border-t pt-4 text-sm text-slate-600 space-y-3">
           <p className="flex items-center gap-2"><Youtube size={18} /> Xuất YouTube chưa khả dụng; cần kết nối kênh bằng OAuth.</p>
-          <p className="flex items-center gap-2"><Code size={18} /> Mã nhúng LMS chưa khả dụng.</p>
+          <button disabled={busy || published || !canPublish || script.videoStatus !== 'APPROVED'} onClick={publish}
+            className="bg-emerald-600 text-white rounded-lg px-4 py-2 disabled:opacity-50">
+            {published || script.videoStatus === 'PUBLISHED' ? 'Đã xuất bản vào thư viện' : 'Xuất bản vào thư viện & lấy mã nhúng LMS'}
+          </button>
+          {!canPublish && <p>Producer hoặc Admin có quyền xuất bản video đã duyệt.</p>}
+          {embedCode && <label className="block"><span className="flex items-center gap-2"><Code size={18} /> Mã nhúng LMS</span>
+            <textarea readOnly value={embedCode} aria-label="Mã nhúng LMS" className="w-full border rounded p-2 mt-2" />
+          </label>}
         </div>
       </div>
     </div>

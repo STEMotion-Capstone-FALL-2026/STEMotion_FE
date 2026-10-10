@@ -755,6 +755,11 @@ export default function App() {
       />
 
       <PublishModal
+        canPublish={['producer', 'admin'].includes(currentUser.role)}
+        onPublished={async () => {
+          const published = await projectService.getProjectById(script.id);
+          setScript(previous => previous.id === published.id ? published : previous);
+        }}
         isOpen={isPublishModalOpen}
         onClose={() => setIsPublishModalOpen(false)}
         script={script}
