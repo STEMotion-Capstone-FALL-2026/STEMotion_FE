@@ -78,4 +78,27 @@ describe('sceneSaveQueue', () => {
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
+
+  it('replaces a temporary identity in a queued save with the first persisted ID', async () => {
+    let release!: (value: any) => void;
+    put.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    put.mockResolvedValue({ scenes: [{ id: 'server-id', title: 'newer edit' }] });
+    const first = sceneSaveQueue.saveNow('identity-script', [{ id: 'scene_new', title: 'initial' }] as any);
+    const second = sceneSaveQueue.saveNow('identity-script', [{ id: 'scene_new', title: 'newer edit' }] as any);
+    await settle();
+    release({ scenes: [{ id: 'server-id', title: 'initial' }] });
+    await first; await second;
+    expect(put.mock.calls[1][1].scenes).toEqual([{ id: 'server-id', title: 'newer edit' }]);
+    expect(sceneSaveQueue.resolveId('identity-script', 'scene_new')).toBe('server-id');
+  });
+
+  it('notifies the UI of a rejected save instead of signaling persistence', async () => {
+    const listener = vi.fn();
+    const unsubscribe = sceneSaveQueue.subscribe(listener);
+    const failure = new Error('Scene has feedback');
+    put.mockRejectedValue(failure);
+    await expect(sceneSaveQueue.saveNow('feedback-script', scenes('delete'))).rejects.toThrow('feedback');
+    expect(listener).toHaveBeenCalledWith({ scriptId: 'feedback-script', error: failure });
+    unsubscribe();
+  });
 });

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { sceneSaveQueue } from './services/sceneSaveQueue';
 import { renderService } from './services/renderService';
 import { STEMScript, FeedbackComment, SceneData, STEMSubject } from './types/stem';
 import { LoginScreen } from './components/LoginScreen';
@@ -123,6 +124,19 @@ export default function App() {
   // ---- Load the studio from the backend -----------------------------------
   const bootstrapInFlight = React.useRef(false);
   /** Loads only server-owned workspace and script data. */
+  useEffect(() => sceneSaveQueue.subscribe(event => {
+    if (event.scriptId !== script.id) return;
+    if (event.error) {
+      showToast((event.error as any)?.message || 'Chưa lưu được phân cảnh. Hãy thử lại trước khi gửi duyệt.', 'warn');
+      return;
+    }
+    // Reconcile identity only: a slow save must not replace newer local text.
+    setScript(prev => prev.id !== event.scriptId ? prev : {
+      ...prev, scenes: prev.scenes.map(scene => ({ ...scene, id: sceneSaveQueue.resolveId(prev.id, scene.id) })),
+    });
+    setActiveSceneId(id => sceneSaveQueue.resolveId(event.scriptId, id));
+  }), [script.id]);
+
   const bootstrapFromApi = useCallback(async () => {
     // StrictMode runs mount effects twice. Invitation tokens are one-use.
     if (bootstrapInFlight.current) return;
@@ -247,7 +261,7 @@ export default function App() {
       setActiveSceneId(newScene.id);
       showToast(`Đã thêm Scene mới (${type}) vào kịch bản!`);
     } catch (err) {
-      console.warn('Fallback adding scene:', err);
+      showToast((err as any)?.message || 'Không thêm được phân cảnh.', 'warn');
     }
   };
 
@@ -264,13 +278,22 @@ export default function App() {
       setActiveSceneId(updatedScript.scenes[0].id);
       showToast('Đã xóa phân cảnh khỏi video.');
     } catch (err) {
-      console.warn('Fallback deleting scene:', err);
+      showToast((err as any)?.message || 'Không xóa được phân cảnh.', 'warn');
     }
   };
 
   const handleUpdateSceneTitle = async (sceneId: string, newTitle: string) => {
     await updateSceneProperty((s) => (s.id === sceneId ? { ...s, title: newTitle } : s));
     showToast('Đã đổi tên phân cảnh thành công!');
+  };
+
+  const persistSceneList = async (scenes: SceneData[], message: string, activeId?: string) => {
+    try {
+      const saved = await sceneSaveQueue.saveNow(script.id, scenes);
+      setScript(prev => prev.id === saved.id ? saved : prev);
+      if (activeId) setActiveSceneId(sceneSaveQueue.resolveId(script.id, activeId));
+      showToast(message);
+    } catch (error: any) { showToast(error?.message || 'Không lưu được thay đổi phân cảnh.', 'warn'); }
   };
 
   const handleMoveScene = (index: number, direction: 'up' | 'down') => {
@@ -281,8 +304,7 @@ export default function App() {
     const temp = newScenes[index];
     newScenes[index] = newScenes[targetIndex];
     newScenes[targetIndex] = temp;
-    setScript((prev) => ({ ...prev, scenes: newScenes }));
-    showToast(`Đã di chuyển phân cảnh sang vị trí 0${targetIndex + 1}!`);
+    void persistSceneList(newScenes, `Đã di chuyển phân cảnh sang vị trí ${targetIndex + 1}.`);
   };
 
   const handleReorderScenes = (fromIndex: number, toIndex: number) => {
@@ -298,8 +320,7 @@ export default function App() {
     const newScenes = [...script.scenes];
     const [moved] = newScenes.splice(fromIndex, 1);
     newScenes.splice(toIndex, 0, moved);
-    setScript((prev) => ({ ...prev, scenes: newScenes }));
-    showToast(`Đã di chuyển phân cảnh đến vị trí 0${toIndex + 1}!`);
+    void persistSceneList(newScenes, `Đã di chuyển phân cảnh đến vị trí ${toIndex + 1}.`);
   };
 
   const handleDuplicateScene = (scene: SceneData) => {
@@ -312,31 +333,14 @@ export default function App() {
     const currentIdx = script.scenes.findIndex((s) => s.id === scene.id);
     const newScenes = [...script.scenes];
     newScenes.splice(currentIdx + 1, 0, duplicated);
-    setScript((prev) => ({
-      ...prev,
-      scenes: newScenes,
-      totalDurationSeconds: Math.round(
-        newScenes.reduce((sum, s) => sum + (s.durationInFrames || 150), 0) / 30
-      ),
-    }));
-    setActiveSceneId(duplicated.id);
-    showToast('Đã nhân bản phân cảnh thành công!');
+    void persistSceneList(newScenes, 'Đã nhân bản phân cảnh.', duplicated.id);
   };
 
   const handleChangeDuration = (sceneId: string, seconds: number) => {
     if (!canEditScript()) return;
-    const frames = Math.max(30, Math.round(seconds * 30));
-    setScript((prev) => ({
-      ...prev,
-      scenes: prev.scenes.map((s) => (s.id === sceneId ? { ...s, durationInFrames: frames } : s)),
-      totalDurationSeconds: Math.round(
-        prev.scenes.reduce(
-          (sum, s) => sum + (s.id === sceneId ? frames : s.durationInFrames || 150),
-          0
-        ) / 30
-      ),
-    }));
-    showToast(`Đã chỉnh thời lượng cảnh thành ${seconds} giây!`);
+    const frames = Math.max(1, Math.round(seconds * (script.fps || 30)));
+    const scenes = script.scenes.map(scene => scene.id === sceneId ? { ...scene, durationInFrames: frames } : scene);
+    void persistSceneList(scenes, `Đã chỉnh thời lượng cảnh thành ${seconds} giây.`);
   };
 
   const renderGeneration = React.useRef(0);

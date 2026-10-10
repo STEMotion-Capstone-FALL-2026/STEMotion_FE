@@ -427,13 +427,10 @@ const res = await apiClient.post<any>('/ai/script/generate', {
       totalDurationSeconds,
     };
 
-    try {
-      const res = await sceneSaveQueue.saveNow(currentScript.id, updatedScript.scenes);
-      return { updatedScript: res || updatedScript, newScene };
-    } catch (error) {
-      console.warn('[scriptService] Backend add scene failed, added locally:', error);
-      return { updatedScript, newScene };
-    }
+    const saved = await sceneSaveQueue.saveNow(currentScript.id, updatedScript.scenes);
+    const persistedScene = saved.scenes.find(scene => scene.id === sceneSaveQueue.resolveId(currentScript.id, newScene.id));
+    if (!persistedScene) throw new Error('Máy chủ không trả lại phân cảnh mới.');
+    return { updatedScript: saved, newScene: persistedScene };
   },
 
   async deleteScene(
@@ -455,11 +452,6 @@ const res = await apiClient.post<any>('/ai/script/generate', {
       totalDurationSeconds,
     };
 
-    try {
-      await sceneSaveQueue.saveNow(currentScript.id, filtered);
-    } catch (error) {
-      console.warn('[scriptService] Backend delete scene failed, deleted locally:', error);
-    }
-    return updatedScript;
+    return sceneSaveQueue.saveNow(currentScript.id, filtered);
   },
 };
