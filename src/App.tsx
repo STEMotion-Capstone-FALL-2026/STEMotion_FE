@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { renderService } from './services/renderService';
 import { STEMScript, FeedbackComment, SceneData, STEMSubject } from './types/stem';
 import { LoginScreen } from './components/LoginScreen';
 import {
@@ -58,13 +59,13 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(() => authService.getCurrentUser());
 
   const handleRoleChange = (role: UserRole) => {
-    authService.switchRole(role);
+    if (currentUser.role !== 'admin' && role !== currentUser.role && role !== 'library') return;
     setCurrentRole(role);
   };
 
   // Multi-workspace state
   const [workspaces, setWorkspaces] = useState<any[]>([]);
-  const [activeGroup, setActiveGroup] = useState({ name: 'Nhóm STEM THCS Tân Bình', code: 'Gr-01' });
+  const [activeGroup, setActiveGroup] = useState({ name: 'Đang tải nhóm…', code: '' });
 
   // Central Dynamic Script State (Single Source of Truth).
   // Starts empty: everything on screen comes from the backend, so an empty
@@ -120,17 +121,29 @@ export default function App() {
   };
 
   // ---- Load the studio from the backend -----------------------------------
-  /**
-   * Pulls the signed-in user, their workspace and its scripts. Falls back to
-   * the bundled sample data when the workspace is still empty, so a fresh
-   * account opens on a usable studio instead of a blank screen.
-   */
+  const bootstrapInFlight = React.useRef(false);
+  /** Loads only server-owned workspace and script data. */
   const bootstrapFromApi = useCallback(async () => {
+    // StrictMode runs mount effects twice. Invitation tokens are one-use.
+    if (bootstrapInFlight.current) return;
+    bootstrapInFlight.current = true;
     setIsBootstrapping(true);
     try {
       const profile = await authService.fetchCurrentUser();
       setCurrentRole(profile.role);
       setCurrentUser(profile);
+
+      // Fragment tokens are not sent in HTTP URLs or Referer headers.
+      if (window.location.hash.startsWith('#invite=')) {
+        try {
+          const token = decodeURIComponent(window.location.hash.slice('#invite='.length));
+          await workspaceService.acceptInvitation(token);
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+          showToast('Đã nhận lời mời vào nhóm.', 'success');
+        } catch (error: any) {
+          showToast(error.message || 'Không nhận được lời mời. Kiểm tra email đăng nhập và hạn link.', 'warn');
+        }
+      }
 
       // Resolve first: a brand-new account has no workspace yet and this
       // creates the default one. It already caches the active id, so the list
@@ -164,12 +177,16 @@ export default function App() {
         setComments(qa);
         showToast(`Đã tải ${list.length} kịch bản từ máy chủ`, 'success');
       } else {
+        setScript(EMPTY_SCRIPT);
+        setComments([]);
+        setActiveSceneId('');
         showToast('Workspace chưa có kịch bản nào. Hãy tạo kịch bản đầu tiên.', 'info');
       }
     } catch (error: any) {
       console.error('[bootstrap] Không tải được dữ liệu từ backend:', error);
       showToast('Không tải được dữ liệu từ máy chủ. Kiểm tra backend đã chạy chưa.', 'warn');
     } finally {
+      bootstrapInFlight.current = false;
       setIsBootstrapping(false);
     }
   }, []);
@@ -195,7 +212,16 @@ export default function App() {
   const selectedScene = script.scenes.find((s) => s.id === activeSceneId) || script.scenes[0];
 
   // Dynamic Scene Updater (Live Props Binding via Service Layer)
+  const canEditScript = () => {
+    if (!['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)
+      || !['writer', 'admin'].includes(currentUser.role)) {
+      showToast('Kịch bản đã gửi duyệt được khóa. Dựng video cần bản composition riêng.', 'warn');
+      return false;
+    }
+    return true;
+  };
   const updateSceneProperty = (updater: (s: any) => any) => {
+    if (!canEditScript()) return;
     if (!selectedScene) return;
     setScript((prev) => {
       const updatedScenes = prev.scenes.map((sc) => {
@@ -214,6 +240,7 @@ export default function App() {
 
   // Add new scene dynamically via Service Layer
   const handleAddNewScene = async (type: SceneData['type'] = 'MATH_FORMULA') => {
+    if (!canEditScript()) return;
     try {
       const { updatedScript, newScene } = await scriptService.addScene(script, type);
       setScript(updatedScript);
@@ -226,6 +253,7 @@ export default function App() {
 
   // Delete scene dynamically via Service Layer
   const handleDeleteScene = async (sceneId: string) => {
+    if (!canEditScript()) return;
     if (script.scenes.length <= 1) {
       showToast('Video cần có ít nhất 1 phân cảnh!', 'warn');
       return;
@@ -246,6 +274,7 @@ export default function App() {
   };
 
   const handleMoveScene = (index: number, direction: 'up' | 'down') => {
+    if (!canEditScript()) return;
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= script.scenes.length) return;
     const newScenes = [...script.scenes];
@@ -257,6 +286,7 @@ export default function App() {
   };
 
   const handleReorderScenes = (fromIndex: number, toIndex: number) => {
+    if (!canEditScript()) return;
     if (
       fromIndex === toIndex ||
       fromIndex < 0 ||
@@ -273,6 +303,7 @@ export default function App() {
   };
 
   const handleDuplicateScene = (scene: SceneData) => {
+    if (!canEditScript()) return;
     const duplicated: SceneData = {
       ...scene,
       id: `scene_${Date.now()}`,
@@ -293,6 +324,7 @@ export default function App() {
   };
 
   const handleChangeDuration = (sceneId: string, seconds: number) => {
+    if (!canEditScript()) return;
     const frames = Math.max(30, Math.round(seconds * 30));
     setScript((prev) => ({
       ...prev,
@@ -307,51 +339,61 @@ export default function App() {
     showToast(`Đã chỉnh thời lượng cảnh thành ${seconds} giây!`);
   };
 
-  // Render Simulation with Real Stages
-  const startRenderMock = () => {
+  const renderGeneration = React.useRef(0);
+  useEffect(() => { setIsRendering(false); return () => { renderGeneration.current++; }; }, [script.id]);
+
+  const startRender = async () => {
+    if (isRendering || !script.id) return;
+    const generation = ++renderGeneration.current;
+    const projectId = script.id;
     setIsRendering(true);
     setRenderProgress(0);
     setRenderPercentageText('0%');
-    setRenderStageText('BullMQ: Đang gửi job render lên GPU Node...');
-    showToast('Đã bắt đầu kết xuất Remotion Video MP4!', 'info');
-
-    let current = 0;
-    const interval = setInterval(() => {
-      current += 10;
-      if (current === 20) {
-        setRenderStageText('Remotion: Đang render các khung hình KaTeX SVG...');
-      } else if (current === 50) {
-        setRenderStageText('FPT.AI TTS: Đang tổng hợp giọng thuyết minh tiếng Việt...');
-      } else if (current === 80) {
-        setRenderStageText('Whisper: Đang đồng bộ Karaoke Subtitles & FFmpeg...');
+    setRenderStageText('Đang gửi yêu cầu kết xuất…');
+    try {
+      let job = await renderService.requestRender(projectId, { fps: script.fps || 30 });
+      showToast('Máy chủ đã nhận yêu cầu kết xuất.', 'info');
+      const deadline = Date.now() + 20 * 60 * 1000;
+      while (generation === renderGeneration.current) {
+        setRenderProgress(job.progressPercentage);
+        setRenderPercentageText(`${job.progressPercentage}%`);
+        setRenderStageText(job.stage || job.status);
+        if (job.status === 'FAILED') throw new Error(job.errorMessage || 'Kết xuất thất bại');
+        if (job.status === 'COMPLETED') {
+          if (!job.outputUrl) throw new Error('Máy chủ chưa trả về video.');
+          const rendered = await projectService.getProjectById(projectId);
+          if (generation !== renderGeneration.current) return;
+          setScript(rendered);
+          showToast('Video đã kết xuất và chuyển sang QA.', 'success');
+          return;
+        }
+        if (Date.now() >= deadline) throw new Error('Hết thời gian theo dõi. Job có thể vẫn chạy trên máy chủ.');
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        if (generation !== renderGeneration.current) return;
+        job = await renderService.getRenderStatus(job.id);
       }
-
-      if (current >= 100) {
-        clearInterval(interval);
-        setIsRendering(false);
-        setRenderProgress(100);
-        setRenderPercentageText('100%');
-        setRenderStageText('Kết xuất hoàn tất 1080p60!');
-        setScript((prev) => ({ ...prev, videoStatus: 'IN_QA' }));
-        showToast('Kết xuất video MP4 thành công! Clip đã chuyển sang Reviewer QA.', 'success');
-      } else {
-        setRenderProgress(current);
-        setRenderPercentageText(`${current}%`);
+    } catch (error: any) {
+      if (generation === renderGeneration.current) {
+        setRenderStageText('Chưa hoàn tất kết xuất');
+        showToast(error.message || 'Không kết nối được dịch vụ kết xuất.', 'warn');
       }
-    }, 350);
+    } finally {
+      if (generation === renderGeneration.current) setIsRendering(false);
+    }
   };
-
   // Reviewer add comment dynamically
   const [newCommentInput, setNewCommentInput] = useState('');
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCommentInput.trim()) return;
+    try {
     const newC = await reviewService.addComment(script.id, {
-      author: 'ThS. Trần Thị B (Reviewer)',
-      avatar: '👩‍🏫',
+      author: currentUser.name,
+      avatar: currentUser.name.slice(0, 2).toUpperCase(),
       role: 'Reviewer',
       timestampSec: Math.round(currentSec * 10) / 10,
+      sceneId: reviewerMode === 'script' ? selectedScene?.id : undefined,
       content: newCommentInput.trim(),
       status: 'OPEN',
       createdAt: 'Vừa xong',
@@ -359,9 +401,12 @@ export default function App() {
     setComments((prev) => [...prev, newC]);
     setNewCommentInput('');
     showToast(
-      `Đã ghim nhận xét của Reviewer tại giây thứ ${Math.round(currentSec)}!`,
+      'Máy chủ đã lưu nhận xét.',
       'info'
     );
+    } catch (error: any) {
+      showToast(error.message || 'Chưa lưu được nhận xét. Nội dung vẫn được giữ để thử lại.', 'warn');
+    }
   };
 
   const handleCreateNewProject = async (
@@ -372,7 +417,7 @@ export default function App() {
   ) => {
     try {
       if (useAi) {
-        showToast(`Đang kết nối Gemini 3.6 Flash để soạn kịch bản STEM: "${title}"...`, 'info');
+        showToast(`Đang dùng AI để soạn kịch bản STEM: "${title}"...`, 'info');
         const aiDraft = await scriptService.generateScriptWithAI(title, subject, grade, 60);
         const newScript = await projectService.createProject({
           title: aiDraft.title,
@@ -544,6 +589,7 @@ export default function App() {
       {/* Top Header Navigation */}
       <HeaderNav
         currentRole={currentRole}
+        accountRole={currentUser.role}
         userName={currentUser.name}
         userEmail={currentUser.email}
         onLogout={() => {
@@ -552,7 +598,15 @@ export default function App() {
         }}
         onRoleChange={handleRoleChange}
         activeGroup={activeGroup}
-        onSelectGroup={setActiveGroup}
+        groups={workspaces}
+        onSelectGroup={(workspaceId) => {
+          if (!workspaces.some((workspace) => workspace.id === workspaceId) || isBootstrapping) return;
+          workspaceService.setActiveWorkspaceId(workspaceId);
+          setScript(EMPTY_SCRIPT);
+          setComments([]);
+          setActiveSceneId('');
+          void bootstrapFromApi();
+        }}
         onOpenInviteModal={() => setIsInviteWorkspaceModalOpen(true)}
         onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
       />
@@ -612,16 +666,14 @@ export default function App() {
           renderProgress={renderProgress}
           renderStageText={renderStageText}
           renderPercentageText={renderPercentageText}
-          startRenderMock={startRenderMock}
+          startRender={startRender}
           onOpenPublishModal={() => setIsPublishModalOpen(true)}
           onSubmitForReview={() => {
-            setScript((prev) => ({
-              ...prev,
-              videoStatus: 'IN_QA',
-            }));
-            setReviewerMode('video');
-            handleRoleChange('reviewer');
-            showToast('Đã gửi video sang Bước 4: Reviewer Duyệt Video!', 'success');
+            if (script.videoStatus !== 'IN_QA' || !script.videoUrl) {
+              showToast('Video phải kết xuất thành công trên máy chủ trước khi QA.', 'warn');
+              return;
+            }
+            showToast('Video đã nằm trong hàng đợi QA trên máy chủ.', 'info');
           }}
         />
       )}
@@ -691,7 +743,11 @@ export default function App() {
       <InviteWorkspaceModal
         isOpen={isInviteWorkspaceModalOpen}
         onClose={() => setIsInviteWorkspaceModalOpen(false)}
-        onSendInvite={() => showToast('Đã gửi thư mời tham gia nhóm thành công!')}
+        onSendInvite={async (email, role) => {
+          const workspaceId = await workspaceService.resolveActiveWorkspaceId();
+          const invitation = await workspaceService.inviteMember(workspaceId, email, role);
+          return `${window.location.origin}/#invite=${encodeURIComponent(invitation.token)}`;
+        }}
       />
 
       <PublishModal

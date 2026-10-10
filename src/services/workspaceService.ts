@@ -29,6 +29,12 @@ export interface WorkspaceMemberDto {
 
 const ACTIVE_WORKSPACE_KEY = 'stemotion_active_workspace';
 
+export interface WorkspaceInvitationDto {
+  member: WorkspaceMemberDto;
+  token: string;
+  expiresAt: string;
+}
+
 /** Per-page-load cache; cleared on sign-out so the next user starts clean. */
 let cachedWorkspaces: WorkspaceSummary[] | null = null;
 
@@ -69,10 +75,9 @@ export const workspaceService = {
    * a user signs in so the studio is never blocked on manual setup.
    */
   async resolveActiveWorkspaceId(): Promise<string> {
-    const cached = this.getCachedWorkspaceId();
-    if (cached) return cached;
-
     const mine = await this.getMyWorkspaces();
+    const cached = this.getCachedWorkspaceId();
+    if (cached && mine.some((workspace) => workspace.id === cached)) return cached;
     if (mine.length > 0) {
       this.setActiveWorkspaceId(mine[0].id);
       return mine[0].id;
@@ -91,16 +96,22 @@ export const workspaceService = {
     return apiClient.get<WorkspaceMemberDto[]>(`/workspaces/${workspaceId}/members`);
   },
 
-  /** Invites by email; the seat activates when that address registers. */
+  /** Creates an inactive seat and returns a one-time link for private delivery. */
   async inviteMember(
     workspaceId: string,
     email: string,
     role: UserRole
-  ): Promise<WorkspaceMemberDto> {
-    const member = await apiClient.post<WorkspaceMemberDto>(
+  ): Promise<WorkspaceInvitationDto> {
+    const member = await apiClient.post<WorkspaceInvitationDto>(
       `/workspaces/${workspaceId}/members`,
-      { email, role }
+      { email, role: role.toUpperCase() }
     );
+    cachedWorkspaces = null;
+    return member;
+  },
+
+  async acceptInvitation(token: string): Promise<WorkspaceMemberDto> {
+    const member = await apiClient.post<WorkspaceMemberDto>('/workspace-invitations/accept', { token });
     cachedWorkspaces = null;
     return member;
   },

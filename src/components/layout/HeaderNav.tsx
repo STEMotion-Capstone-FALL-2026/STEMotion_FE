@@ -37,23 +37,27 @@ const initialsOf = (fullName: string): string => {
 
 interface HeaderNavProps {
   currentRole: UserRole;
+  accountRole: UserRole;
   /** The signed-in user, so the header shows who is actually logged in. */
   userName: string;
   userEmail: string;
   onLogout: () => void;
   onRoleChange: (role: UserRole) => void;
+  groups: { id: string; name: string; department?: string }[];
   activeGroup: { name: string; code: string };
-  onSelectGroup: (group: { name: string; code: string }) => void;
+  onSelectGroup: (workspaceId: string) => void;
   onOpenInviteModal: () => void;
   onOpenCreateProjectModal: () => void;
 }
 
 export const HeaderNav: React.FC<HeaderNavProps> = ({
   currentRole,
+  accountRole,
   userName,
   userEmail,
   onLogout,
   onRoleChange,
+  groups,
   activeGroup,
   onSelectGroup,
   onOpenInviteModal,
@@ -61,7 +65,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 }) => {
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
 
-  const studios = allowedStudios(currentRole);
+  const studios = allowedStudios(accountRole);
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-6 py-2.5 flex items-center justify-between shadow-xs">
@@ -110,35 +114,19 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                 <span className="text-brand-600 font-semibold">Multi-Workspace</span>
               </div>
               <div className="space-y-1">
-                <button
-                  onClick={() => {
-                    onSelectGroup({ name: 'Nhóm STEM THCS Tân Bình', code: 'Gr-01' });
+                {groups.map((group) => (
+                  <button key={group.id} onClick={() => {
+                    onSelectGroup(group.id);
                     setIsGroupDropdownOpen(false);
-                  }}
-                  className="w-full p-2 rounded-lg hover:bg-blue-50 text-left flex items-center justify-between"
-                >
-                  <div>
-                    <div className="font-bold text-slate-900">Nhóm STEM THCS Tân Bình</div>
-                    <div className="text-[10px] text-slate-500">Môn Toán & Vật Lý khối 9</div>
-                  </div>
-                  {activeGroup.code === 'Gr-01' && <Check className="w-3.5 h-3.5 text-brand-600" />}
-                </button>
-
-                <button
-                  onClick={() => {
-                    onSelectGroup({ name: 'Kênh EdTech STEM Sáng Tạo', code: 'Gr-02' });
-                    setIsGroupDropdownOpen(false);
-                  }}
-                  className="w-full p-2 rounded-lg hover:bg-blue-50 text-left flex items-center justify-between"
-                >
-                  <div>
-                    <div className="font-bold text-slate-900">Kênh EdTech STEM Sáng Tạo</div>
-                    <div className="text-[10px] text-slate-500">Dự án Kênh YouTube & TikTok</div>
-                  </div>
-                  {activeGroup.code === 'Gr-02' && <Check className="w-3.5 h-3.5 text-brand-600" />}
-                </button>
+                  }} className="w-full p-2 rounded-lg hover:bg-blue-50 text-left flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-slate-900">{group.name}</div>
+                      <div className="text-[10px] text-slate-500">{group.department}</div>
+                    </div>
+                    {activeGroup.code === group.id.slice(0, 6) && <Check className="w-3.5 h-3.5 text-brand-600" />}
+                  </button>
+                ))}
               </div>
-
               <div className="pt-1.5 border-t border-slate-100 space-y-1">
                 <button
                   onClick={() => {

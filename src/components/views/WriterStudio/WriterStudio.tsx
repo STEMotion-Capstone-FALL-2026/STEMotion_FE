@@ -17,7 +17,8 @@ import {
   Volume2,
 } from 'lucide-react';
 import { STEMScript, SceneData } from '../../../types/stem';
-import { UserRole } from '../../../services';
+import { UserRole, projectService } from '../../../services';
+import { sceneSaveQueue } from '../../../services/sceneSaveQueue';
 import { renderLatexToString } from '../../../utils/latex';
 
 interface WriterStudioProps {
@@ -66,76 +67,24 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   const [draggedSceneIdx, setDraggedSceneIdx] = useState<number | null>(null);
   const [dragOverSceneIdx, setDragOverSceneIdx] = useState<number | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const currentAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
 
   const handlePlayTts = (text: string) => {
-    if (!text?.trim()) {
-      showToast('Vui lòng nhập lời thoại trước khi nghe thử!', 'warn');
+    if (!text?.trim() || !('speechSynthesis' in window)) {
+      showToast('Trình duyệt chưa hỗ trợ nghe thử lời thoại này.', 'warn');
       return;
     }
-
-    if (isSpeaking) {
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current = null;
-      }
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-      setIsSpeaking(false);
-      showToast('Đã dừng phát giọng đọc.');
-      return;
-    }
-
+    window.speechSynthesis.cancel();
+    if (isSpeaking) { setIsSpeaking(false); return; }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'vi-VN';
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
     setIsSpeaking(true);
-    showToast('Đang phát giọng đọc AI thuyết minh tiếng Việt...');
-
-    try {
-      const audioUrl = `http://localhost:4000/tts-preview?text=${encodeURIComponent(text)}`;
-      const audio = new Audio(audioUrl);
-      currentAudioRef.current = audio;
-      audio.onloadedmetadata = () => {
-        if (audio.duration && !isNaN(audio.duration) && audio.duration > 0) {
-          const speechSec = audio.duration;
-          const targetSec = Math.max(3, Math.round(speechSec + 0.6));
-          updateSceneProperty((s) => ({
-            ...s,
-            durationInFrames: targetSec * 30,
-          }));
-          showToast(`Đã đồng bộ thời lượng phân cảnh: ${targetSec}s (khớp giọng đọc ${speechSec.toFixed(1)}s)`);
-        }
-      };
-      audio.onended = () => {
-        setIsSpeaking(false);
-        currentAudioRef.current = null;
-      };
-      audio.onerror = () => {
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'vi-VN';
-          utterance.onend = () => setIsSpeaking(false);
-          utterance.onerror = () => setIsSpeaking(false);
-          window.speechSynthesis.speak(utterance);
-        } else {
-          setIsSpeaking(false);
-        }
-      };
-      audio.play().catch(() => {
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'vi-VN';
-          utterance.onend = () => setIsSpeaking(false);
-          utterance.onerror = () => setIsSpeaking(false);
-          window.speechSynthesis.speak(utterance);
-        } else {
-          setIsSpeaking(false);
-        }
-      });
-    } catch {
-      setIsSpeaking(false);
-    }
+    showToast('Nghe thử bằng giọng của trình duyệt; giọng video được tạo khi kết xuất.', 'info');
+    window.speechSynthesis.speak(utterance);
   };
-
   return (
     <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Top Bar Writer */}
@@ -172,13 +121,22 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           {/* Nút gửi sang Reviewer (Bước 1 -> Bước 2) */}
           <button
             onClick={async () => {
-              setScript((prev) => ({ ...prev, scriptStatus: 'IN_REVIEW' }));
-              showToast('Đã nộp kịch bản! Chuyển sang Reviewer để thẩm định kịch bản.', 'success');
-              setTimeout(() => {
-                onRoleChange('reviewer');
+              if (isSubmitting) return;
+              setIsSubmitting(true);
+              try {
+                await sceneSaveQueue.saveNow(script.id, script.scenes);
+                const submitted = await projectService.submitForReview(script.id);
+                setScript(submitted);
+                setActiveSceneId(submitted.scenes[0]?.id || '');
+                showToast('Kịch bản đã được lưu và gửi vào hàng đợi thẩm định.', 'success');
                 onSetReviewerMode('script');
-              }, 800);
+              } catch (error: any) {
+                showToast(error.message || 'Không gửi được kịch bản. Vui lòng thử lại.', 'warn');
+              } finally {
+                setIsSubmitting(false);
+              }
             }}
+            disabled={isSubmitting || !['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)}
             className="px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold shadow-xs flex items-center space-x-1.5"
           >
             <Send className="w-3.5 h-3.5" />

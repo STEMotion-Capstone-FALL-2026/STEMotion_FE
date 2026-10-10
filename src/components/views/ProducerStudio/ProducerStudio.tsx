@@ -24,7 +24,7 @@ interface ProducerStudioProps {
   renderProgress: number;
   renderStageText: string;
   renderPercentageText: string;
-  startRenderMock: () => void;
+  startRender: () => void;
   onOpenPublishModal?: () => void;
   onSubmitForReview?: () => void;
 }
@@ -48,7 +48,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   renderProgress,
   renderStageText,
   renderPercentageText,
-  startRenderMock,
+  startRender,
   onOpenPublishModal,
   onSubmitForReview,
 }) => {
@@ -109,7 +109,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
             </button>
           )}
           <button
-            onClick={onOpenPublishModal || startRenderMock}
+            onClick={script.videoUrl ? onOpenPublishModal : startRender}
             className={`px-3.5 py-1.5 font-bold rounded-lg border flex items-center space-x-1.5 transition-colors cursor-pointer ${
               script.videoStatus === 'APPROVED'
                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs border-emerald-500'
@@ -187,7 +187,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
         <SceneInspector
           selectedScene={selectedScene}
           updateSceneProperty={updateSceneProperty}
-          onStartRender={startRenderMock}
+          onStartRender={startRender}
         />
       </div>
     </section>

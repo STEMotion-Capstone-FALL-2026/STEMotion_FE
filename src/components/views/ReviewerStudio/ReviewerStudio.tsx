@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   FileText,
   Play,
@@ -56,6 +56,26 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   onOpenPublishModal,
   showToast,
 }) => {
+  const [decisionPending, setDecisionPending] = useState(false);
+  const [reviewNote, setReviewNote] = useState('');
+  const decide = async (decision: 'APPROVED' | 'CHANGE_REQUESTED' | 'VIDEO_APPROVED' | 'VIDEO_RETURNED') => {
+    if (decisionPending) return;
+    setDecisionPending(true);
+    try {
+      const updated = decision === 'VIDEO_APPROVED'
+        ? await reviewService.approveVideo(script.id)
+        : decision === 'VIDEO_RETURNED'
+          ? await reviewService.sendBackVideo(script.id)
+          : await reviewService.submitReviewDecision(script.id, decision, reviewNote);
+      setScript(updated);
+      setActiveSceneId(updated.scenes[0]?.id || '');
+      showToast(decision.includes('RETURNED') || decision === 'CHANGE_REQUESTED'
+        ? 'Đã lưu yêu cầu chỉnh sửa.' : 'Đã lưu quyết định phê duyệt.', 'success');
+      if (decision === 'VIDEO_APPROVED') onOpenPublishModal();
+    } catch (error: any) {
+      showToast(error.message || 'Không lưu được quyết định. Trạng thái chưa thay đổi.', 'warn');
+    } finally { setDecisionPending(false); }
+  };
   return (
     <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Top Bar Reviewer với Bộ Chuyển Chế Độ Duyệt */}
@@ -105,27 +125,16 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
           {reviewerMode === 'script' ? (
             <>
               <button
-                onClick={async () => {
-                  await reviewService.submitReviewDecision(script.id, 'CHANGE_REQUESTED');
-                  setScript((prev) => ({ ...prev, scriptStatus: 'CHANGE_REQUESTED' }));
-                  showToast('Đã gửi yêu cầu sửa lại kịch bản cho Writer!', 'warn');
-                  setTimeout(() => onRoleChange('writer'), 900);
-                }}
+                onClick={() => void decide('CHANGE_REQUESTED')}
+                disabled={decisionPending}
                 className="px-3 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-lg font-bold flex items-center space-x-1"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Yêu Cầu Writer Sửa Lại</span>
               </button>
               <button
-                onClick={async () => {
-                  await reviewService.submitReviewDecision(script.id, 'APPROVED');
-                  setScript((prev) => ({ ...prev, scriptStatus: 'APPROVED' }));
-                  showToast(
-                    'Đã phê duyệt kịch bản! Hệ thống chuyển sang Producer để tạo video.',
-                    'success'
-                  );
-                  setTimeout(() => onRoleChange('producer'), 1000);
-                }}
+                onClick={() => void decide('APPROVED')}
+                disabled={decisionPending}
                 className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs"
               >
                 <CheckCheck className="w-4 h-4" />
@@ -135,10 +144,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
           ) : (
             <>
               <button
-                onClick={() => {
-                  showToast('Đã gửi yêu cầu chỉnh sửa video cho Producer!', 'warn');
-                  setTimeout(() => onRoleChange('producer'), 900);
-                }}
+                onClick={() => void decide('VIDEO_RETURNED')}
+                disabled={decisionPending}
                 className="px-3 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-lg font-bold flex items-center space-x-1"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -153,12 +160,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                 <span>Tải Video MP4</span>
               </button>
               <button
-                onClick={async () => {
-                  await reviewService.submitReviewDecision(script.id, 'APPROVED');
-                  setScript((prev) => ({ ...prev, videoStatus: 'APPROVED' }));
-                  showToast('Đã phê duyệt video hoàn chỉnh! Mở màn hình Xuất Bản YouTube & Tải MP4.');
-                  onOpenPublishModal();
-                }}
+                onClick={() => void decide('VIDEO_APPROVED')}
+                disabled={decisionPending}
                 className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs"
               >
                 <CheckCheck className="w-4 h-4" />
@@ -467,17 +470,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                   <Sparkles className="w-3.5 h-3.5 text-brand-600" />
                   Chỉ Số Sư Phạm (Flesch-Kincaid):
                 </span>
-                <ul className="text-blue-800 space-y-1 text-[11px] pl-4 list-disc">
-                  <li>
-                    Độ khó bài giảng: <b>Phù hợp chuẩn {script.gradeLevel}</b>
-                  </li>
-                  <li>
-                    Thuật ngữ khoa học: <b>Đồng nhất 100%</b>
-                  </li>
-                  <li>
-                    Khuyến nghị: <b>Đủ điều kiện phê duyệt</b>
-                  </li>
-                </ul>
+                <p>Chưa có kết quả AI thẩm định cho phiên bản này. Reviewer cần kiểm tra nội dung trước khi quyết định.</p>
               </div>
 
               {/* Form Góp Ý Kịch Bản */}
@@ -487,6 +480,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                 </label>
                 <textarea
                   rows={4}
+                  value={reviewNote}
+                  onChange={(event) => setReviewNote(event.target.value)}
                   placeholder="Nhập nhận xét hoặc chỉ dẫn sửa đổi trước khi duyệt..."
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:border-amber-500"
                 />
@@ -495,15 +490,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
 
             <div className="pt-3 border-t border-slate-100 space-y-2 shrink-0 mt-4">
               <button
-                onClick={async () => {
-                  await reviewService.submitReviewDecision(script.id, 'APPROVED');
-                  setScript((prev) => ({ ...prev, scriptStatus: 'APPROVED' }));
-                  showToast(
-                    'Đã phê duyệt kịch bản! Hệ thống chuyển sang Producer để tạo video.',
-                    'success'
-                  );
-                  setTimeout(() => onRoleChange('producer'), 900);
-                }}
+                onClick={() => void decide('APPROVED')}
+                disabled={decisionPending}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-xs"
               >
                 <CheckCheck className="w-4 h-4" />

@@ -10,6 +10,7 @@ export interface RenderJobStatus {
   projectId: string;
   status: 'QUEUED' | 'RENDERING' | 'COMPLETED' | 'FAILED';
   progressPercentage: number;
+  stage?: string;
   outputUrl?: string;
   errorMessage?: string;
   resolution: string;
@@ -26,6 +27,7 @@ export const renderService = {
       // The backend calls the in-flight state PROCESSING; the UI says RENDERING.
       status: job.status === 'PROCESSING' ? 'RENDERING' : job.status,
       progressPercentage: job.progress ?? 0,
+      stage: job.stage,
       outputUrl: job.videoUrl ?? undefined,
       errorMessage: job.errorMessage ?? undefined,
       resolution,
@@ -39,7 +41,7 @@ export const renderService = {
     options: { resolution?: string; fps?: number } = {}
   ): Promise<RenderJobStatus> {
     const resolution = options.resolution || '1080p';
-    const fps = options.fps || 60;
+    const fps = options.fps || 30;
 
     const job = await apiClient.post<any>(`/render/projects/${projectId}/start`, {
       resolution,

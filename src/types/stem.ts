@@ -206,6 +206,7 @@ export interface STEMScript {
   scriptStatus: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'CHANGE_REQUESTED';
   videoStatus?: 'NOT_RENDERED' | 'RENDERING' | 'IN_QA' | 'APPROVED' | 'PUBLISHED';
   fps?: number;
+  videoUrl?: string | null;
   scenes: SceneData[];
   createdAt?: string;
   reviewComments?: FeedbackComment[];
