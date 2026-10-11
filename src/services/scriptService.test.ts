@@ -31,3 +31,32 @@ describe('AI illustrated scenes', () => {
     });
   });
 });
+
+describe('AI scientific content integrity', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(['MATH_FORMULA', 'CHEMICAL_REACTION', 'STEM_QUIZ', 'DATA_CHART'])
+    ('rejects missing scientific content instead of fabricating %s', async (type) => {
+      vi.spyOn(apiClient, 'post').mockResolvedValue({ result: { scenes: [{ type, title: 'Lesson' }] } });
+      await expect(scriptService.generateScriptWithAI('Lesson', 'Physics', '10')).rejects.toThrow('phân cảnh 1');
+    });
+
+  it('rejects an empty AI response', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue({ result: { scenes: [] } });
+    await expect(scriptService.generateScriptWithAI('Lesson', 'Physics', '10')).rejects.toThrow('phân cảnh hợp lệ');
+  });
+
+  it('preserves a valid nested quiz including answer index zero', async () => {
+    const props = { question: 'Question', options: ['Correct', 'Incorrect'], correctIndex: 0 };
+    vi.spyOn(apiClient, 'post').mockResolvedValue({ result: { scenes: [{ type: 'STEM_QUIZ', props }] } });
+    const draft = await scriptService.generateScriptWithAI('Lesson', 'Physics', '10');
+    expect(draft.scenes[0]).toMatchObject(props);
+  });
+
+  it('rejects a quiz answer outside the supplied options', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue({ result: { scenes: [{
+      type: 'STEM_QUIZ', question: 'Question', options: ['A', 'B'], correctIndex: 2,
+    }] } });
+    await expect(scriptService.generateScriptWithAI('Lesson', 'Physics', '10')).rejects.toThrow('phân cảnh 1');
+  });
+});

@@ -74,6 +74,31 @@ const res = await apiClient.post<any>('/ai/script/generate', {
     });
     const payload = res?.result ?? res;
     const rawScenes: any[] = payload?.scenes || [];
+    if (!Array.isArray(rawScenes) || rawScenes.length === 0) {
+      throw new Error('AI không trả về phân cảnh hợp lệ; vui lòng thử lại.');
+    }
+    // Missing scientific content must not become fabricated lesson data.
+    rawScenes.forEach((scene, index) => {
+      const value = (key: string) => scene?.[key] ?? scene?.props?.[key];
+      const nonEmpty = (key: string) => typeof value(key) === 'string' && value(key).trim().length > 0;
+      let valid = scene != null && typeof scene === 'object';
+      if (scene?.type === 'MATH_FORMULA') valid = nonEmpty('latex');
+      if (scene?.type === 'CHEMICAL_REACTION') valid = nonEmpty('equation');
+      if (scene?.type === 'STEM_QUIZ') {
+        const options = value('options');
+        const correctIndex = value('correctIndex');
+        valid = nonEmpty('question') && Array.isArray(options) && options.length >= 2
+          && options.every((option: unknown) => typeof option === 'string' && option.trim().length > 0)
+          && Number.isInteger(correctIndex) && correctIndex >= 0 && correctIndex < options.length;
+      }
+      if (scene?.type === 'DATA_CHART') {
+        const points = value('dataPoints');
+        valid = Array.isArray(points) && points.length > 0
+          && points.every((point: any) => typeof point?.label === 'string'
+            && point.label.trim().length > 0 && typeof point.value === 'number' && Number.isFinite(point.value));
+      }
+      if (!valid) throw new Error(`AI trả về dữ liệu thiếu hoặc sai ở phân cảnh ${index + 1} (${scene?.type ?? 'unknown'}).`);
+    });
 
     const scenes: SceneData[] = rawScenes.map((sc, idx) => {
       const type = sc.type || 'TITLE_HERO';
@@ -99,7 +124,7 @@ const res = await apiClient.post<any>('/ai/script/generate', {
       if (type === 'MATH_FORMULA') {
         return {
           ...base,
-          latex: sc.latex || (sc.props?.latex) || 'f(x) = ax^2 + bx + c',
+          latex: sc.latex || sc.props?.latex,
           steps: sc.steps || (sc.props?.steps) || [
             { label: 'Bước 1', latexSnippet: sc.latex || 'f(x)', explanation: 'Đại lượng trọng tâm' },
           ],
@@ -108,9 +133,9 @@ const res = await apiClient.post<any>('/ai/script/generate', {
       if (type === 'STEM_QUIZ') {
         return {
           ...base,
-          question: sc.question || (sc.props?.question) || 'Khẳng định nào sau đây là chính xác?',
-          options: sc.options || (sc.props?.options) || ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
-          correctIndex: sc.correctIndex ?? (sc.props?.correctIndex ?? 0),
+          question: sc.question || sc.props?.question,
+          options: sc.options || sc.props?.options,
+          correctIndex: sc.correctIndex ?? sc.props?.correctIndex,
           hint: sc.hint || (sc.props?.hint) || 'Vận dụng kiến thức vừa học ở phần trước.',
           explanation: sc.explanation || (sc.props?.explanation) || 'Phương án chính xác theo quy luật bài giảng.',
         } as SceneData;
@@ -118,7 +143,7 @@ const res = await apiClient.post<any>('/ai/script/generate', {
       if (type === 'CHEMICAL_REACTION') {
         return {
           ...base,
-          equation: sc.equation || (sc.props?.equation) || '2H2 + O2 -> 2H2O',
+          equation: sc.equation || sc.props?.equation,
           reactants: sc.reactants || (sc.props?.reactants) || 'Chất tham gia',
           products: sc.products || (sc.props?.products) || 'Chất sản phẩm',
           condition: sc.condition || (sc.props?.condition) || 'Điều kiện phản ứng',
@@ -149,10 +174,7 @@ const res = await apiClient.post<any>('/ai/script/generate', {
           chartType: sc.chartType || sc.props?.chartType || 'bar',
           xAxisLabel: sc.xAxisLabel || sc.props?.xAxisLabel || 'Tham số X',
           yAxisLabel: sc.yAxisLabel || sc.props?.yAxisLabel || 'Giá trị Y',
-          dataPoints: sc.dataPoints || sc.props?.dataPoints || [
-            { label: 'Mẫu 1', value: 3.5, color: '#3B82F6' },
-            { label: 'Mẫu 2', value: 7.2, color: '#10B981' },
-          ],
+          dataPoints: sc.dataPoints || sc.props?.dataPoints,
         } as SceneData;
       }
       if (type === 'ILLUSTRATED_EXPLAINER') {
