@@ -2,8 +2,15 @@ import {describe,it,expect} from 'vitest';
 import {phaseBPlans,phaseBScript} from './phaseB';
 import {registry,validateScenePlan} from './plan';
 import {scenePositions} from './CinematicScene';
-import {musicVolume} from './PhaseBVideo';
+import {musicVolume,narratedTimeline} from './PhaseBVideo';
 describe('Phase B library contract',()=>{
+ it('keeps measured narration contiguous while visual transitions overlap',()=>{
+  const scenes=phaseBScript().scenes.map((s,i)=>({...s,durationInFrames:[250,310,280,330,300,330][i]}));
+  const timeline=narratedTimeline(scenes);
+  expect(timeline.map(s=>s.start)).toEqual([0,250,560,840,1170,1470]);
+  expect(timeline.reduce((n,s)=>n+s.visualFrames,0)-24*5).toBe(1800);
+  expect(timeline[5].visualFrames).toBe(330);
+ });
  it('has six different frame layouts and all nine typed subject assets',()=>{
   expect(new Set(phaseBPlans.map(p=>JSON.stringify(scenePositions(p)))).size).toBe(6);
   const ids=['force_vector','orbit_path','pendulum','lens','wave','atom','molecule','flask','element_tile'] as const;

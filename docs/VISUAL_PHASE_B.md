@@ -1,6 +1,6 @@
 # Phase B — local subject packs and narrated showcase
 
-Date: 2026-10-11. Local only; no push, DB migration or production rollout.
+Initial Phase B evidence: 2026-10-11. Audio evidence below belongs to the earlier approved Edge demo. Latest FPT quota attempt and narrated transition work: [Track 3](TRACK3_2026-10-11.md). Do not interpret the old counts or Edge timings as the latest FPT result.
 
 ## Architecture and assets
 
@@ -71,8 +71,6 @@ FPT worker path now fails the job on synthesis errors, measures audio through
 ffprobe, and keeps camera duration synchronized; no silent Google fallback for
 explicit FPT mode. Edge remains local demo tooling only.
 
-V14 remains prepared but unapplied. Back up production Supabase before any BE
-push/rollout. Cloud profile currently disables Flyway: push alone does not apply
-V14; migration must be explicitly planned before deploying the V14 entity.
+V14 was applied manually to Supabase at 15:40:15 GMT+7 on 2026-10-11 after verified backup. The earlier prepared/unapplied status is superseded by BE docs/V14_ROLLOUT_2026-10-11.md. Cloud profile still disables Flyway; do not reapply V14 on push. Subsequent migrations require their own backup and approval.
 VPS worker deployment, AI service rollout and AI Director are separate pending
 tracks and have not been represented as completed by this showcase.
