@@ -8,6 +8,7 @@ export interface ScenePlan {
   assets: {asset_id: AssetId; slot: string; props: Record<string, string | number>}[];
   narration: string;
   duration_sec: number;
+  layout_variant?: 'center' | 'left' | 'right';
 }
 export interface DirectorPlan { scenes: ScenePlan[] }
 export { registry };
@@ -18,8 +19,9 @@ function keys(v: Record<string, unknown>, allowed: string[]) {
 }
 export function validateScenePlan(value: unknown): asserts value is ScenePlan {
   if (!object(value)) throw new Error('Expected scene object');
-  keys(value, ['template_id','assets','narration','duration_sec']);
+  keys(value, ['template_id','assets','narration','duration_sec','layout_variant']);
   if (typeof value.template_id !== 'string' || !own(registry.templates, value.template_id)) throw new Error('Unknown template_id');
+  if (value.layout_variant !== undefined && !['center','left','right'].includes(String(value.layout_variant))) throw new Error('Unknown layout_variant');
   if (typeof value.narration !== 'string' || value.narration.length > 6000) throw new Error('Invalid narration');
   if (typeof value.duration_sec !== 'number' || !Number.isFinite(value.duration_sec) || value.duration_sec < 1 || value.duration_sec > 120) throw new Error('duration_sec must be 1–120');
   if (!Array.isArray(value.assets) || value.assets.length < 1 || value.assets.length > 8) throw new Error('Expected 1–8 assets');
@@ -37,7 +39,7 @@ export function validateScenePlan(value: unknown): asserts value is ScenePlan {
     for (const [key, val] of Object.entries(asset.props)) {
       const rule = schema[key];
       if (rule.type === 'string' && (typeof val !== 'string' || val.length > (rule.maxLength ?? Infinity) || (rule.pattern && !new RegExp(rule.pattern).test(val)) || (rule.enum && !rule.enum.includes(val)))) throw new Error('Invalid asset string');
-      if (rule.type === 'number' && (typeof val !== 'number' || !Number.isFinite(val) || val < (rule.minimum ?? -Infinity) || val > (rule.maximum ?? Infinity))) throw new Error('Invalid asset number');
+      if ((rule.type === 'number' || rule.type === 'integer') && (typeof val !== 'number' || !Number.isFinite(val) || (rule.type === 'integer' && !Number.isInteger(val)) || val < (rule.minimum ?? -Infinity) || val > (rule.maximum ?? Infinity))) throw new Error('Invalid asset number');
     }
   }
   if (!used.has('main')) throw new Error('main slot is required');

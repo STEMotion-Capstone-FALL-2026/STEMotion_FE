@@ -17,11 +17,11 @@ export const ParticleField: React.FC = () => {
     return <circle key={i} cx={x+Math.sin(frame/210+i)*9} cy={y+Math.cos(frame/180+i)*6} r={i%7===0?2.5:1.2} fill={tokens.ink} opacity={.2+(noise2D('stemotion-opacity',i,frame/150)+1)*.18}/>;
   })}</g>;
 };
-export const ZoomCamera: React.FC<React.PropsWithChildren<{duration: number}>> = ({duration,children}) => {
+export const ZoomCamera: React.FC<React.PropsWithChildren<{duration: number;center?:[number,number]}>> = ({duration,center=[960,520],children}) => {
   const frame=useCurrentFrame();
   const t=interpolate(frame,[0,duration*.2,duration*.8,duration-1],[0,0,1,1],{extrapolateLeft:'clamp',extrapolateRight:'clamp'});
   const smooth=t*t*(3-2*t), scale=Math.exp(Math.log(.38)+(Math.log(3.5)-Math.log(.38))*smooth);
-  return <g transform={`translate(960 520) scale(${scale}) translate(-960 -520)`}>{children}</g>;
+  return <g transform={`translate(${center[0]} ${center[1]}) scale(${scale}) translate(${-center[0]} ${-center[1]})`}>{children}</g>;
 };
 export const GlowBody: React.FC<AssetProps> = ({color=tokens.cyan,radius=155,label=''}) => {
   const id=useId();
