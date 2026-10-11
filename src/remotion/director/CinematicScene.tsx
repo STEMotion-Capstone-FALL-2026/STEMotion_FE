@@ -2,6 +2,7 @@ import React from 'react';
 import {AbsoluteFill, spring, useCurrentFrame, useVideoConfig} from 'remotion';
 import type {AssetId, ScenePlan} from './plan';
 import {validateScenePlan} from './plan';
+import {springLoop} from './motion';
 import {tokens} from './tokens';
 import {Arrow,Callout,GlowBody,KineticNumber,Label,Mascot,ParticleField,SpaceBackground,ZoomCamera} from './assets/general';
 import type {AssetProps} from './assets/general';
@@ -22,11 +23,16 @@ export const CinematicScene: React.FC<{plan: ScenePlan}> = ({plan}) => {
   const duration=Math.round(plan.duration_sec*fps);
   const enter=spring({frame,fps,config:{damping:200},durationInFrames:24});
   const layout=scenePositions(plan);
+  const glowId=React.useId();
+  const pulse=springLoop(frame,fps);
   const body=plan.assets.map(asset => {
     const Component=components[asset.asset_id], [x,y]=layout[asset.slot];
     return <g key={asset.slot} transform={`translate(${x} ${y}) scale(${asset.slot.startsWith('item_')?.65:1})`} opacity={enter}><Component {...asset.props}/></g>;
   });
   return <AbsoluteFill style={{background:tokens.navy}}><svg width="100%" height="100%" viewBox="0 0 1920 1080" style={{fontFamily:tokens.font}}><SpaceBackground/><ParticleField/>
+    <defs><radialGradient id={glowId}><stop stopColor={tokens.cyan} stopOpacity=".65"/><stop offset="1" stopColor={tokens.cyan} stopOpacity="0"/></radialGradient></defs>
+    <ellipse cx={layout.main[0]} cy={layout.main[1]} rx={230+30*pulse} ry={230+30*pulse} fill={`url(#${glowId})`} opacity={.16+.12*pulse}/>
+
     {plan.template_id==='cosmic_zoom' ? <><ZoomCamera duration={duration} center={layout.main}>{body.filter((_,i)=>plan.assets[i].slot==='main')}</ZoomCamera>{body.filter((_,i)=>plan.assets[i].slot!=='main')}</> : body}
     <path d="M 96 982 H 1824" stroke={tokens.ink} strokeOpacity=".12"/><path d={`M 96 982 H ${96+1728*Math.min(1,frame/Math.max(1,duration-1))}`} stroke={tokens.cyan} strokeWidth="3"/>
   </svg></AbsoluteFill>;

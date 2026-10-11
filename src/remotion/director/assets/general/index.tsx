@@ -10,11 +10,11 @@ export const SpaceBackground: React.FC = () => {
 };
 /** Small SVG particle field avoids canvas readiness races in frame snapshots. */
 export const ParticleField: React.FC = () => {
-  const frame=useCurrentFrame();
+  const frame=useCurrentFrame(),{fps}=useVideoConfig();
   return <g>{Array.from({length:140},(_,i) => {
     const x=(noise2D('stemotion-x',i,0)+1)*960;
     const y=(noise2D('stemotion-y',i,0)+1)*540;
-    return <circle key={i} cx={x+Math.sin(frame/210+i)*9} cy={y+Math.cos(frame/180+i)*6} r={i%7===0?2.5:1.2} fill={tokens.ink} opacity={.2+(noise2D('stemotion-opacity',i,frame/150)+1)*.18}/>;
+    return <circle key={i} cx={(x+frame/fps*8)%1920} cy={(y+frame/fps*4)%1080} r={i%7===0?2.5:1.2} fill={tokens.ink} opacity={.2+(noise2D('stemotion-opacity',i,frame/150)+1)*.18}/>;
   })}</g>;
 };
 export const ZoomCamera: React.FC<React.PropsWithChildren<{duration: number;center?:[number,number]}>> = ({duration,center=[960,520],children}) => {
@@ -29,8 +29,8 @@ export const GlowBody: React.FC<AssetProps> = ({color=tokens.cyan,radius=155,lab
 };
 /** Original floating prism mascot, with articulated antenna and pointing fin. */
 export const Mascot: React.FC<AssetProps> = ({color=tokens.coral,pose='idle'}) => {
-  const frame=useCurrentFrame();
-  return <g transform={`translate(0 ${Math.sin(frame/20)*7})`}><ellipse cy="135" rx="100" ry="13" fill="#000" opacity=".2"/><path d="M 0 -110 L 85 -55 L 85 55 L 0 110 L -85 55 L -85 -55 Z" fill={color}/><path d="M 0 -110 L 0 110 L 85 55 L 85 -55 Z" fill="#15163a" opacity=".14"/><rect x="-55" y="-40" width="110" height="72" rx="28" fill={tokens.navy}/><circle cx="-23" cy="-7" r="9" fill={tokens.ink}/><circle cx="23" cy="-7" r="9" fill={tokens.ink}/><path d="M -14 15 Q 0 28 14 15" fill="none" stroke={tokens.cyan} strokeWidth="4"/><path d={pose==='point'?'M 82 10 L 170 -62 L 145 -70':'M 82 10 L 120 45'} stroke={color} strokeWidth="19" fill="none" strokeLinecap="round"/><path d="M 0 -110 L 0 -150" stroke={color} strokeWidth="8"/><circle cy="-158" r="12" fill={tokens.gold}/></g>;
+  const frame=useCurrentFrame(),{fps}=useVideoConfig();
+  return <g transform={`translate(0 ${Math.sin(frame/fps*Math.PI*2/3.2)*12})`}><ellipse cy="135" rx="100" ry="13" fill="#000" opacity=".2"/><path d="M 0 -110 L 85 -55 L 85 55 L 0 110 L -85 55 L -85 -55 Z" fill={color}/><path d="M 0 -110 L 0 110 L 85 55 L 85 -55 Z" fill="#15163a" opacity=".14"/><rect x="-55" y="-40" width="110" height="72" rx="28" fill={tokens.navy}/><circle cx="-23" cy="-7" r="9" fill={tokens.ink}/><circle cx="23" cy="-7" r="9" fill={tokens.ink}/><path d="M -14 15 Q 0 28 14 15" fill="none" stroke={tokens.cyan} strokeWidth="4"/><path d={pose==='point'?'M 82 10 L 170 -62 L 145 -70':'M 82 10 L 120 45'} stroke={color} strokeWidth="19" fill="none" strokeLinecap="round"/><path d="M 0 -110 L 0 -150" stroke={color} strokeWidth="8"/><circle cy="-158" r="12" fill={tokens.gold}/></g>;
 };
 export const Callout: React.FC<AssetProps> = ({text='',color=tokens.cyan}) => <g><rect x="-250" y="-52" width="500" height="104" rx="22" fill={tokens.navy} stroke={color} strokeWidth="2"/><text textAnchor="middle" y="12" fontSize="30" fill={tokens.ink}>{text}</text></g>;
 export const Arrow: React.FC<AssetProps> = ({color=tokens.gold}) => <g fill="none" stroke={color} strokeWidth="5" strokeLinecap="round"><path d="M -180 80 Q -100 -45 110 -30"/><path d="M 80 -55 L 110 -30 L 75 -5"/></g>;
