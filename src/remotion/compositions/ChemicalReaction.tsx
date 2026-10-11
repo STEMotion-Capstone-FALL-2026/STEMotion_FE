@@ -3,7 +3,7 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { ChemicalReactionProps } from '@/types/stem';
-import katex from 'katex';
+import { renderLatexToString } from '@/utils/latex';
 import { FlatStage } from '../flat/FlatStage';
 
 export const ChemicalReaction: React.FC<ChemicalReactionProps> = ({
@@ -52,19 +52,7 @@ export const ChemicalReaction: React.FC<ChemicalReactionProps> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const renderLatex = (tex: string) => {
-    try {
-      return {
-        __html: katex.renderToString(tex, {
-          displayMode: true,
-          throwOnError: false,
-          output: 'html',
-        }),
-      };
-    } catch {
-      return { __html: `<code>${tex}</code>` };
-    }
-  };
+  const renderLatex = renderLatexToString;
 
   // Entry animation
   const cardScale = spring({

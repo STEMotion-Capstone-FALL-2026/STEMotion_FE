@@ -7,9 +7,13 @@ export const renderLatexToString = (tex: string) => {
         displayMode: true,
         throwOnError: false,
         output: 'html',
+        trust: false,
       }),
     };
   } catch {
-    return { __html: `<span>${tex}</span>` };
+    const escaped = (tex || '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[character]!);
+    return { __html: `<span>${escaped}</span>` };
   }
 };

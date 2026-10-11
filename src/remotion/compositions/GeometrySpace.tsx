@@ -3,7 +3,7 @@
 import React from 'react';
 import { spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { GeometrySpaceProps } from '@/types/stem';
-import katex from 'katex';
+import { renderLatexToString } from '@/utils/latex';
 import { FlatStage } from '../flat/FlatStage';
 
 export const GeometrySpace: React.FC<GeometrySpaceProps> = ({
@@ -54,19 +54,7 @@ export const GeometrySpace: React.FC<GeometrySpaceProps> = ({
     c: typeof dimensions?.c === 'number' ? dimensions.c : 5,
   };
 
-  const renderLatex = (tex: string) => {
-    try {
-      return {
-        __html: katex.renderToString(tex, {
-          displayMode: true,
-          throwOnError: false,
-          output: 'html',
-        }),
-      };
-    } catch {
-      return { __html: `<code>${tex}</code>` };
-    }
-  };
+  const renderLatex = renderLatexToString;
 
   const geomSpring = spring({
     frame,

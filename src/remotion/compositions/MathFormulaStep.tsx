@@ -3,7 +3,7 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { MathFormulaProps } from '@/types/stem';
-import katex from 'katex';
+import { renderLatexToString } from '@/utils/latex';
 import { FlatStage } from '../flat/FlatStage';
 
 export const MathFormulaStep: React.FC<MathFormulaProps> = ({
@@ -55,19 +55,7 @@ export const MathFormulaStep: React.FC<MathFormulaProps> = ({
   const stepTextFontSize = Math.max(12, Math.round(baseSize * 0.45));
 
   // Render LaTeX safely
-  const renderLatex = (tex: string) => {
-    try {
-      return {
-        __html: katex.renderToString(tex, {
-          displayMode: true,
-          throwOnError: false,
-          output: 'html',
-        }),
-      };
-    } catch {
-      return { __html: `<code>${tex}</code>` };
-    }
-  };
+  const renderLatex = renderLatexToString;
 
   const mainFormulaScale = spring({
     frame,
