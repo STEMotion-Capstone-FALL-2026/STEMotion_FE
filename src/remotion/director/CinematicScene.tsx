@@ -13,7 +13,7 @@ export function scenePositions(plan: ScenePlan): Record<string,[number,number]> 
   const variant=plan.layout_variant ?? 'center';
   const cosmic=plan.template_id==='cosmic_zoom';
   if(variant==='left') return {...positions,main:cosmic?[650,510]:[730,500],guide:[1550,790],note_1:[1360,510],pointer:[1170,650],label:cosmic?[1160,210]:[960,140],quantity:[1320,880],item_1:cosmic?[1350,760]:[900,800],item_2:[350,800]};
-  if(variant==='right') return {...positions,main:cosmic?[1290,500]:[1210,530],guide:[350,800],note_1:[480,360],pointer:[760,570],label:cosmic?[700,160]:[1050,180],quantity:[550,900],item_1:[500,730],item_2:[1660,810]};
+  if(variant==='right') return {...positions,main:cosmic?[1290,500]:[1210,530],guide:[350,800],note_1:[480,360],pointer:[760,570],label:cosmic?[700,160]:[1050,180],quantity:[550,900],item_1:cosmic?[750,780]:[500,730],item_2:[1660,810]};
   return {...positions,main:cosmic?[900,520]:[960,550],label:cosmic?[1220,130]:[960,140],item_1:[470,580],item_2:[1490,720]};
 }
 export const CinematicScene: React.FC<{plan: ScenePlan}> = ({plan}) => {
