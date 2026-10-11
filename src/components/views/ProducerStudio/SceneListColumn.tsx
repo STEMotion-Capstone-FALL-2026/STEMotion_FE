@@ -177,7 +177,7 @@ export const SceneListColumn: React.FC<SceneListColumnProps> = ({
                         title="Thời lượng phân cảnh"
                       >
                         {!standardOptions.includes(currentSec) && (
-                          <option value={currentSec}>{currentSec}s (Khớp giọng)</option>
+                          <option value={currentSec}>{currentSec}s (Hiện tại)</option>
                         )}
                         {standardOptions.map((opt) => (
                           <option key={opt} value={opt}>

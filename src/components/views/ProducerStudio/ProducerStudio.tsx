@@ -93,10 +93,10 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
               });
             }}
             className="px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 font-semibold rounded-lg border border-amber-200 flex items-center space-x-1 shadow-xs cursor-pointer"
-            title="Tự động tính toán & khớp thời lượng tất cả các cảnh theo độ dài lời thoại thuyết minh"
+            title="Ước lượng thời lượng từ số từ trong lời thoại; chưa đo audio TTS thực tế"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-            <span>Khớp Giọng Đọc</span>
+            <span>Ước lượng thời lượng</span>
           </button>
           {onSubmitForReview && (
             <button
