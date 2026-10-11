@@ -1,0 +1,9 @@
+node_modules
+.git
+.env
+.env.*
+.local-artifacts
+.local-tools
+.audit
+dist
+*.log
