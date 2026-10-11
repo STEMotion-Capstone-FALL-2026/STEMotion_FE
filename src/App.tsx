@@ -84,6 +84,8 @@ export default function App() {
     type: 'resegment' | 'grade' | 'extract' | 'terms' | null;
     title: string;
     details: string[];
+    requestId?: string;
+    decision?: string;
   }>({
     type: null,
     title: 'AI Script Intelligence',
@@ -429,6 +431,10 @@ export default function App() {
           gradeLevel: grade,
           scenes: aiDraft.scenes
         });
+        if (aiDraft.aiRequestId) {
+          try { await scriptService.decideAiRequest(aiDraft.aiRequestId, 'ACCEPTED'); }
+          catch { showToast('Dự án đã tạo; chưa lưu được quyết định AI.','warn'); }
+        }
         setScript(newScript);
         setActiveSceneId(newScript.scenes[0]?.id || '');
         setCurrentRole('writer');
@@ -476,6 +482,7 @@ export default function App() {
       if (action === 'resegment') {
         const scenesList = response?.scenes || [];
         setAiAnalysisResult({
+          requestId: res.requestId,
           type: 'resegment',
           title: `Phan Canh Tu Dong (${scenesList.length} Scenes)`,
           details: [
@@ -511,6 +518,7 @@ export default function App() {
         }
         details.push(footer);
         setAiAnalysisResult({
+          requestId: res.requestId,
           type: 'grade',
           title: `Cham Do Kho Su Pham (${response?.readabilityScore ?? '?'}/100)`,
           details,
@@ -519,6 +527,7 @@ export default function App() {
       } else if (action === 'extract') {
         const concepts = response?.concepts || [];
         setAiAnalysisResult({
+          requestId: res.requestId,
           type: 'extract',
           title: `Trich Xuat Khai Niem STEM (${concepts.length} Khai niem)`,
           details: [
@@ -537,6 +546,7 @@ export default function App() {
       } else if (action === 'terms') {
         const issues = response?.issues || [];
         setAiAnalysisResult({
+          requestId: res.requestId,
           type: 'terms',
           title: `Ra Soat Tinh Nhat Quan Thuat Ngu (${issues.length} canh bao)`,
           details: [
@@ -721,6 +731,14 @@ export default function App() {
           onRoleChange={handleRoleChange}
           onSetReviewerMode={setReviewerMode}
           aiAnalysisResult={aiAnalysisResult}
+          onAiDecision={async (decision) => {
+            if (!aiAnalysisResult.requestId) return;
+            try {
+              await scriptService.decideAiRequest(aiAnalysisResult.requestId, decision);
+              setAiAnalysisResult(previous => previous.requestId === aiAnalysisResult.requestId ? ({...previous, decision}) : previous);
+              showToast('Đã lưu quyết định AI; nội dung kịch bản chưa thay đổi.', 'success');
+            } catch (error: any) { showToast(error.message || 'Không lưu được quyết định AI', 'warn'); }
+          }}
           handleTriggerAiAction={handleTriggerAiAction}
           showToast={showToast}
         />

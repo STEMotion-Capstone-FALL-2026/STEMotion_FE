@@ -15,6 +15,7 @@ export interface AiActionResult {
   result: any;
   model: string;
   elapsedMs: number;
+  requestId?: string;
 }
 
 export const scriptService = {
@@ -39,12 +40,6 @@ export const scriptService = {
     subject?: STEMSubject,
     gradeLevel?: string
   ): Promise<AiActionResult> {
-    const wrap = (result: any): AiActionResult => ({
-      action,
-      result,
-      model: 'mock',
-      elapsedMs: 0,
-    });
 
 const res = await apiClient.post<any>('/ai/script/action', {
       action,
@@ -57,7 +52,12 @@ const res = await apiClient.post<any>('/ai/script/action', {
       result: res?.result ?? res,
       model: res?.model ?? 'unknown',
       elapsedMs: res?.elapsedMs ?? 0,
+      requestId: res?.requestId,
     };
+  },
+
+  async decideAiRequest(requestId: string, decision: 'ACCEPTED' | 'IGNORED'): Promise<void> {
+    await apiClient.put(`/ai/requests/${encodeURIComponent(requestId)}/decision`, {decision});
   },
 
   async generateScriptWithAI(
@@ -65,7 +65,7 @@ const res = await apiClient.post<any>('/ai/script/action', {
     subject: STEMSubject,
     gradeLevel: string,
     targetDurationSec: number = 60
-  ): Promise<STEMScript> {
+  ): Promise<STEMScript & {aiRequestId?: string}> {
 const res = await apiClient.post<any>('/ai/script/generate', {
       topic,
       subject,
@@ -207,6 +207,7 @@ const res = await apiClient.post<any>('/ai/script/generate', {
     });
 
     return {
+      aiRequestId: res?.requestId,
       id: `SCR-${subject.toUpperCase().slice(0, 4)}-${Date.now().toString().slice(-4)}`,
       title: payload?.title || topic,
       subject,

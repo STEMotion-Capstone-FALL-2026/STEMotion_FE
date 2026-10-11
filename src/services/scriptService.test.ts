@@ -2,6 +2,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './apiClient';
 import { scriptService } from './scriptService';
 
+describe('AI decision contract', () => {
+  afterEach(() => vi.restoreAllMocks());
+  it('keeps the request id returned by the gateway', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue({result:{score:80},requestId:'owned-id',model:'stub',elapsedMs:2});
+    expect(await scriptService.runAiAction('grade','Force')).toMatchObject({requestId:'owned-id',model:'stub'});
+  });
+  it.each(['ACCEPTED','IGNORED'] as const)('persists explicit %s without saving the draft', async (decision) => {
+    const put=vi.spyOn(apiClient,'put').mockResolvedValue({decision});
+    await scriptService.decideAiRequest('owned-id',decision);
+    expect(put).toHaveBeenCalledExactlyOnceWith('/ai/requests/owned-id/decision',{decision});
+  });
+  it('does not treat a failed decision request as success', async () => {
+    vi.spyOn(apiClient,'put').mockRejectedValue(new Error('Forbidden'));
+    await expect(scriptService.decideAiRequest('other-id','ACCEPTED')).rejects.toThrow('Forbidden');
+  });
+});
+
 describe('AI illustrated scenes', () => {
   afterEach(() => vi.restoreAllMocks());
 

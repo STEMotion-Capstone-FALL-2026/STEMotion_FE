@@ -40,7 +40,10 @@ interface WriterStudioProps {
     type: 'resegment' | 'grade' | 'extract' | 'terms' | null;
     title: string;
     details: string[];
+    requestId?: string;
+    decision?: string;
   };
+  onAiDecision: (decision: 'ACCEPTED' | 'IGNORED') => Promise<void>;
   handleTriggerAiAction: (action: 'resegment' | 'grade' | 'extract' | 'terms') => void;
   showToast: (message: string, type?: 'success' | 'info' | 'warn') => void;
 }
@@ -61,6 +64,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   onRoleChange,
   onSetReviewerMode,
   aiAnalysisResult,
+  onAiDecision,
   handleTriggerAiAction,
   showToast,
 }) => {
@@ -801,6 +805,13 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                   <span>{aiAnalysisResult.title}</span>
                 </div>
                 <ul className="text-xs text-blue-800 space-y-1 pl-4 list-disc">
+                  {aiAnalysisResult.requestId && !aiAnalysisResult.decision && (
+                    <div className="flex gap-2 mb-3">
+                      <button onClick={() => void onAiDecision('ACCEPTED')} className="px-3 py-1 rounded bg-blue-600 text-white">Chấp nhận gợi ý</button>
+                      <button onClick={() => void onAiDecision('IGNORED')} className="px-3 py-1 rounded border">Bỏ qua gợi ý</button>
+                    </div>
+                  )}
+                  {aiAnalysisResult.decision && <p>Đã lưu: {aiAnalysisResult.decision === 'ACCEPTED' ? 'Chấp nhận' : 'Bỏ qua'}. Kịch bản chưa tự thay đổi.</p>}
                   {aiAnalysisResult.details.map((item, idx) => (
                     <li key={idx}>{item}</li>
                   ))}
