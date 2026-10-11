@@ -1,6 +1,6 @@
 # Phase B — local subject packs and narrated showcase
 
-Initial Phase B evidence: 2026-10-11. Audio evidence below belongs to the earlier approved Edge demo. Latest FPT quota attempt and narrated transition work: [Track 3](TRACK3_2026-10-11.md). Do not interpret the old counts or Edge timings as the latest FPT result.
+Initial Phase B evidence: 2026-10-11. Audio evidence below belongs to the earlier approved Edge demo. Latest user-approved Edge narrated transition export and measured verification: [Track 3](TRACK3_2026-10-11.md). Do not interpret the old counts or Edge timings as the latest FPT result.
 
 ## Architecture and assets
 
