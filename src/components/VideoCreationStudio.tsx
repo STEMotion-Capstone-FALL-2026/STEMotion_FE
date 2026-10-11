@@ -652,8 +652,6 @@ export const VideoCreationStudio: React.FC = () => {
                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-mono font-medium"
               >
                 <option value="1080p">1920 x 1080 (Full HD 1080p)</option>
-                <option value="720p">1280 x 720 (HD 720p)</option>
-                <option value="4k">3840 x 2160 (Ultra HD 4K)</option>
               </select>
             </div>
 
@@ -665,7 +663,6 @@ export const VideoCreationStudio: React.FC = () => {
                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-mono font-medium"
               >
                 <option value={30}>30 Khung hình/giây (FPS)</option>
-                <option value={60}>60 Khung hình/giây (Siêu mượt)</option>
               </select>
             </div>
 

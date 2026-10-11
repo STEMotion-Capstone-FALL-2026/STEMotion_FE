@@ -163,8 +163,6 @@ export const ProducerView: React.FC<ProducerViewProps> = ({
                   className="w-full p-2 rounded-lg border border-slate-200 bg-white font-mono"
                 >
                   <option value="1080p">1920x1080 (Full HD)</option>
-                  <option value="720p">1280x720 (HD 720p)</option>
-                  <option value="4k">3840x2160 (4K UHD)</option>
                 </select>
               </div>
 
@@ -176,7 +174,6 @@ export const ProducerView: React.FC<ProducerViewProps> = ({
                   className="w-full p-2 rounded-lg border border-slate-200 bg-white font-mono"
                 >
                   <option value={30}>30 FPS (Chuẩn bài giảng)</option>
-                  <option value={60}>60 FPS (Mượt mà tối đa)</option>
                 </select>
               </div>
 
