@@ -174,10 +174,6 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
                     style={{ width: `${renderProgress}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[10px] text-slate-400 mt-1.5 font-mono">
-                  <span>Job ID: #BULL-RENDER-9812</span>
-                  <span>GPU Server: NVIDIA A10G (1080p60)</span>
-                </div>
               </div>
             )}
           </div>
