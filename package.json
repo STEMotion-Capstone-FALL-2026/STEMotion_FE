@@ -3,7 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "engines": { "node": "24.x" },
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -17,6 +19,7 @@
     "@remotion/noise": "4.0.526",
     "@remotion/paths": "4.0.526",
     "@remotion/player": "4.0.526",
+    "@remotion/transitions": "4.0.526",
     "clsx": "^2.1.1",
     "katex": "^0.16.11",
     "lucide-react": "^0.453.0",

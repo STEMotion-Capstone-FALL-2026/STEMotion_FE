@@ -18,11 +18,13 @@ import { FLAT_DEMO_SCENES, FLAT_DEMO_SCRIPT } from '../lib/flatDemo';
 import { CinematicScene } from './director/CinematicScene';
 import { phaseBScript } from './director/phaseB';
 import { PhaseBVideo } from './director/PhaseBVideo';
+import { PhaseBMotionReview } from './director/PhaseBMotionReview';
 import { PhaseADemo, cosmicPlan, talkingPlan } from './director/demo';
 
 export const RemotionRoot: React.FC = () => {
   return (
     <>
+      <Composition id="PhaseBMotionReview" component={PhaseBMotionReview} durationInFrames={1800} fps={30} width={1920} height={1080} />
       <Composition id="PhaseBAssetTest" component={CinematicScene} durationInFrames={300} fps={30} width={1920} height={1080} defaultProps={{plan:talkingPlan}} />
       <Composition id="PhaseBVideo" component={PhaseBVideo} durationInFrames={1800} fps={30} width={1920} height={1080} defaultProps={{script:phaseBScript()}} calculateMetadata={({props})=>({durationInFrames:props.script.scenes.reduce((sum,s)=>sum+s.durationInFrames,0)})} />
       <Composition id="PhaseACosmicZoom" component={CinematicScene} durationInFrames={900} fps={30} width={1920} height={1080} defaultProps={{plan:cosmicPlan}} />
