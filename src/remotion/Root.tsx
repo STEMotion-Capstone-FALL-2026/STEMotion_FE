@@ -15,10 +15,15 @@ import { GeometrySpace } from './compositions/GeometrySpace';
 import { IllustratedExplainer } from './compositions/IllustratedExplainer';
 import { DEFAULT_SAMPLE_SCRIPT } from '../lib/sampleData';
 import { FLAT_DEMO_SCENES, FLAT_DEMO_SCRIPT } from '../lib/flatDemo';
+import { CinematicScene } from './director/CinematicScene';
+import { PhaseADemo, cosmicPlan, talkingPlan } from './director/demo';
 
 export const RemotionRoot: React.FC = () => {
   return (
     <>
+      <Composition id="PhaseACosmicZoom" component={CinematicScene} durationInFrames={900} fps={30} width={1920} height={1080} defaultProps={{plan:cosmicPlan}} />
+      <Composition id="PhaseATalkingDiagram" component={CinematicScene} durationInFrames={450} fps={30} width={1920} height={1080} defaultProps={{plan:talkingPlan}} />
+      <Composition id="PhaseADemo" component={PhaseADemo} durationInFrames={900} fps={30} width={1920} height={1080} />
       <Composition
         id="FullSTEMVideo"
         component={FullSTEMVideo}

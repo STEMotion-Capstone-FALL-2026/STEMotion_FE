@@ -15,8 +15,10 @@ import { ComparisonSplit } from './ComparisonSplit';
 import { ProcessTimeline } from './ProcessTimeline';
 import { GeometrySpace } from './GeometrySpace';
 import { IllustratedExplainer } from './IllustratedExplainer';
+import { CinematicScene } from '../director/CinematicScene';
 
 export const renderSceneComponent = (scene: SceneData) => {
+  if (scene.visualPlan) return <CinematicScene plan={scene.visualPlan} />;
   switch (scene.type) {
     case 'TITLE_HERO':
       return <TitleHeroReveal {...scene} />;

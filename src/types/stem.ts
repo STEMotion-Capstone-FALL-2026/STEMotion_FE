@@ -20,6 +20,8 @@ export type STEMTemplateType = SceneType;
 
 export interface SceneBase {
   id: string;
+  /** Optional additive director plan; legacy scenes keep their existing renderer. */
+  visualPlan?: import('../remotion/director/plan').ScenePlan;
   /**
    * URL of the generated Vietnamese narration. Set by the render service after
    * TTS; absent in the browser Player, where the preview stays silent.
