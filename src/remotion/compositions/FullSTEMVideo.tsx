@@ -89,7 +89,11 @@ export const FullSTEMVideo: React.FC<{ script: STEMScript }> = ({ script }) => {
   return (
     <Series>
       {scenes.map((scene) => {
-        const narrationUrl = (scene as SceneData & { narrationAudioUrl?: string }).narrationAudioUrl;
+        const narrationUrl =
+          (scene as SceneData & { narrationAudioUrl?: string }).narrationAudioUrl ||
+          (scene.narration && scene.narration.trim()
+            ? `http://localhost:4000/tts-preview?v=v3&text=${encodeURIComponent(scene.narration.trim())}`
+            : undefined);
 
         return (
           <Series.Sequence

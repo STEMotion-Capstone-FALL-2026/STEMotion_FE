@@ -419,12 +419,13 @@ export default function App() {
     title: string,
     subject: STEMSubject,
     grade: string,
-    useAi: boolean = true
+    useAi: boolean = true,
+    targetDurationSec: number = 0
   ) => {
     try {
       if (useAi) {
         showToast(`Đang dùng AI để soạn kịch bản STEM: "${title}"...`, 'info');
-        const aiDraft = await scriptService.generateScriptWithAI(title, subject, grade, 60);
+        const aiDraft = await scriptService.generateScriptWithAI(title, subject, grade, targetDurationSec);
         const newScript = await projectService.createProject({
           title: aiDraft.title,
           subject,

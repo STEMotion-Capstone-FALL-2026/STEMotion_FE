@@ -5,7 +5,7 @@ import { STEMSubject } from '../../types/stem';
 interface CreateProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (title: string, subject: STEMSubject, grade: string, useAi: boolean) => Promise<void> | void;
+  onCreate: (title: string, subject: STEMSubject, grade: string, useAi: boolean, targetDurationSec?: number) => Promise<void> | void;
 }
 
 export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
@@ -17,6 +17,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   const [newProjSubject, setNewProjSubject] = useState<STEMSubject>('Physics');
   const [newProjGrade, setNewProjGrade] = useState('Lớp 10');
   const [useAi, setUseAi] = useState(true);
+  const [targetDurationSec, setTargetDurationSec] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -26,7 +27,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
     if (!newProjTitle.trim()) return;
     setIsLoading(true);
     try {
-      await onCreate(newProjTitle.trim(), newProjSubject, newProjGrade, useAi);
+      await onCreate(newProjTitle.trim(), newProjSubject, newProjGrade, useAi, targetDurationSec);
       setNewProjTitle('');
       onClose();
     } finally {
@@ -55,7 +56,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
               required
               value={newProjTitle}
               onChange={(e) => setNewProjTitle(e.target.value)}
-              placeholder="VD: Cân bằng phản ứng Oxi hóa khử, Định luật khúc xạ..."
+              placeholder="VD: Điều gì xảy ra nếu bạn rơi vào Hố Đen?, Hệ miễn dịch..."
               className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:border-brand-500 focus:outline-none"
             />
           </div>
@@ -90,6 +91,22 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
             </div>
           </div>
 
+          {useAi && (
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Độ sâu & Số lượng phân cảnh (AI Pacing):</label>
+              <select
+                value={targetDurationSec}
+                onChange={(e) => setTargetDurationSec(Number(e.target.value))}
+                className="w-full p-2 border border-indigo-200 rounded-lg bg-indigo-50/40 font-semibold text-indigo-950"
+              >
+                <option value={0}>✨ Tự động co giãn theo độ sâu chủ đề (4 – 9 cảnh)</option>
+                <option value={60}>⚡ Ngắn gọn / Cô đọng (4 – 5 cảnh | ~60s)</option>
+                <option value={90}>📘 Tiêu chuẩn bài giảng (6 – 7 cảnh | ~90s)</option>
+                <option value={135}>🚀 Chuyên sâu Kurzgesagt (8 – 10 cảnh | ~135s)</option>
+              </select>
+            </div>
+          )}
+
           <div className="flex items-center space-x-2 bg-indigo-50/80 border border-indigo-200 p-2.5 rounded-xl">
             <input
               type="checkbox"
@@ -103,7 +120,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                 Soạn kịch bản thông minh bằng Google Gemini AI
               </span>
-              <span className="text-[10px] text-indigo-600 block">Tự động cấu trúc 5-7 phân cảnh, lời thoại thuyết minh & công thức chuẩn môn học</span>
+              <span className="text-[10px] text-indigo-600 block">Tự động phân tích độ sâu chủ đề (4–10 phân cảnh), lời thoại thuyết minh & minh họa Kurzgesagt</span>
             </label>
           </div>
 
