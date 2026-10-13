@@ -2,6 +2,7 @@ import React from 'react';
 import { AbsoluteFill, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Backdrop } from './Backdrop';
 import { FLAT_FONT, FlatAmbience, paletteFor } from './theme';
+import { arrivalTransform, useVariation } from './variation';
 import './flat-stage.css';
 
 /**
@@ -22,19 +23,20 @@ export const FlatStage: React.FC<{
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const arrive = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 22 });
-  const palette = paletteFor(ambience);
+  const variation = useVariation();
+  const palette = paletteFor(ambience, variation.hueShift);
 
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
-      <AbsoluteFill style={{ transform: `scale(${1.06 - 0.06 * arrive})` }}>
-        <Backdrop ambience={ambience} />
+      <AbsoluteFill style={{ transform: arrivalTransform(variation.arrival, arrive, 0.06) }}>
+        <Backdrop ambience={ambience} seed={variation.backdropSeed || ambience} hueShift={variation.hueShift} />
       </AbsoluteFill>
       <div
         className={`flat-stage relative w-full h-full overflow-hidden select-none ${className}`}
         style={{
           fontFamily: FLAT_FONT,
           color: palette.text,
-          transform: `scale(${1.04 - 0.04 * arrive})`,
+          transform: arrivalTransform(variation.arrival, arrive, 0.04),
         }}
       >
         {children}

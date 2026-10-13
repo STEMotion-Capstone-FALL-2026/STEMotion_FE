@@ -20,6 +20,7 @@ import { STEMScript, SceneData } from '../../../types/stem';
 import { UserRole, projectService } from '../../../services';
 import { sceneSaveQueue } from '../../../services/sceneSaveQueue';
 import { renderLatexToString } from '../../../utils/latex';
+import { MetaphorPanel } from './MetaphorPanel';
 
 interface WriterStudioProps {
   script: STEMScript;
@@ -860,6 +861,14 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               </div>
             )}
 
+            {/* Ẩn dụ hình ảnh: AI đề xuất, Writer chọn */}
+            <MetaphorPanel
+              script={script}
+              scene={selectedScene}
+              updateSceneProperty={updateSceneProperty}
+              showToast={showToast}
+            />
+
             {/* Kết quả AI hiển thị ngay dưới form */}
             {aiAnalysisResult.type && (
               <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 space-y-2 animate-fade-in">
@@ -893,7 +902,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               </div>
               <div>
                 <h3 className="font-bold text-slate-900">AI Script Intelligence</h3>
-                <p className="text-[10px] text-slate-400">Gemini 1.5 Flash (Human-in-the-loop)</p>
+                <p className="text-[10px] text-slate-400">Gemini (Human-in-the-loop)</p>
               </div>
             </div>
 

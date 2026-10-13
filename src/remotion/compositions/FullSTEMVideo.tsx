@@ -16,6 +16,7 @@ import { ProcessTimeline } from './ProcessTimeline';
 import { GeometrySpace } from './GeometrySpace';
 import { IllustratedExplainer } from './IllustratedExplainer';
 import { CinematicScene } from '../director/CinematicScene';
+import { SceneSeedContext, VideoSeedContext } from '../flat/variation';
 
 export const renderSceneComponent = (scene: SceneData) => {
   if (scene.visualPlan) return <CinematicScene plan={scene.visualPlan} />;
@@ -87,6 +88,8 @@ export class SceneErrorBoundary extends React.Component<
 export const FullSTEMVideo: React.FC<{ script: STEMScript }> = ({ script }) => {
   const scenes = script?.scenes || [];
   return (
+    // The script id seeds this video's tint, accent order and camera moves (flat/variation.ts).
+    <VideoSeedContext.Provider value={script?.id || ''}>
     <Series>
       {scenes.map((scene) => {
         const narrationUrl =
@@ -101,12 +104,13 @@ export const FullSTEMVideo: React.FC<{ script: STEMScript }> = ({ script }) => {
             durationInFrames={scene.durationInFrames || 150}
           >
             <SceneErrorBoundary scene={scene}>
-              {renderSceneComponent(scene)}
+              <SceneSeedContext.Provider value={scene.id}>{renderSceneComponent(scene)}</SceneSeedContext.Provider>
             </SceneErrorBoundary>
             {narrationUrl && <Audio src={narrationUrl} />}
           </Series.Sequence>
         );
       })}
     </Series>
+    </VideoSeedContext.Provider>
   );
 };

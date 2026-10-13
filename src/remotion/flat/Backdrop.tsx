@@ -13,21 +13,26 @@ import { useDrift } from './motion';
 const W = 1920;
 const H = 1080;
 
-const Specks: React.FC<{ ambience: FlatAmbience; count: number }> = ({ ambience, count }) => {
+const Specks: React.FC<{ ambience: FlatAmbience; count: number; seed: string; hueShift: number }> = ({
+  ambience,
+  count,
+  seed,
+  hueShift,
+}) => {
   const frame = useCurrentFrame();
-  const palette = paletteFor(ambience);
+  const palette = paletteFor(ambience, hueShift);
   const rises = ambience === 'ocean' || ambience === 'cell' || ambience === 'sky';
 
   const specks = useMemo(
     () =>
       Array.from({ length: count }, (_, i) => ({
-        x: random(`speck-x-${ambience}-${i}`) * W,
-        y: random(`speck-y-${ambience}-${i}`) * H,
-        r: 1.2 + random(`speck-r-${ambience}-${i}`) * (rises ? 4 : 2.4),
-        phase: random(`speck-p-${ambience}-${i}`) * Math.PI * 2,
-        speed: 0.25 + random(`speck-s-${ambience}-${i}`) * 0.7,
+        x: random(`speck-x-${seed}-${i}`) * W,
+        y: random(`speck-y-${seed}-${i}`) * H,
+        r: 1.2 + random(`speck-r-${seed}-${i}`) * (rises ? 4 : 2.4),
+        phase: random(`speck-p-${seed}-${i}`) * Math.PI * 2,
+        speed: 0.25 + random(`speck-s-${seed}-${i}`) * 0.7,
       })),
-    [ambience, count, rises]
+    [seed, count, rises]
   );
 
   return (
@@ -77,8 +82,8 @@ const Blob: React.FC<{ seed: string; color: string; x: number; y: number; size: 
 };
 
 /** Large, low-contrast rings in the field's own colour: depth without clutter. */
-const DepthRings: React.FC<{ ambience: FlatAmbience }> = ({ ambience }) => {
-  const palette = paletteFor(ambience);
+const DepthRings: React.FC<{ ambience: FlatAmbience; hueShift: number }> = ({ ambience, hueShift }) => {
+  const palette = paletteFor(ambience, hueShift);
   const d = useDrift(`rings-${ambience}`, 18, 0.004);
   const ring = mix(palette.sky[0], palette.light ? '#ffffff' : palette.sky[2], 0.35);
   return (
@@ -91,18 +96,18 @@ const DepthRings: React.FC<{ ambience: FlatAmbience }> = ({ ambience }) => {
 };
 
 /** Four-point sparkles in the accent colours, twinkling at their own pace. */
-const Sparkles: React.FC<{ ambience: FlatAmbience; count: number }> = ({ ambience, count }) => {
+const Sparkles: React.FC<{ ambience: FlatAmbience; count: number; seed: string }> = ({ ambience, count, seed }) => {
   const frame = useCurrentFrame();
   const sparks = useMemo(
     () =>
       Array.from({ length: count }, (_, i) => ({
-        x: 80 + random(`spark-x-${ambience}-${i}`) * (W - 160),
-        y: 60 + random(`spark-y-${ambience}-${i}`) * (H - 120),
-        r: 7 + random(`spark-r-${ambience}-${i}`) * 11,
-        phase: random(`spark-p-${ambience}-${i}`) * Math.PI * 2,
+        x: 80 + random(`spark-x-${seed}-${i}`) * (W - 160),
+        y: 60 + random(`spark-y-${seed}-${i}`) * (H - 120),
+        r: 7 + random(`spark-r-${seed}-${i}`) * 11,
+        phase: random(`spark-p-${seed}-${i}`) * Math.PI * 2,
         color: ACCENTS[i % ACCENTS.length],
       })),
-    [ambience, count]
+    [seed, count]
   );
   return (
     <svg width={W} height={H} style={{ position: 'absolute', inset: 0 }}>
@@ -117,10 +122,10 @@ const Sparkles: React.FC<{ ambience: FlatAmbience; count: number }> = ({ ambienc
 };
 
 /** Shapes that sit at the frame edges and move faster than the specks. */
-const NearLayer: React.FC<{ ambience: FlatAmbience }> = ({ ambience }) => {
+const NearLayer: React.FC<{ ambience: FlatAmbience; hueShift: number }> = ({ ambience, hueShift }) => {
   const frame = useCurrentFrame();
   const d = useDrift(`near-${ambience}`, 22, 0.008);
-  const palette = paletteFor(ambience);
+  const palette = paletteFor(ambience, hueShift);
   const style: React.CSSProperties = {
     position: 'absolute',
     inset: 0,
@@ -203,11 +208,15 @@ const NearLayer: React.FC<{ ambience: FlatAmbience }> = ({ ambience }) => {
   );
 };
 
-export const Backdrop: React.FC<{ ambience: FlatAmbience; detail?: FlatDetail }> = ({
-  ambience,
-  detail = 'minimal',
-}) => {
-  const palette = paletteFor(ambience);
+export const Backdrop: React.FC<{
+  ambience: FlatAmbience;
+  detail?: FlatDetail;
+  /** Places specks and sparkles; scenes pass their own so no two share a field. */
+  seed?: string;
+  /** Per-video tint, see variation.ts. */
+  hueShift?: number;
+}> = ({ ambience, detail = 'minimal', seed = ambience, hueShift = 0 }) => {
+  const palette = paletteFor(ambience, hueShift);
   const rich = detail === 'rich';
   return (
     <AbsoluteFill
@@ -216,14 +225,14 @@ export const Backdrop: React.FC<{ ambience: FlatAmbience; detail?: FlatDetail }>
         overflow: 'hidden',
       }}
     >
-      <DepthRings ambience={ambience} />
-      <Specks ambience={ambience} count={rich ? 120 : ambience === 'space' ? 80 : 36} />
-      <Sparkles ambience={ambience} count={rich ? 18 : 10} />
+      <DepthRings ambience={ambience} hueShift={hueShift} />
+      <Specks ambience={ambience} seed={seed} hueShift={hueShift} count={rich ? 120 : ambience === 'space' ? 80 : 36} />
+      <Sparkles ambience={ambience} seed={seed} count={rich ? 18 : 10} />
       {rich ? (
         <>
-          <Blob seed={`${ambience}-a`} color={palette.blobs[0]} x={420} y={300} size={620} light={palette.light} />
-          <Blob seed={`${ambience}-b`} color={palette.blobs[1]} x={1500} y={720} size={560} light={palette.light} />
-          <NearLayer ambience={ambience} />
+          <Blob seed={`${seed}-a`} color={palette.blobs[0]} x={420} y={300} size={620} light={palette.light} />
+          <Blob seed={`${seed}-b`} color={palette.blobs[1]} x={1500} y={720} size={560} light={palette.light} />
+          <NearLayer ambience={ambience} hueShift={hueShift} />
         </>
       ) : null}
     </AbsoluteFill>

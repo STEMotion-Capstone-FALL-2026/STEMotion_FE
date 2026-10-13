@@ -19,6 +19,8 @@ const LAYOUT_LABELS: Record<FlatLayout, string> = {
   row: 'Hàng ngang (quy trình có mũi tên)',
   cluster: 'Lưới (nhóm khái niệm)',
   swarm: 'Đàn hạt (tế bào, quần thể, đám mây electron)',
+  exchange: 'Tương tác (bên trao, bên nhận, thứ được trao)',
+  zoom: 'Zoom xuyên tỉ lệ (từ vĩ mô vào vi mô)',
 };
 
 const DETAIL_LABELS: Record<FlatDetail, string> = {
@@ -188,6 +190,18 @@ export const IllustratedExplainerInspector: React.FC<{
         {scene.layout === 'swarm' && (
           <p className="text-[10px] text-fuchsia-800/80 leading-snug">
             Biểu tượng đầu tiên là nhân của đàn hạt; tối đa 3 biểu tượng còn lại xếp bên phải.
+          </p>
+        )}
+
+        {scene.layout === 'exchange' && (
+          <p className="text-[10px] text-fuchsia-800/80 leading-snug">
+            Biểu tượng 1 là bên trao, 2 là bên nhận, 3 là thứ được trao đi (bỏ trống thì dùng tia sáng).
+          </p>
+        )}
+
+        {scene.layout === 'zoom' && (
+          <p className="text-[10px] text-fuchsia-800/80 leading-snug">
+            Xếp từ lớn đến nhỏ: camera đi xuyên từ biểu tượng 1 vào 2, 3, 4 (tối đa 4 tầng).
           </p>
         )}
 

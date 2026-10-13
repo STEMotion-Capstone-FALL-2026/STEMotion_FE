@@ -18,7 +18,7 @@ export const FLAT_FONT = `${font.fontFamily}, 'Nunito', system-ui, sans-serif`;
 export type { FlatAmbience, FlatDetail, FlatLayout };
 
 export const FLAT_AMBIENCES: FlatAmbience[] = ['space', 'cell', 'lab', 'ocean', 'lilac', 'sky'];
-export const FLAT_LAYOUTS: FlatLayout[] = ['focus', 'row', 'cluster', 'swarm'];
+export const FLAT_LAYOUTS: FlatLayout[] = ['focus', 'row', 'cluster', 'swarm', 'exchange', 'zoom'];
 
 export interface AmbiencePalette {
   /** Background gradient, centre to edge. */
@@ -50,8 +50,38 @@ export const AMBIENCE: Record<FlatAmbience, AmbiencePalette> = {
   sky: { sky: ['#b5fff2', '#6fe3d2', '#2fb4b6'], blobs: ['#ffffff', '#3ff0e6', '#4f9bff'], speck: '#ffffff', ...LIGHT_TEXT },
 };
 
-export const paletteFor = (ambience: FlatAmbience | undefined): AmbiencePalette =>
-  AMBIENCE[ambience ?? 'space'] ?? AMBIENCE.space;
+/** Rotates a colour's hue by `degrees`, keeping its saturation and lightness. */
+export const hueRotate = (hex: string, degrees: number): string => {
+  if (!degrees) return hex;
+  const n = parseInt(hex.replace('#', '').slice(0, 6), 16);
+  const [r, g, b] = [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff].map((c) => c / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return hex;
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (((h * 60 + degrees) % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r1, g1, b1] =
+    h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  const hex2 = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+  return `#${hex2(r1)}${hex2(g1)}${hex2(b1)}`;
+};
+
+/** The ambience palette, optionally tinted by a per-video hue shift. */
+export const paletteFor = (ambience: FlatAmbience | undefined, hueShift = 0): AmbiencePalette => {
+  const base = AMBIENCE[ambience ?? 'space'] ?? AMBIENCE.space;
+  if (!hueShift) return base;
+  return {
+    ...base,
+    sky: base.sky.map((c) => hueRotate(c, hueShift)) as AmbiencePalette['sky'],
+    blobs: base.blobs.map((c) => hueRotate(c, hueShift)),
+  };
+};
 
 /** Accent colours handed out to objects in order. */
 export const ACCENTS = ['#ffd23f', '#ff3d9a', '#3ff0e6', '#ff8a3d', '#5cf2a8', '#9b6bff'];

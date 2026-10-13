@@ -162,7 +162,11 @@ export interface GeometrySpaceProps extends SceneBase {
 }
 
 export type FlatAmbience = 'space' | 'cell' | 'lab' | 'ocean' | 'lilac' | 'sky';
-export type FlatLayout = 'focus' | 'row' | 'cluster' | 'swarm';
+/**
+ * exchange: the first icon hands the third icon (or a spark) over to the second, again and again;
+ * zoom: each icon is one level deeper than the last, and the camera dives from one into the next.
+ */
+export type FlatLayout = 'focus' | 'row' | 'cluster' | 'swarm' | 'exchange' | 'zoom';
 /** minimal: one colour field and a few specks; rich: adds drifting shapes. */
 export type FlatDetail = 'minimal' | 'rich';
 

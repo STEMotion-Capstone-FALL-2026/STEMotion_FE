@@ -1,6 +1,7 @@
 import React from 'react';
 import { noise2D } from '@remotion/noise';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
+import { CameraMove, cameraTransform } from './variation';
 
 /**
  * Motion primitives for flat scenes. Nothing in a flat scene ever stands
@@ -76,19 +77,20 @@ export const CameraDrift: React.FC<{
   durationInFrames: number;
   zoom?: number;
   pan?: number;
+  /** Direction of the move; varies per scene (see variation.ts). */
+  move?: CameraMove;
   children: React.ReactNode;
-}> = ({ durationInFrames, zoom = 0.06, pan = 24, children }) => {
+}> = ({ durationInFrames, zoom = 0.06, pan = 24, move = 'push-left', children }) => {
   const frame = useCurrentFrame();
   const t = interpolate(frame, [0, Math.max(1, durationInFrames)], [0, 1], {
     extrapolateRight: 'clamp',
   });
-  const eased = 1 - Math.pow(1 - t, 2);
   return (
     <div
       style={{
         position: 'absolute',
         inset: 0,
-        transform: `scale(${1 + zoom * eased}) translateX(${-pan * eased}px)`,
+        transform: cameraTransform(move, t, zoom, pan),
         transformOrigin: '50% 55%',
       }}
     >
