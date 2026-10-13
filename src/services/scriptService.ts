@@ -7,7 +7,7 @@ import { apiClient } from './apiClient';
 import { STEMScript, STEMSubject, SceneData, SceneType } from '../types/stem';
 import { sceneSaveQueue } from './sceneSaveQueue';
 
-export type AiAction = 'resegment' | 'grade' | 'extract' | 'terms';
+export type AiAction = 'resegment' | 'grade' | 'extract' | 'terms' | 'metaphor';
 
 /** Raw payload the AI endpoint returns, plus the metadata the UI shows. */
 export interface AiActionResult {
@@ -77,6 +77,36 @@ const res = await apiClient.post<any>('/ai/script/action', {
     if (!Array.isArray(rawScenes) || rawScenes.length === 0) {
       throw new Error('AI không trả về phân cảnh hợp lệ; vui lòng thử lại.');
     }
+    // Missing scientific content must not become fabricated lesson data: a
+    // formula, equation, quiz, chart or process stage the AI did not supply is
+    // an error the writer sees, never a placeholder that looks like real content.
+    rawScenes.forEach((scene, index) => {
+      const value = (key: string) => scene?.[key] ?? scene?.props?.[key];
+      const nonEmpty = (key: string) => typeof value(key) === 'string' && value(key).trim().length > 0;
+      let valid = scene != null && typeof scene === 'object';
+      if (scene?.type === 'MATH_FORMULA') valid = nonEmpty('latex');
+      if (scene?.type === 'CHEMICAL_REACTION') valid = nonEmpty('equation');
+      if (scene?.type === 'STEM_QUIZ') {
+        const options = value('options');
+        const correctIndex = value('correctIndex');
+        valid = nonEmpty('question') && Array.isArray(options) && options.length >= 2
+          && options.every((option: unknown) => typeof option === 'string' && option.trim().length > 0)
+          && Number.isInteger(correctIndex) && correctIndex >= 0 && correctIndex < options.length;
+      }
+      if (scene?.type === 'DATA_CHART') {
+        const points = value('dataPoints');
+        valid = Array.isArray(points) && points.length > 0
+          && points.every((point: any) => typeof point?.label === 'string'
+            && point.label.trim().length > 0 && typeof point.value === 'number' && Number.isFinite(point.value));
+      }
+      if (scene?.type === 'PROCESS_TIMELINE') {
+        const stages = value('stages');
+        valid = Array.isArray(stages) && stages.length >= 2
+          && stages.every((stage: any) => typeof stage?.title === 'string' && stage.title.trim().length > 0);
+      }
+      if (!valid) throw new Error(`AI trả về dữ liệu thiếu hoặc sai ở phân cảnh ${index + 1} (${scene?.type ?? 'unknown'}).`);
+    });
+
     const scenes: SceneData[] = rawScenes.map((sc, idx) => {
       const type = sc.type || 'ILLUSTRATED_EXPLAINER';
       const durationInFrames = sc.durationInFrames || 240;
@@ -99,7 +129,7 @@ const res = await apiClient.post<any>('/ai/script/action', {
         } as SceneData;
       }
       if (type === 'MATH_FORMULA') {
-        const latex = sc.latex || sc.props?.latex || 'E = mc^2';
+        const latex = sc.latex || sc.props?.latex;
         const rawSteps = sc.steps || sc.props?.steps;
         return {
           ...base,
@@ -110,19 +140,12 @@ const res = await apiClient.post<any>('/ai/script/action', {
         } as SceneData;
       }
       if (type === 'PROCESS_TIMELINE') {
-        const rawStages = sc.stages || sc.props?.stages;
-        const stages = Array.isArray(rawStages) && rawStages.length > 0
-          ? rawStages.map((st: any, sIdx: number) => ({
-              stageNumber: st.stageNumber ?? (sIdx + 1),
-              title: st.title || `Giai đoạn ${sIdx + 1}`,
-              description: st.description || '',
-              badge: st.badge || `Bước ${sIdx + 1}`,
-            }))
-          : [
-              { stageNumber: 1, title: 'Giai đoạn 1', description: 'Khởi tạo quá trình', badge: 'Bước 1' },
-              { stageNumber: 2, title: 'Giai đoạn 2', description: 'Biến đổi & tương tác', badge: 'Bước 2' },
-              { stageNumber: 3, title: 'Giai đoạn 3', description: 'Kết quả & cân bằng', badge: 'Bước 3' },
-            ];
+        const stages = (sc.stages || sc.props?.stages).map((st: any, sIdx: number) => ({
+          stageNumber: st.stageNumber ?? (sIdx + 1),
+          title: st.title,
+          description: st.description || '',
+          badge: st.badge || `Bước ${sIdx + 1}`,
+        }));
         return {
           ...base,
           processTitle: sc.processTitle || sc.props?.processTitle || base.title,
@@ -130,15 +153,11 @@ const res = await apiClient.post<any>('/ai/script/action', {
         } as SceneData;
       }
       if (type === 'STEM_QUIZ') {
-        const rawOpts = sc.options || sc.props?.options;
-        const options = Array.isArray(rawOpts) && rawOpts.length >= 2
-          ? rawOpts
-          : ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'];
-        const rawIdx = sc.correctIndex ?? sc.props?.correctIndex;
-        const correctIndex = Number.isInteger(rawIdx) && rawIdx >= 0 && rawIdx < options.length ? rawIdx : 0;
+        const options = sc.options || sc.props?.options;
+        const correctIndex = sc.correctIndex ?? sc.props?.correctIndex;
         return {
           ...base,
-          question: sc.question || sc.props?.question || base.title,
+          question: sc.question || sc.props?.question,
           options,
           correctIndex,
           hint: sc.hint || sc.props?.hint || 'Vận dụng kiến thức vừa học ở phần trước.',
@@ -148,7 +167,7 @@ const res = await apiClient.post<any>('/ai/script/action', {
       if (type === 'CHEMICAL_REACTION') {
         return {
           ...base,
-          equation: sc.equation || sc.props?.equation || 'A + B \\rightarrow AB',
+          equation: sc.equation || sc.props?.equation,
           reactants: sc.reactants || sc.props?.reactants || 'Chất tham gia',
           products: sc.products || sc.props?.products || 'Chất sản phẩm',
           condition: sc.condition || sc.props?.condition || 'Điều kiện tiêu chuẩn',
@@ -174,17 +193,10 @@ const res = await apiClient.post<any>('/ai/script/action', {
         } as SceneData;
       }
       if (type === 'DATA_CHART') {
-        const rawPoints = sc.dataPoints || sc.props?.dataPoints;
-        const dataPoints = Array.isArray(rawPoints) && rawPoints.length > 0
-          ? rawPoints.map((pt: any, pIdx: number) => ({
-              label: String(pt?.label || `Mốc ${pIdx + 1}`),
-              value: typeof pt?.value === 'number' && Number.isFinite(pt.value) ? pt.value : (pIdx + 1) * 10,
-            }))
-          : [
-              { label: 'Mốc 1', value: 25 },
-              { label: 'Mốc 2', value: 50 },
-              { label: 'Mốc 3', value: 85 },
-            ];
+        const dataPoints = (sc.dataPoints || sc.props?.dataPoints).map((pt: any) => ({
+          label: String(pt.label),
+          value: pt.value,
+        }));
         return {
           ...base,
           chartType: sc.chartType || sc.props?.chartType || 'bar',

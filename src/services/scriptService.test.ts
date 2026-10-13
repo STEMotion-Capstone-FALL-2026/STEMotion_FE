@@ -43,8 +43,8 @@ describe('AI illustrated scenes', () => {
     }] } });
     const draft = await scriptService.generateScriptWithAI('Bài học', 'Physics', '10');
     expect(draft.scenes[0]).toMatchObject({
-      headline: 'Bài học', icons: [{ name: 'book', label: 'Bài học' }],
-      ambience: 'sky', layout: 'focus', narration: 'Lời thoại gốc', durationInFrames: 90,
+      headline: 'Bài học', icons: [{ name: 'sparkle', label: 'Bài học' }],
+      ambience: 'space', layout: 'focus', narration: 'Lời thoại gốc', durationInFrames: 90,
     });
   });
 });
@@ -52,11 +52,21 @@ describe('AI illustrated scenes', () => {
 describe('AI scientific content integrity', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(['MATH_FORMULA', 'CHEMICAL_REACTION', 'STEM_QUIZ', 'DATA_CHART'])
+  it.each(['MATH_FORMULA', 'CHEMICAL_REACTION', 'STEM_QUIZ', 'DATA_CHART', 'PROCESS_TIMELINE'])
     ('rejects missing scientific content instead of fabricating %s', async (type) => {
       vi.spyOn(apiClient, 'post').mockResolvedValue({ result: { scenes: [{ type, title: 'Lesson' }] } });
       await expect(scriptService.generateScriptWithAI('Lesson', 'Physics', '10')).rejects.toThrow('phân cảnh 1');
     });
+
+  it('keeps a complete process timeline as given', async () => {
+    const stages = [
+      { stageNumber: 1, title: 'Hấp thụ ánh sáng', description: 'Diệp lục bắt photon' },
+      { stageNumber: 2, title: 'Cố định CO₂', description: 'Chu trình Calvin' },
+    ];
+    vi.spyOn(apiClient, 'post').mockResolvedValue({ result: { scenes: [{ type: 'PROCESS_TIMELINE', processTitle: 'Quang hợp', stages }] } });
+    const draft = await scriptService.generateScriptWithAI('Lesson', 'Biology', '10');
+    expect(draft.scenes[0]).toMatchObject({ processTitle: 'Quang hợp', stages: stages.map((s) => expect.objectContaining(s)) });
+  });
 
   it('rejects an empty AI response', async () => {
     vi.spyOn(apiClient, 'post').mockResolvedValue({ result: { scenes: [] } });
