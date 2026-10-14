@@ -74,83 +74,23 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
 
-  const currentAudioRef = React.useRef<HTMLAudioElement | null>(null);
-
   const handlePlayTts = (text: string) => {
-    if (!text?.trim()) {
-      showToast('Chưa có lời thoại để đọc thử.', 'warn');
+    if (!text?.trim() || !('speechSynthesis' in window)) {
+      showToast('Trình duyệt chưa hỗ trợ nghe thử lời thoại này.', 'warn');
       return;
     }
-
+    window.speechSynthesis.cancel();
     if (isSpeaking) {
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current.src = '';
-        currentAudioRef.current = null;
-      }
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
       setIsSpeaking(false);
       return;
     }
-
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'vi-VN';
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
     setIsSpeaking(true);
-    showToast('Đang phát giọng đọc AI thuyết minh tiếng Việt...', 'info');
-
-    let fallbackTriggered = false;
-    const playFallback = () => {
-      if (fallbackTriggered) return;
-      fallbackTriggered = true;
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current.src = '';
-        currentAudioRef.current = null;
-      }
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'vi-VN';
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
-        window.speechSynthesis.speak(utterance);
-      } else {
-        setIsSpeaking(false);
-      }
-    };
-
-    try {
-      const audioUrl = `http://localhost:4000/tts-preview?v=v3&text=${encodeURIComponent(text.trim())}`;
-      const audio = new Audio(audioUrl);
-      currentAudioRef.current = audio;
-
-      audio.onloadedmetadata = () => {
-        if (audio.duration && !isNaN(audio.duration) && audio.duration > 0) {
-          const speechSec = audio.duration;
-          const targetSec = Math.max(3, Math.round(speechSec + 0.6));
-          updateSceneProperty((s) => ({
-            ...s,
-            durationInFrames: targetSec * 30,
-          }));
-          showToast(`Đã đồng bộ thời lượng phân cảnh: ${targetSec}s (khớp giọng đọc ${speechSec.toFixed(1)}s)`);
-        }
-      };
-
-      audio.onended = () => {
-        setIsSpeaking(false);
-        currentAudioRef.current = null;
-      };
-
-      audio.onerror = () => {
-        playFallback();
-      };
-
-      audio.play().catch(() => {
-        playFallback();
-      });
-    } catch {
-      playFallback();
-    }
+    showToast('Nghe thử bằng giọng của trình duyệt; giọng video được tạo khi kết xuất.', 'info');
+    window.speechSynthesis.speak(utterance);
   };
   return (
     <section className="flex-1 min-h-0 flex flex-col overflow-hidden">

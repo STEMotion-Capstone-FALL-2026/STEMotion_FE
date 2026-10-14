@@ -51,11 +51,7 @@ const getSingleComponent = (scene: SceneData) => {
 
 const SingleSceneRenderer: React.FC<{ scene: SceneData }> = ({ scene }) => {
   const Comp = getSingleComponent(scene);
-  const narrationUrl =
-    (scene as any).narrationAudioUrl ||
-    (scene.narration && scene.narration.trim()
-      ? `http://localhost:4000/tts-preview?v=v3&text=${encodeURIComponent(scene.narration.trim())}`
-      : undefined);
+  const narrationUrl = (scene as any).narrationAudioUrl;
 
   return (
     <SceneErrorBoundary scene={scene}>

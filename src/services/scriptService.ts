@@ -77,6 +77,29 @@ const res = await apiClient.post<any>('/ai/script/action', {
     if (!Array.isArray(rawScenes) || rawScenes.length === 0) {
       throw new Error('AI không trả về phân cảnh hợp lệ; vui lòng thử lại.');
     }
+    // Missing scientific content must not become fabricated lesson data.
+    rawScenes.forEach((scene, index) => {
+      const value = (key: string) => scene?.[key] ?? scene?.props?.[key];
+      const nonEmpty = (key: string) => typeof value(key) === 'string' && value(key).trim().length > 0;
+      let valid = scene != null && typeof scene === 'object';
+      if (scene?.type === 'MATH_FORMULA') valid = nonEmpty('latex');
+      if (scene?.type === 'CHEMICAL_REACTION') valid = nonEmpty('equation');
+      if (scene?.type === 'STEM_QUIZ') {
+        const options = value('options');
+        const correctIndex = value('correctIndex');
+        valid = nonEmpty('question') && Array.isArray(options) && options.length >= 2
+          && options.every((option: unknown) => typeof option === 'string' && option.trim().length > 0)
+          && Number.isInteger(correctIndex) && correctIndex >= 0 && correctIndex < options.length;
+      }
+      if (scene?.type === 'DATA_CHART') {
+        const points = value('dataPoints');
+        valid = Array.isArray(points) && points.length > 0
+          && points.every((point: any) => typeof point?.label === 'string'
+            && point.label.trim().length > 0 && typeof point.value === 'number' && Number.isFinite(point.value));
+      }
+      if (!valid) throw new Error(`AI trả về dữ liệu thiếu hoặc sai ở phân cảnh ${index + 1} (${scene?.type ?? 'unknown'}).`);
+    });
+
     const scenes: SceneData[] = rawScenes.map((sc, idx) => {
       const type = sc.type || 'ILLUSTRATED_EXPLAINER';
       const durationInFrames = sc.durationInFrames || 240;
@@ -99,13 +122,13 @@ const res = await apiClient.post<any>('/ai/script/action', {
         } as SceneData;
       }
       if (type === 'MATH_FORMULA') {
-        const latex = sc.latex || sc.props?.latex || 'E = mc^2';
+        const latex = sc.latex || sc.props?.latex;
         const rawSteps = sc.steps || sc.props?.steps;
         return {
           ...base,
           latex,
           steps: Array.isArray(rawSteps) && rawSteps.length > 0 ? rawSteps : [
-            { label: 'Bước 1', latexSnippet: latex, explanation: sc.narration || 'Đại lượng trọng tâm' },
+            { label: 'Bước 1', latexSnippet: latex || 'f(x)', explanation: sc.narration || 'Đại lượng trọng tâm' },
           ],
         } as SceneData;
       }
@@ -130,17 +153,11 @@ const res = await apiClient.post<any>('/ai/script/action', {
         } as SceneData;
       }
       if (type === 'STEM_QUIZ') {
-        const rawOpts = sc.options || sc.props?.options;
-        const options = Array.isArray(rawOpts) && rawOpts.length >= 2
-          ? rawOpts
-          : ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'];
-        const rawIdx = sc.correctIndex ?? sc.props?.correctIndex;
-        const correctIndex = Number.isInteger(rawIdx) && rawIdx >= 0 && rawIdx < options.length ? rawIdx : 0;
         return {
           ...base,
-          question: sc.question || sc.props?.question || base.title,
-          options,
-          correctIndex,
+          question: sc.question || sc.props?.question,
+          options: sc.options || sc.props?.options,
+          correctIndex: sc.correctIndex ?? sc.props?.correctIndex,
           hint: sc.hint || sc.props?.hint || 'Vận dụng kiến thức vừa học ở phần trước.',
           explanation: sc.explanation || sc.props?.explanation || 'Phương án chính xác theo quy luật bài giảng.',
         } as SceneData;
@@ -148,7 +165,7 @@ const res = await apiClient.post<any>('/ai/script/action', {
       if (type === 'CHEMICAL_REACTION') {
         return {
           ...base,
-          equation: sc.equation || sc.props?.equation || 'A + B \\rightarrow AB',
+          equation: sc.equation || sc.props?.equation,
           reactants: sc.reactants || sc.props?.reactants || 'Chất tham gia',
           products: sc.products || sc.props?.products || 'Chất sản phẩm',
           condition: sc.condition || sc.props?.condition || 'Điều kiện tiêu chuẩn',
@@ -174,23 +191,12 @@ const res = await apiClient.post<any>('/ai/script/action', {
         } as SceneData;
       }
       if (type === 'DATA_CHART') {
-        const rawPoints = sc.dataPoints || sc.props?.dataPoints;
-        const dataPoints = Array.isArray(rawPoints) && rawPoints.length > 0
-          ? rawPoints.map((pt: any, pIdx: number) => ({
-              label: String(pt?.label || `Mốc ${pIdx + 1}`),
-              value: typeof pt?.value === 'number' && Number.isFinite(pt.value) ? pt.value : (pIdx + 1) * 10,
-            }))
-          : [
-              { label: 'Mốc 1', value: 25 },
-              { label: 'Mốc 2', value: 50 },
-              { label: 'Mốc 3', value: 85 },
-            ];
         return {
           ...base,
           chartType: sc.chartType || sc.props?.chartType || 'bar',
           xAxisLabel: sc.xAxisLabel || sc.props?.xAxisLabel || 'Tham số X',
           yAxisLabel: sc.yAxisLabel || sc.props?.yAxisLabel || 'Giá trị Y',
-          dataPoints,
+          dataPoints: sc.dataPoints || sc.props?.dataPoints,
         } as SceneData;
       }
       if (type === 'ILLUSTRATED_EXPLAINER') {
@@ -202,14 +208,14 @@ const res = await apiClient.post<any>('/ai/script/action', {
               ...(ic?.badge ? { badge: String(ic.badge) } : {}),
               ...(ic?.sub ? { sub: String(ic.sub) } : {}),
             }))
-          : [{ name: 'sparkle', label: base.title }];
+          : [{ name: 'book', label: 'Bài học' }];
         return {
           ...sc.props,
           ...sc,
           ...base,
           headline: sc.headline || sc.props?.headline || base.title,
           caption: sc.caption ?? sc.props?.caption ?? '',
-          ambience: sc.ambience || sc.props?.ambience || 'space',
+          ambience: sc.ambience || sc.props?.ambience || 'sky',
           layout: sc.layout || sc.props?.layout || 'focus',
           detail: sc.detail || sc.props?.detail || 'rich',
           icons,
