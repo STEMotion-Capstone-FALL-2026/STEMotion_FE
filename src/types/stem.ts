@@ -14,7 +14,8 @@ export type SceneType =
   | 'COMPARISON_SPLIT'
   | 'PROCESS_TIMELINE'
   | 'GEOMETRY_SPACE'
-  | 'ILLUSTRATED_EXPLAINER';
+  | 'ILLUSTRATED_EXPLAINER'
+  | 'COMPOSED';
 
 export type STEMTemplateType = SceneType;
 
@@ -187,6 +188,60 @@ export interface IllustratedExplainerProps extends SceneBase {
   icons: IllustratedIcon[];
 }
 
+/**
+ * A scene assembled from blocks instead of a fixed template. The AI or the
+ * producer picks a frame (how the screen is divided), puts blocks into its
+ * slots and ties each block's entrance to a word of the narration. See
+ * src/remotion/composed/.
+ */
+export type ComposedFrame = 'center' | 'split' | 'thirds' | 'grid' | 'sidebar';
+export type ComposedSlot =
+  | 'top' | 'main' | 'bottom' | 'left' | 'right' | 'middle' | 'tl' | 'tr' | 'bl' | 'br' | 'side';
+export type ComposedBlockKind =
+  | 'title' | 'text' | 'list' | 'formula' | 'icon' | 'icons' | 'number'
+  | 'chart' | 'choice' | 'arrow' | 'highlight' | 'guide';
+export type ComposedMotion = 'pop' | 'rise' | 'slide' | 'draw' | 'type' | 'count';
+export type ComposedEmphasis = 'none' | 'pulse' | 'float' | 'shake';
+export type ComposedTone = 'default' | 'accent' | 'good' | 'bad';
+
+export interface ComposedBlock {
+  id: string;
+  kind: ComposedBlockKind;
+  /** Where the block sits; arrows and highlights are overlays and take none. */
+  slot?: ComposedSlot;
+  /** title, text, guide speech, number label, arrow label. */
+  text?: string;
+  items?: string[];
+  latex?: string;
+  icon?: IllustratedIcon;
+  icons?: IllustratedIcon[];
+  value?: number;
+  unit?: string;
+  points?: { label: string; value: number }[];
+  question?: string;
+  options?: string[];
+  answer?: number;
+  /** arrow: from and to block ids; highlight: target in `to`. */
+  from?: string;
+  to?: string;
+  pose?: 'idle' | 'point';
+  /** Words of the narration that cue the block: appear, leave, reveal the answer, cross out. */
+  at?: string;
+  until?: string;
+  revealAt?: string;
+  strikeAt?: string;
+  motion?: ComposedMotion;
+  emphasis?: ComposedEmphasis;
+  tone?: ComposedTone;
+}
+
+export interface ComposedProps extends SceneBase {
+  type: 'COMPOSED';
+  frame: ComposedFrame;
+  ambience?: FlatAmbience;
+  blocks: ComposedBlock[];
+}
+
 export type SceneData =
   | TitleHeroProps
   | MathFormulaProps
@@ -199,7 +254,8 @@ export type SceneData =
   | ComparisonSplitProps
   | ProcessTimelineProps
   | GeometrySpaceProps
-  | IllustratedExplainerProps;
+  | IllustratedExplainerProps
+  | ComposedProps;
 
 export type STEMScene = SceneData;
 

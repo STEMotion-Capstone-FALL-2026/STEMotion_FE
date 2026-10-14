@@ -15,6 +15,7 @@ import { ComparisonSplit } from './ComparisonSplit';
 import { ProcessTimeline } from './ProcessTimeline';
 import { GeometrySpace } from './GeometrySpace';
 import { IllustratedExplainer } from './IllustratedExplainer';
+import { ComposedScene } from '../composed/ComposedScene';
 import { CinematicScene } from '../director/CinematicScene';
 import { SceneSeedContext, VideoSeedContext } from '../flat/variation';
 
@@ -45,6 +46,8 @@ export const renderSceneComponent = (scene: SceneData) => {
       return <GeometrySpace {...scene} />;
     case 'ILLUSTRATED_EXPLAINER':
       return <IllustratedExplainer {...scene} />;
+    case 'COMPOSED':
+      return <ComposedScene {...scene} />;
     default:
       return null;
   }

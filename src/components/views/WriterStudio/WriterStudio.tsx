@@ -21,6 +21,7 @@ import { UserRole, projectService } from '../../../services';
 import { sceneSaveQueue } from '../../../services/sceneSaveQueue';
 import { renderLatexToString } from '../../../utils/latex';
 import { MetaphorPanel } from './MetaphorPanel';
+import { ComposedBlocksEditor } from './ComposedBlocksEditor';
 
 interface WriterStudioProps {
   script: STEMScript;
@@ -357,6 +358,13 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                 title="Thêm so sánh"
               >
                 + So sánh
+              </button>
+              <button
+                onClick={() => handleAddNewScene('COMPOSED')}
+                className="flex-1 py-1 rounded-md border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-fuchsia-700 text-center"
+                title="Thêm cảnh tự do, lắp ghép từ các khối"
+              >
+                + Tự do
               </button>
               <button
                 onClick={() => handleAddNewScene('PROCESS_TIMELINE')}
@@ -822,6 +830,10 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                   ))}
                 </div>
               </div>
+            )}
+
+            {selectedScene.type === 'COMPOSED' && (
+              <ComposedBlocksEditor scene={selectedScene} updateSceneProperty={updateSceneProperty} />
             )}
 
             {selectedScene.type === 'GEOMETRY_SPACE' && (

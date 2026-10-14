@@ -6,6 +6,7 @@
 import { apiClient } from './apiClient';
 import { STEMScript, STEMSubject, SceneData, SceneType } from '../types/stem';
 import { sceneSaveQueue } from './sceneSaveQueue';
+import { ComposedContentError, composedPropsFrom } from './composed';
 
 export type AiAction = 'resegment' | 'grade' | 'extract' | 'terms' | 'metaphor';
 
@@ -17,6 +18,21 @@ export interface AiActionResult {
   elapsedMs: number;
   requestId?: string;
 }
+
+/** One way to lead a video through a lesson, as suggested by the AI. */
+export interface LessonApproach {
+  name: string;
+  hook: string;
+  flow: string[];
+  whyItFits: string;
+}
+
+/** The text sent as the chosen approach when drafting. */
+export const describeApproach = (a: LessonApproach): string =>
+  [a.name, a.hook && `Mở đầu: ${a.hook}`, a.flow.length ? `Mạch: ${a.flow.join(' → ')}` : '']
+    .filter(Boolean)
+    .join('. ')
+    .slice(0, 800);
 
 export const scriptService = {
   /** Kept for callers that only want the segmentation analysis. */
@@ -60,17 +76,36 @@ const res = await apiClient.post<any>('/ai/script/action', {
     await apiClient.put(`/ai/requests/${encodeURIComponent(requestId)}/decision`, {decision});
   },
 
+  /**
+   * Asks for three different ways to lead a video through the lesson. The
+   * writer picks one, edits it or writes their own before drafting.
+   */
+  async suggestApproaches(topic: string, subject: STEMSubject, gradeLevel: string): Promise<LessonApproach[]> {
+    const res = await apiClient.post<any>('/ai/script/approaches', { topic, subject, gradeLevel });
+    const options = (res?.result ?? res)?.options;
+    return (Array.isArray(options) ? options : [])
+      .filter((o: any) => typeof o?.name === 'string' && o.name.trim())
+      .map((o: any) => ({
+        name: o.name.trim(),
+        hook: typeof o.hook === 'string' ? o.hook : '',
+        flow: Array.isArray(o.flow) ? o.flow.filter((s: unknown) => typeof s === 'string') : [],
+        whyItFits: typeof o.whyItFits === 'string' ? o.whyItFits : '',
+      }));
+  },
+
   async generateScriptWithAI(
     topic: string,
     subject: STEMSubject,
     gradeLevel: string,
-    targetDurationSec: number = 0
-  ): Promise<STEMScript & {aiRequestId?: string}> {
+    targetDurationSec: number = 0,
+    approach?: string
+  ): Promise<STEMScript & {aiRequestId?: string; approachName?: string; flow?: string[]}> {
     const res = await apiClient.post<any>('/ai/script/generate', {
       topic,
       subject,
       gradeLevel,
       targetDurationSec,
+      ...(approach?.trim() ? { approach: approach.trim() } : {}),
     });
     const payload = res?.result ?? res;
     const rawScenes: any[] = payload?.scenes || [];
@@ -103,6 +138,14 @@ const res = await apiClient.post<any>('/ai/script/action', {
         const stages = value('stages');
         valid = Array.isArray(stages) && stages.length >= 2
           && stages.every((stage: any) => typeof stage?.title === 'string' && stage.title.trim().length > 0);
+      }
+      if (scene?.type === 'COMPOSED') {
+        try {
+          composedPropsFrom(scene);
+        } catch (error) {
+          if (!(error instanceof ComposedContentError)) throw error;
+          throw new Error(`AI trả về dữ liệu thiếu hoặc sai ở phân cảnh ${index + 1} (COMPOSED: ${error.message}).`);
+        }
       }
       if (!valid) throw new Error(`AI trả về dữ liệu thiếu hoặc sai ở phân cảnh ${index + 1} (${scene?.type ?? 'unknown'}).`);
     });
@@ -227,6 +270,9 @@ const res = await apiClient.post<any>('/ai/script/action', {
           icons,
         } as SceneData;
       }
+      if (type === 'COMPOSED') {
+        return { ...base, ...composedPropsFrom(sc) } as SceneData;
+      }
       if (type === 'OUTRO') {
         const rawSummary = sc.summaryPoints || sc.props?.summaryPoints;
         return {
@@ -244,6 +290,8 @@ const res = await apiClient.post<any>('/ai/script/action', {
 
     return {
       aiRequestId: res?.requestId,
+      approachName: typeof payload?.approachName === 'string' ? payload.approachName : undefined,
+      flow: Array.isArray(payload?.flow) ? payload.flow.filter((s: unknown) => typeof s === 'string') : undefined,
       id: `SCR-${subject.toUpperCase().slice(0, 4)}-${Date.now().toString().slice(-4)}`,
       title: payload?.title || topic,
       subject,
@@ -370,6 +418,22 @@ const res = await apiClient.post<any>('/ai/script/action', {
         explanation: 'Diện tích hai hình vuông trên hai cạnh góc vuông bù đúng bằng diện tích hình vuông cạnh huyền.',
         narration: 'Mô hình hình học trực quan giúp học sinh ghi nhớ bản chất diện tích của định lý Pytago.',
         durationInFrames: 180,
+      };
+    } else if (type === 'COMPOSED') {
+      // A starting point only: writers and producers add, remove and move blocks freely.
+      newScene = {
+        id: `scene_${Date.now()}`,
+        type: 'COMPOSED',
+        title: `Scene ${sceneNum}: Cảnh tự do`,
+        frame: 'split',
+        ambience: 'space',
+        blocks: [
+          { id: 'title', kind: 'title', slot: 'top', text: 'Tiêu đề của cảnh' },
+          { id: 'idea', kind: 'text', slot: 'left', at: 'ý chính', text: 'Ý chính của cảnh' },
+          { id: 'picture', kind: 'icon', slot: 'right', at: 'hình ảnh', icon: { name: 'lightbulb', label: 'Minh hoạ' } },
+        ],
+        narration: 'Đây là ý chính của cảnh, đi kèm một hình ảnh minh hoạ.',
+        durationInFrames: 240,
       };
     } else if (type === 'ILLUSTRATED_EXPLAINER') {
       newScene = {

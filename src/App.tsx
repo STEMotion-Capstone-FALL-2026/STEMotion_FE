@@ -420,12 +420,13 @@ export default function App() {
     subject: STEMSubject,
     grade: string,
     useAi: boolean = true,
-    targetDurationSec: number = 0
+    targetDurationSec: number = 0,
+    approach?: string
   ) => {
     try {
       if (useAi) {
         showToast(`Đang dùng AI để soạn kịch bản STEM: "${title}"...`, 'info');
-        const aiDraft = await scriptService.generateScriptWithAI(title, subject, grade, targetDurationSec);
+        const aiDraft = await scriptService.generateScriptWithAI(title, subject, grade, targetDurationSec, approach);
         const newScript = await projectService.createProject({
           title: aiDraft.title,
           subject,
@@ -439,7 +440,11 @@ export default function App() {
         setScript(newScript);
         setActiveSceneId(newScript.scenes[0]?.id || '');
         setCurrentRole('writer');
-        showToast(`AI đã soạn kịch bản hoàn tất: "${newScript.title}" (${newScript.scenes.length} phân cảnh)!`, 'success');
+        showToast(
+          `AI đã soạn kịch bản hoàn tất: "${newScript.title}" (${newScript.scenes.length} phân cảnh)` +
+            (aiDraft.approachName ? `, dẫn dắt theo cách "${aiDraft.approachName}"` : '') + '!',
+          'success'
+        );
         return;
       }
       const newScript = await projectService.createProject({

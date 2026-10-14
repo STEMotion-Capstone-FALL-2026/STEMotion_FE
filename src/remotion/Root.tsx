@@ -16,6 +16,7 @@ import { IllustratedExplainer } from './compositions/IllustratedExplainer';
 import { DEFAULT_SAMPLE_SCRIPT } from '../lib/sampleData';
 import { FLAT_DEMO_SCENES, FLAT_DEMO_SCRIPT } from '../lib/flatDemo';
 import { METAPHOR_DEMO_SCENES, METAPHOR_DEMO_SCRIPT } from '../lib/metaphorDemo';
+import { OHM_DEMOS } from '../lib/composedDemo';
 import { CinematicScene } from './director/CinematicScene';
 import { phaseBScript } from './director/phaseB';
 import { PhaseBVideo } from './director/PhaseBVideo';
@@ -252,6 +253,19 @@ export const RemotionRoot: React.FC = () => {
         height={1080}
         defaultProps={{ script: METAPHOR_DEMO_SCRIPT }}
       />
+      {/* One lesson, three ways to teach it, all from composed-scene blocks. */}
+      {Object.entries(OHM_DEMOS).map(([id, demo]) => (
+        <Composition
+          key={id}
+          id={id}
+          component={FullSTEMVideo}
+          durationInFrames={demo.scenes.reduce((acc, sc) => acc + sc.durationInFrames, 0)}
+          fps={30}
+          width={1920}
+          height={1080}
+          defaultProps={{ script: demo }}
+        />
+      ))}
     </>
   );
 };
