@@ -15,7 +15,6 @@ import {
 
 // Layout Components
 import { HeaderNav } from './components/layout/HeaderNav';
-import { WorkflowBar } from './components/layout/WorkflowBar';
 import { ToastContainer, ToastItem } from './components/layout/ToastContainer';
 
 // Studio Views
@@ -626,16 +625,6 @@ export default function App() {
         onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
       />
 
-      {/* 5-Step Sequential Workflow Status Bar */}
-      <WorkflowBar
-        currentRole={currentRole}
-        reviewerMode={reviewerMode}
-        script={script}
-        onRoleChange={handleRoleChange}
-        onSetReviewerMode={setReviewerMode}
-        onOpenPublishModal={() => setIsPublishModalOpen(true)}
-      />
-
       {/* Main Role View Container */}
       {script.scenes.length === 0 && currentRole !== 'admin' && currentRole !== 'library' && (
         <main className="flex-1 bg-slate-50 flex items-center justify-center p-6">
@@ -766,10 +755,13 @@ export default function App() {
       <InviteWorkspaceModal
         isOpen={isInviteWorkspaceModalOpen}
         onClose={() => setIsInviteWorkspaceModalOpen(false)}
+        activeGroupName={activeGroup.name}
         onSendInvite={async (email, role) => {
           const workspaceId = await workspaceService.resolveActiveWorkspaceId();
-          const invitation = await workspaceService.inviteMember(workspaceId, email, role);
-          return `${window.location.origin}/#invite=${encodeURIComponent(invitation.token)}`;
+          const member = await workspaceService.inviteMember(workspaceId, email, role);
+          window.dispatchEvent(new CustomEvent('stemotion:workspace-members-updated'));
+          showToast(`Đã thêm ${member.name || email} vào ${activeGroup.name}!`, 'success');
+          return member;
         }}
       />
 

@@ -96,15 +96,28 @@ export const workspaceService = {
     return apiClient.get<WorkspaceMemberDto[]>(`/workspaces/${workspaceId}/members`);
   },
 
-  /** Creates an inactive seat and returns a one-time link for private delivery. */
+  /** Adds an existing user (ACTIVE) or records a pending email seat (INVITED) in the workspace. */
   async inviteMember(
     workspaceId: string,
     email: string,
-    role: UserRole
-  ): Promise<WorkspaceInvitationDto> {
-    const member = await apiClient.post<WorkspaceInvitationDto>(
+    role: UserRole | string
+  ): Promise<WorkspaceMemberDto> {
+    const member = await apiClient.post<WorkspaceMemberDto>(
       `/workspaces/${workspaceId}/members`,
-      { email, role: role.toUpperCase() }
+      { email: email.trim(), role: role.toUpperCase() }
+    );
+    cachedWorkspaces = null;
+    return member;
+  },
+
+  async updateMemberRole(
+    workspaceId: string,
+    memberId: string,
+    role: string
+  ): Promise<WorkspaceMemberDto> {
+    const member = await apiClient.patch<WorkspaceMemberDto>(
+      `/workspaces/${workspaceId}/members/${memberId}`,
+      { role: role.toUpperCase() }
     );
     cachedWorkspaces = null;
     return member;

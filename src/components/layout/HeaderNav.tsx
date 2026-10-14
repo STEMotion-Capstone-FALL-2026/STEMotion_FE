@@ -96,15 +96,17 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
 
-          {/* Nút Mời Thành Viên */}
-          <button
-            onClick={onOpenInviteModal}
-            title="Mời thành viên vào nhóm này"
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-brand-500 hover:bg-blue-50 text-xs font-bold text-slate-700 flex items-center space-x-1.5 transition-all shadow-xs"
-          >
-            <UserPlus className="w-3.5 h-3.5 text-brand-600" />
-            <span>+ Mời</span>
-          </button>
+          {/* Nút Mời Thành Viên (Chỉ hiển thị cho Admin / Tổ trưởng) */}
+          {accountRole === 'admin' && (
+            <button
+              onClick={onOpenInviteModal}
+              title="Thêm / Mời thành viên vào Tổ bộ môn này (Quyền Admin)"
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-brand-500 hover:bg-blue-50 text-xs font-bold text-slate-700 flex items-center space-x-1.5 transition-all shadow-xs"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-brand-600" />
+              <span>+ Thêm vào nhóm</span>
+            </button>
+          )}
 
           {/* Dropdown danh sách nhóm */}
           {isGroupDropdownOpen && (
@@ -127,28 +129,32 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                   </button>
                 ))}
               </div>
-              <div className="pt-1.5 border-t border-slate-100 space-y-1">
-                <button
-                  onClick={() => {
-                    setIsGroupDropdownOpen(false);
-                    onOpenCreateProjectModal();
-                  }}
-                  className="w-full p-2 rounded-lg hover:bg-blue-50 text-left flex items-center space-x-2 text-brand-600 font-bold"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span>+ Tạo Dự Án Kịch Bản Mới</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setIsGroupDropdownOpen(false);
-                    onOpenInviteModal();
-                  }}
-                  className="w-full p-2 rounded-lg hover:bg-slate-50 text-left flex items-center space-x-2 text-slate-700 font-medium"
-                >
-                  <Users className="w-4 h-4 text-slate-500" />
-                  <span>Quản lý & Mời thành viên...</span>
-                </button>
-              </div>
+              {(accountRole === 'writer' || accountRole === 'admin') && (
+                <div className="pt-1.5 border-t border-slate-100 space-y-1">
+                  <button
+                    onClick={() => {
+                      setIsGroupDropdownOpen(false);
+                      onOpenCreateProjectModal();
+                    }}
+                    className="w-full p-2 rounded-lg hover:bg-blue-50 text-left flex items-center space-x-2 text-brand-600 font-bold"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>+ Tạo Dự Án Kịch Bản Mới</span>
+                  </button>
+                  {accountRole === 'admin' && (
+                    <button
+                      onClick={() => {
+                        setIsGroupDropdownOpen(false);
+                        onOpenInviteModal();
+                      }}
+                      className="w-full p-2 rounded-lg hover:bg-slate-50 text-left flex items-center space-x-2 text-slate-700 font-medium"
+                    >
+                      <Users className="w-4 h-4 text-slate-500" />
+                      <span>Quản lý & Thêm thành viên vào nhóm...</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
