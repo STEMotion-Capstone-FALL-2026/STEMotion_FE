@@ -106,4 +106,40 @@ describe('authService', () => {
     expect(user).toBeDefined();
     expect(user.role).toBeDefined();
   });
+
+  it('maps mustChangePassword flag from login response', async () => {
+    global.fetch = mockJson(200, {
+      ...loginPayload,
+      user: { ...loginPayload.user, mustChangePassword: true },
+    }) as typeof fetch;
+
+    const user = await authService.login('writer@stemotion.vn', 'password123');
+
+    expect(user.mustChangePassword).toBe(true);
+    expect(authService.getCurrentUser().mustChangePassword).toBe(true);
+  });
+
+  it('changePassword calls api and updates mustChangePassword to false', async () => {
+    apiClient.setAuthToken('jwt-token');
+    authService.setCurrentUser({
+      id: 'user-1',
+      name: 'Nguyen Van A',
+      email: 'writer@stemotion.vn',
+      role: 'writer',
+      mustChangePassword: true,
+    });
+
+    global.fetch = mockJson(204, {}) as typeof fetch;
+
+    await authService.changePassword('oldPass123', 'newPass1234');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/auth/change-password'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ currentPassword: 'oldPass123', newPassword: 'newPass1234' }),
+      })
+    );
+    expect(authService.getCurrentUser().mustChangePassword).toBe(false);
+  });
 });

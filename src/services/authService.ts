@@ -1,4 +1,4 @@
-﻿/**
+/**
  * STEMotion Front-End - Authentication Service
  * Manages user session, JWT tokens, and role switching across 5 roles:
  * - Producer, Reviewer, Writer, Admin, Library
@@ -14,6 +14,7 @@ export interface UserProfile {
   email: string;
   avatarUrl?: string;
   role: UserRole;
+  mustChangePassword?: boolean;
 }
 
 const USER_STORAGE_KEY = 'stemotion_user_profile';
@@ -28,6 +29,7 @@ const EMPTY_USER: UserProfile = {
   name: '',
   email: '',
   role: 'writer',
+  mustChangePassword: false,
 };
 
 export const authService = {
@@ -91,6 +93,15 @@ const response = await apiClient.post<any>('/auth/login', {
     }
   },
 
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await apiClient.post('/auth/change-password', {
+      currentPassword,
+      newPassword,
+    });
+    const current = this.getCurrentUser();
+    this.setCurrentUser({ ...current, mustChangePassword: false });
+  },
+
   /** The backend spells roles in upper case; the UI uses capitalised names. */
   _toProfile(raw: any): UserProfile {
     const roleMap: Record<string, UserRole> = {
@@ -104,6 +115,7 @@ const response = await apiClient.post<any>('/auth/login', {
       name: raw?.fullName ?? raw?.name ?? '',
       email: raw?.email ?? '',
       role: roleMap[raw?.role] ?? (raw?.role as UserRole) ?? 'writer',
+      mustChangePassword: Boolean(raw?.mustChangePassword),
     };
   },
 

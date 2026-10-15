@@ -293,11 +293,13 @@ export type ReviewComment = FeedbackComment;
 
 export interface WorkspaceMember {
   id: string;
+  userId?: string;
   name: string;
   email: string;
-  role: 'Trưởng bộ môn (Admin)' | 'Writer (Biên kịch)' | 'Reviewer (Chuyên gia)' | 'Producer (Dựng video)';
-  avatar: string;
-  status: 'ACTIVE' | 'INVITED';
+  role: 'Trưởng bộ môn (Admin)' | 'Writer (Biên kịch)' | 'Reviewer (Chuyên gia)' | 'Producer (Dựng video)' | UserRole | string;
+  avatar?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  isLeader: boolean;
 }
 
 export interface Workspace {
@@ -306,4 +308,6 @@ export interface Workspace {
   department: string;
   membersCount: number;
   activeProjects: number;
+  myRole?: UserRole;
+  isLeader?: boolean;
 }

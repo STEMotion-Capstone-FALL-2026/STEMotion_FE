@@ -29,7 +29,8 @@ import { MediaLibraryView } from './components/views/MediaLibrary/MediaLibraryVi
 import { TemplateCatalogModal } from './components/modals/TemplateCatalogModal';
 import { PublishModal } from './components/modals/PublishModal';
 import { CreateProjectModal } from './components/modals/CreateProjectModal';
-import { InviteWorkspaceModal } from './components/modals/InviteWorkspaceModal';
+import { ManageMembersModal } from './components/modals/ManageMembersModal';
+import { ChangePasswordModal } from './components/modals/ChangePasswordModal';
 import { VersionDiffModal } from './components/modals/VersionDiffModal';
 
 /** Shape the studio renders before the first script arrives. */
@@ -67,6 +68,8 @@ export default function App() {
   // Multi-workspace state
   const [workspaces, setWorkspaces] = useState<any[]>([]);
   const [activeGroup, setActiveGroup] = useState({ name: 'Đang tải nhóm…', code: '' });
+  const [isLeader, setIsLeader] = useState(false);
+  const [hasNoWorkspace, setHasNoWorkspace] = useState(false);
 
   // Central Dynamic Script State (Single Source of Truth).
   // Starts empty: everything on screen comes from the backend, so an empty
@@ -100,7 +103,8 @@ export default function App() {
 
   // Modals state
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
-  const [isInviteWorkspaceModalOpen, setIsInviteWorkspaceModalOpen] = useState(false);
+  const [isManageMembersModalOpen, setIsManageMembersModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isVersionDiffModalOpen, setIsVersionDiffModalOpen] = useState(false);
   const [isSwapAssetModalOpen, setIsSwapAssetModalOpen] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
@@ -140,33 +144,20 @@ export default function App() {
   }), [script.id]);
 
   const bootstrapFromApi = useCallback(async () => {
-    // StrictMode runs mount effects twice. Invitation tokens are one-use.
     if (bootstrapInFlight.current) return;
     bootstrapInFlight.current = true;
     setIsBootstrapping(true);
     try {
       const profile = await authService.fetchCurrentUser();
-      setCurrentRole(profile.role);
       setCurrentUser(profile);
-
-      // Fragment tokens are not sent in HTTP URLs or Referer headers.
-      if (window.location.hash.startsWith('#invite=')) {
-        try {
-          const token = decodeURIComponent(window.location.hash.slice('#invite='.length));
-          await workspaceService.acceptInvitation(token);
-          history.replaceState(null, '', window.location.pathname + window.location.search);
-          showToast('Đã nhận lời mời vào nhóm.', 'success');
-        } catch (error: any) {
-          showToast(error.message || 'Không nhận được lời mời. Kiểm tra email đăng nhập và hạn link.', 'warn');
-        }
+      if (profile.mustChangePassword) {
+        setIsChangePasswordModalOpen(true);
       }
 
-      // Resolve first: a brand-new account has no workspace yet and this
-      // creates the default one. It already caches the active id, so the list
-      // below is fetched once rather than twice.
       const activeId = await workspaceService.resolveActiveWorkspaceId();
       const myWorkspaces = await workspaceService.getMyWorkspaces();
       if (myWorkspaces.length > 0) {
+        setHasNoWorkspace(false);
         const active = myWorkspaces.find((w) => w.id === activeId) ?? myWorkspaces[0];
         workspaceService.setActiveWorkspaceId(active.id);
         setWorkspaces(
@@ -176,27 +167,50 @@ export default function App() {
             department: w.department || '',
             membersCount: w.membersCount,
             activeProjects: w.activeProjects,
+            myRole: w.myRole,
+            isLeader: w.isLeader,
           }))
         );
         setActiveGroup({ name: active.name, code: active.id.slice(0, 6) });
-      }
+        setIsLeader(Boolean(active.isLeader));
 
-      const list = await projectService.getProjects();
-      if (list.length > 0) {
-        // The list endpoint returns summaries; fetch the newest in full so the
-        // Player and the scene editor have the actual scenes to work with.
-        const full = await projectService.getProjectById(list[0].id);
-        setScript(full);
-        setActiveSceneId(full.scenes?.[0]?.id || '');
+        if (profile.role === 'admin') {
+          setCurrentRole('admin');
+        } else if (active.myRole) {
+          setCurrentRole(active.myRole);
+        } else {
+          setCurrentRole(profile.role);
+        }
 
-        const qa = await reviewService.getComments(full.id);
-        setComments(qa);
-        showToast(`Đã tải ${list.length} kịch bản từ máy chủ`, 'success');
+        const list = await projectService.getProjects();
+        if (list.length > 0) {
+          const full = await projectService.getProjectById(list[0].id);
+          setScript(full);
+          setActiveSceneId(full.scenes?.[0]?.id || '');
+
+          const qa = await reviewService.getComments(full.id);
+          setComments(qa);
+          showToast(`Đã tải ${list.length} kịch bản từ máy chủ`, 'success');
+        } else {
+          setScript(EMPTY_SCRIPT);
+          setComments([]);
+          setActiveSceneId('');
+          showToast('Workspace chưa có kịch bản nào. Hãy tạo kịch bản đầu tiên.', 'info');
+        }
       } else {
+        setHasNoWorkspace(true);
+        setWorkspaces([]);
+        setActiveGroup({ name: 'Chưa có tổ', code: '------' });
+        setIsLeader(false);
         setScript(EMPTY_SCRIPT);
         setComments([]);
         setActiveSceneId('');
-        showToast('Workspace chưa có kịch bản nào. Hãy tạo kịch bản đầu tiên.', 'info');
+        if (profile.role === 'admin') {
+          setCurrentRole('admin');
+          showToast('Hệ thống chưa có tổ chuyên môn nào. Vui lòng tạo tổ đầu tiên.', 'info');
+        } else {
+          showToast('Tài khoản của bạn chưa được phân vào tổ chuyên môn nào.', 'warn');
+        }
       }
     } catch (error: any) {
       console.error('[bootstrap] Không tải được dữ liệu từ backend:', error);
@@ -220,8 +234,15 @@ export default function App() {
       setIsAuthenticated(false);
       workspaceService.clearCache();
     };
+    const onPasswordChangeReq = () => {
+      setIsChangePasswordModalOpen(true);
+    };
     window.addEventListener('stemotion:unauthorized', onUnauthorized);
-    return () => window.removeEventListener('stemotion:unauthorized', onUnauthorized);
+    window.addEventListener('stemotion:password-change-required', onPasswordChangeReq);
+    return () => {
+      window.removeEventListener('stemotion:unauthorized', onUnauthorized);
+      window.removeEventListener('stemotion:password-change-required', onPasswordChangeReq);
+    };
   }, []);
 
   // Active scene pointer
@@ -591,6 +612,9 @@ export default function App() {
           setCurrentRole(user.role);
           setCurrentUser(user);
           setIsAuthenticated(true);
+          if (user.mustChangePassword) {
+            setIsChangePasswordModalOpen(true);
+          }
         }}
       />
     );
@@ -610,11 +634,14 @@ export default function App() {
       <HeaderNav
         currentRole={currentRole}
         accountRole={currentUser.role}
+        isLeader={isLeader}
         userName={currentUser.name}
         userEmail={currentUser.email}
         onLogout={() => {
           authService.logout();
           setIsAuthenticated(false);
+          setIsChangePasswordModalOpen(false);
+          setIsManageMembersModalOpen(false);
         }}
         onRoleChange={handleRoleChange}
         activeGroup={activeGroup}
@@ -627,7 +654,7 @@ export default function App() {
           setActiveSceneId('');
           void bootstrapFromApi();
         }}
-        onOpenInviteModal={() => setIsInviteWorkspaceModalOpen(true)}
+        onOpenManageMembersModal={() => setIsManageMembersModalOpen(true)}
         onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
       />
 
@@ -641,8 +668,32 @@ export default function App() {
         onOpenPublishModal={() => setIsPublishModalOpen(true)}
       />
 
+      {hasNoWorkspace && currentUser.role !== 'admin' && (
+        <main className="flex-1 bg-slate-50 flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-4 shadow-sm">
+            <div className="text-4xl">🏢</div>
+            <h2 className="text-base font-extrabold text-slate-900">
+              Chưa Được Phân Vào Tổ Chuyên Môn
+            </h2>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Tài khoản của bạn chưa được phân vào tổ chuyên môn nào. Vui lòng liên hệ Quản trị viên để được gán vào tổ.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                authService.logout();
+                setIsAuthenticated(false);
+              }}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
+            >
+              Đăng xuất
+            </button>
+          </div>
+        </main>
+      )}
+
       {/* Main Role View Container */}
-      {script.scenes.length === 0 && currentRole !== 'admin' && currentRole !== 'library' && (
+      {!hasNoWorkspace && script.scenes.length === 0 && currentRole !== 'admin' && currentRole !== 'library' && (
         <main className="flex-1 bg-slate-50 flex items-center justify-center p-6">
           <div className="max-w-md text-center space-y-3">
             <div className="text-4xl">📄</div>
@@ -751,7 +802,12 @@ export default function App() {
       )}
 
       {currentRole === 'admin' && (
-        <AdminPortal onOpenInviteModal={() => setIsInviteWorkspaceModalOpen(true)} />
+        <AdminPortal
+          onOpenManageMembersModal={() => setIsManageMembersModalOpen(true)}
+          onWorkspaceCreated={() => {
+            void bootstrapFromApi();
+          }}
+        />
       )}
 
       {currentRole === 'library' && (
@@ -768,13 +824,29 @@ export default function App() {
         onCreate={handleCreateNewProject}
       />
 
-      <InviteWorkspaceModal
-        isOpen={isInviteWorkspaceModalOpen}
-        onClose={() => setIsInviteWorkspaceModalOpen(false)}
-        onSendInvite={async (email, role) => {
-          const workspaceId = await workspaceService.resolveActiveWorkspaceId();
-          const invitation = await workspaceService.inviteMember(workspaceId, email, role);
-          return `${window.location.origin}/#invite=${encodeURIComponent(invitation.token)}`;
+      <ManageMembersModal
+        isOpen={isManageMembersModalOpen}
+        onClose={() => setIsManageMembersModalOpen(false)}
+        workspaceId={workspaceService.getCachedWorkspaceId() || workspaces[0]?.id || ''}
+        workspaceName={activeGroup.name}
+        isCurrentUserAdminOrLeader={currentUser.role === 'admin' || isLeader}
+        onMembersUpdated={() => {
+          void bootstrapFromApi();
+        }}
+      />
+
+      <ChangePasswordModal
+        isOpen={isChangePasswordModalOpen}
+        onSuccess={() => {
+          setIsChangePasswordModalOpen(false);
+          setCurrentUser((prev) => ({ ...prev, mustChangePassword: false }));
+          showToast('Đổi mật khẩu thành công! Chào mừng bạn đến với STEMotion.', 'success');
+        }}
+        onLogout={() => {
+          authService.logout();
+          setIsAuthenticated(false);
+          setIsChangePasswordModalOpen(false);
+          setIsManageMembersModalOpen(false);
         }}
       />
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * STEMotion Front-End - Admin & Asset Library Service
  * Provides monitoring data, render queue status, and template assets
  */
@@ -29,15 +29,28 @@ export interface ProvisionUserRequest {
   role: 'WRITER' | 'REVIEWER' | 'PRODUCER' | 'ADMIN';
 }
 
+export interface AdminUserDto {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  mustChangePassword?: boolean;
+}
+
 export const adminService = {
   async provisionUser(request: ProvisionUserRequest): Promise<{ id: string; email: string }> {
     return apiClient.post('/users', request);
   },
+
+  async getUsers(): Promise<AdminUserDto[]> {
+    return apiClient.get<AdminUserDto[]>('/users');
+  },
+
   async getSystemMetrics(): Promise<SystemMetrics> {
-return apiClient.get<SystemMetrics>('/admin/metrics');
+    return apiClient.get<SystemMetrics>('/admin/metrics');
   },
 
   async getAssetTemplates(): Promise<STEMAssetTemplate[]> {
-return apiClient.get<STEMAssetTemplate[]>('/templates');
+    return apiClient.get<STEMAssetTemplate[]>('/templates');
   },
 };

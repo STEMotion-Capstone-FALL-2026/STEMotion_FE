@@ -91,6 +91,10 @@ export const apiClient = {
         window.dispatchEvent(new CustomEvent('stemotion:unauthorized'));
       }
 
+      if (response.status === 403 && (json.error?.code === 'PASSWORD_CHANGE_REQUIRED' || json.code === 'PASSWORD_CHANGE_REQUIRED')) {
+        window.dispatchEvent(new CustomEvent('stemotion:password-change-required'));
+      }
+
       if (!response.ok || json.success === false) {
         throw new ApiError(
           json.error?.message || json.message || response.statusText || 'API Request Failed',

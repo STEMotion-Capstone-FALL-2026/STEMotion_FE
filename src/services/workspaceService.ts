@@ -16,6 +16,8 @@ export interface WorkspaceSummary {
   department?: string;
   membersCount: number;
   activeProjects: number;
+  myRole?: UserRole;
+  isLeader?: boolean;
 }
 
 export interface WorkspaceMemberDto {
@@ -24,16 +26,18 @@ export interface WorkspaceMemberDto {
   name: string;
   email: string;
   role: UserRole;
-  status: 'ACTIVE' | 'INVITED';
+  status: 'ACTIVE' | 'INACTIVE';
+  isLeader: boolean;
+}
+
+export interface CandidateUser {
+  id: string;
+  fullName: string;
+  email: string;
+  systemRole: string;
 }
 
 const ACTIVE_WORKSPACE_KEY = 'stemotion_active_workspace';
-
-export interface WorkspaceInvitationDto {
-  member: WorkspaceMemberDto;
-  token: string;
-  expiresAt: string;
-}
 
 /** Per-page-load cache; cleared on sign-out so the next user starts clean. */
 let cachedWorkspaces: WorkspaceSummary[] | null = null;
@@ -66,15 +70,16 @@ export const workspaceService = {
    */
   async getMyWorkspaces(): Promise<WorkspaceSummary[]> {
     if (cachedWorkspaces) return cachedWorkspaces;
-    cachedWorkspaces = await apiClient.get<WorkspaceSummary[]>('/workspaces/mine');
+    const rawList = await apiClient.get<any[]>('/workspaces/mine');
+    cachedWorkspaces = (rawList || []).map((w) => this._toWorkspaceSummary(w));
     return cachedWorkspaces;
   },
 
   /**
-   * Returns the workspace to operate in, creating a default one the first time
-   * a user signs in so the studio is never blocked on manual setup.
+   * Returns the workspace to operate in.
+   * Never auto-creates a workspace. Returns null if user is not in any workspace.
    */
-  async resolveActiveWorkspaceId(): Promise<string> {
+  async resolveActiveWorkspaceId(): Promise<string | null> {
     const mine = await this.getMyWorkspaces();
     const cached = this.getCachedWorkspaceId();
     if (cached && mine.some((workspace) => workspace.id === cached)) return cached;
@@ -82,43 +87,101 @@ export const workspaceService = {
       this.setActiveWorkspaceId(mine[0].id);
       return mine[0].id;
     }
+    return null;
+  },
 
-    const created = await apiClient.post<WorkspaceSummary>('/workspaces', {
-      name: 'Nhóm STEM của tôi',
-      department: 'Chưa phân tổ',
+  async createWorkspace(data: {
+    name: string;
+    department?: string;
+    leaderUserId: string;
+    leaderRole?: string;
+  }): Promise<WorkspaceSummary> {
+    const created = await apiClient.post<any>('/workspaces', {
+      name: data.name,
+      department: data.department,
+      leaderUserId: data.leaderUserId,
+      leaderRole: data.leaderRole ? data.leaderRole.toUpperCase() : 'WRITER',
     });
     cachedWorkspaces = null;
-    this.setActiveWorkspaceId(created.id);
-    return created.id;
+    return this._toWorkspaceSummary(created);
   },
 
   async getMembers(workspaceId: string): Promise<WorkspaceMemberDto[]> {
-    return apiClient.get<WorkspaceMemberDto[]>(`/workspaces/${workspaceId}/members`);
+    const rawList = await apiClient.get<any[]>(`/workspaces/${workspaceId}/members`);
+    return (rawList || []).map((m) => this._toMemberDto(m));
   },
 
-  /** Creates an inactive seat and returns a one-time link for private delivery. */
-  async inviteMember(
+  async getCandidates(workspaceId: string): Promise<CandidateUser[]> {
+    return apiClient.get<CandidateUser[]>(`/workspaces/${workspaceId}/candidates`);
+  },
+
+  async addMember(
     workspaceId: string,
-    email: string,
-    role: UserRole
-  ): Promise<WorkspaceInvitationDto> {
-    const member = await apiClient.post<WorkspaceInvitationDto>(
-      `/workspaces/${workspaceId}/members`,
-      { email, role: role.toUpperCase() }
-    );
+    data: { userId: string; role: string; isLeader?: boolean }
+  ): Promise<WorkspaceMemberDto> {
+    const member = await apiClient.post<any>(`/workspaces/${workspaceId}/members`, {
+      userId: data.userId,
+      role: data.role.toUpperCase(),
+      isLeader: Boolean(data.isLeader),
+    });
     cachedWorkspaces = null;
-    return member;
+    return this._toMemberDto(member);
   },
 
-  async acceptInvitation(token: string): Promise<WorkspaceMemberDto> {
-    const member = await apiClient.post<WorkspaceMemberDto>('/workspace-invitations/accept', { token });
+  async updateMember(
+    workspaceId: string,
+    memberId: string,
+    data: { role?: string; status?: string; isLeader?: boolean }
+  ): Promise<WorkspaceMemberDto> {
+    const payload: any = {};
+    if (data.role) payload.role = data.role.toUpperCase();
+    if (data.status) payload.status = data.status.toUpperCase();
+    if (data.isLeader !== undefined) payload.isLeader = data.isLeader;
+
+    const member = await apiClient.patch<any>(`/workspaces/${workspaceId}/members/${memberId}`, payload);
     cachedWorkspaces = null;
-    return member;
+    return this._toMemberDto(member);
   },
 
   async removeMember(workspaceId: string, memberId: string): Promise<boolean> {
     await apiClient.delete(`/workspaces/${workspaceId}/members/${memberId}`);
     cachedWorkspaces = null;
     return true;
+  },
+
+  _toMemberDto(raw: any): WorkspaceMemberDto {
+    const roleMap: Record<string, UserRole> = {
+      WRITER: 'writer',
+      REVIEWER: 'reviewer',
+      PRODUCER: 'producer',
+      ADMIN: 'admin',
+    };
+    return {
+      id: raw.id,
+      userId: raw.userId,
+      name: raw.name || '',
+      email: raw.email || '',
+      role: roleMap[raw.role] ?? (raw.role?.toLowerCase() as UserRole) ?? 'writer',
+      status: raw.status || 'ACTIVE',
+      isLeader: Boolean(raw.isLeader),
+    };
+  },
+
+  _toWorkspaceSummary(raw: any): WorkspaceSummary {
+    const roleMap: Record<string, UserRole> = {
+      WRITER: 'writer',
+      REVIEWER: 'reviewer',
+      PRODUCER: 'producer',
+      ADMIN: 'admin',
+    };
+    return {
+      id: raw.id,
+      name: raw.name,
+      department: raw.department || '',
+      membersCount: raw.membersCount ?? 0,
+      activeProjects: raw.activeProjects ?? 0,
+      myRole: raw.myRole ? (roleMap[raw.myRole] ?? (raw.myRole.toLowerCase() as UserRole)) : undefined,
+      isLeader: Boolean(raw.isLeader),
+    };
   },
 };
