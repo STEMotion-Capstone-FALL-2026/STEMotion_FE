@@ -1,5 +1,5 @@
 /**
- * STEMotion Service Layer Barrel Export
+ * STEMotion Service Layer Barrel Export (with FE-15, FE-16, FE-17 Admin APIs)
  */
 
 export * from './apiClient';

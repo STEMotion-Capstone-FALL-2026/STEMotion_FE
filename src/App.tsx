@@ -16,7 +16,6 @@ import {
 
 // Layout Components
 import { HeaderNav } from './components/layout/HeaderNav';
-import { WorkflowBar } from './components/layout/WorkflowBar';
 import { ToastContainer, ToastItem } from './components/layout/ToastContainer';
 
 // Studio Views
@@ -673,16 +672,6 @@ export default function App() {
         }}
         onOpenManageMembersModal={() => setIsManageMembersModalOpen(true)}
         onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
-      />
-
-      {/* 5-Step Sequential Workflow Status Bar */}
-      <WorkflowBar
-        currentRole={currentRole}
-        reviewerMode={reviewerMode}
-        script={script}
-        onRoleChange={handleRoleChange}
-        onSetReviewerMode={setReviewerMode}
-        onOpenPublishModal={() => setIsPublishModalOpen(true)}
       />
 
       {hasNoWorkspace && currentUser.role !== 'admin' && (

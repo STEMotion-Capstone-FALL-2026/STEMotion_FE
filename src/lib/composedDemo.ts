@@ -5,7 +5,8 @@ import { ComposedBlock, ComposedFrame, ComposedProps, FlatAmbience, STEMScript }
  * from the same composed-scene blocks and no template: an experiment, a game
  * show and an investigation. Registered in Remotion Studio as OhmExperiment,
  * OhmGameshow and OhmInvestigation. Scene lengths fit the measured narration;
- * rendering them with sound needs the render service on :4000 for the voice.
+ * the voice itself is only added by the render service (narrationAudioUrl),
+ * so Studio previews and CLI renders of the demos are silent.
  */
 
 const scene = (
