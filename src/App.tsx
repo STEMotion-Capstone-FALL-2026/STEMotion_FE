@@ -3,6 +3,7 @@ import { sceneSaveQueue } from './services/sceneSaveQueue';
 import { renderService } from './services/renderService';
 import { STEMScript, FeedbackComment, SceneData, STEMSubject } from './types/stem';
 import { LoginScreen } from './components/LoginScreen';
+import type { WorkspaceSummary } from './services/workspaceService';
 import {
   apiClient,
   authService,
@@ -31,6 +32,7 @@ import { PublishModal } from './components/modals/PublishModal';
 import { CreateProjectModal } from './components/modals/CreateProjectModal';
 import { ManageMembersModal } from './components/modals/ManageMembersModal';
 import { ChangePasswordModal } from './components/modals/ChangePasswordModal';
+import { WorkspacePickerModal } from './components/modals/WorkspacePickerModal';
 import { VersionDiffModal } from './components/modals/VersionDiffModal';
 
 /** Shape the studio renders before the first script arrives. */
@@ -60,8 +62,14 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>(() => authService.getCurrentUser().role);
   const [currentUser, setCurrentUser] = useState(() => authService.getCurrentUser());
 
+  // The role the user holds in the active workspace; roles are per workspace.
+  const [workspaceRole, setWorkspaceRole] = useState<UserRole | null>(null);
+  // Set when the user belongs to several workspaces and has not picked one on this device.
+  const [workspaceChoices, setWorkspaceChoices] = useState<WorkspaceSummary[] | null>(null);
+
   const handleRoleChange = (role: UserRole) => {
-    if (currentUser.role !== 'admin' && role !== currentUser.role && role !== 'library') return;
+    // Only admins switch freely; everyone else works in the role of the active workspace.
+    if (currentUser.role !== 'admin' && role !== workspaceRole && role !== 'library') return;
     setCurrentRole(role);
   };
 
@@ -154,8 +162,15 @@ export default function App() {
         setIsChangePasswordModalOpen(true);
       }
 
-      const activeId = await workspaceService.resolveActiveWorkspaceId();
+      // Remembered before resolving, which would otherwise fall back to the first workspace.
+      const remembered = workspaceService.getCachedWorkspaceId();
       const myWorkspaces = await workspaceService.getMyWorkspaces();
+      if (myWorkspaces.length > 1 && !myWorkspaces.some((w) => w.id === remembered)) {
+        setWorkspaceChoices(myWorkspaces);
+        return;
+      }
+      setWorkspaceChoices(null);
+      const activeId = await workspaceService.resolveActiveWorkspaceId();
       if (myWorkspaces.length > 0) {
         setHasNoWorkspace(false);
         const active = myWorkspaces.find((w) => w.id === activeId) ?? myWorkspaces[0];
@@ -173,6 +188,7 @@ export default function App() {
         );
         setActiveGroup({ name: active.name, code: active.id.slice(0, 6) });
         setIsLeader(Boolean(active.isLeader));
+        setWorkspaceRole(active.myRole ?? null);
 
         if (profile.role === 'admin') {
           setCurrentRole('admin');
@@ -202,6 +218,7 @@ export default function App() {
         setWorkspaces([]);
         setActiveGroup({ name: 'Chưa có tổ', code: '------' });
         setIsLeader(false);
+        setWorkspaceRole(null);
         setScript(EMPTY_SCRIPT);
         setComments([]);
         setActiveSceneId('');
@@ -834,6 +851,17 @@ export default function App() {
           void bootstrapFromApi();
         }}
       />
+
+      {workspaceChoices && !isChangePasswordModalOpen && (
+        <WorkspacePickerModal
+          workspaces={workspaceChoices}
+          onPick={(workspaceId) => {
+            workspaceService.setActiveWorkspaceId(workspaceId);
+            setWorkspaceChoices(null);
+            void bootstrapFromApi();
+          }}
+        />
+      )}
 
       <ChangePasswordModal
         isOpen={isChangePasswordModalOpen}
