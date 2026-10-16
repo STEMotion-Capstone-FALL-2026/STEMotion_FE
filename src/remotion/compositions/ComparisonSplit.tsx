@@ -4,6 +4,7 @@ import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { ComparisonSplitProps } from '@/types/stem';
 import { FlatStage } from '../flat/FlatStage';
+import { LegoBlock } from '../lego/LegoBlock';
 
 export const ComparisonSplit: React.FC<ComparisonSplitProps> = (props) => {
   const {
@@ -121,15 +122,17 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = (props) => {
     <FlatStage ambience="lab" className="flex flex-col justify-between p-12">
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3 relative z-10">
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-1 rounded bg-indigo-500/20 text-indigo-400 font-mono text-xs font-bold uppercase tracking-wider border border-indigo-500/30">
-            SO SÁNH & PHÂN BIỆT ĐỐI CHIẾU
-          </span>
-          <h2 className="text-3xl font-extrabold text-slate-100">{title}</h2>
+      <LegoBlock id="header" label="Tiêu đề So sánh" kind="title" className="relative z-10">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded bg-indigo-500/20 text-indigo-400 font-mono text-xs font-bold uppercase tracking-wider border border-indigo-500/30">
+              SO SÁNH & PHÂN BIỆT ĐỐI CHIẾU
+            </span>
+            <h2 className="text-3xl font-extrabold text-slate-100" style={{ fontSize: 'var(--lego-font-size, 30px)' }}>{title}</h2>
+          </div>
+          <span className="text-xs text-indigo-300/80 font-mono">Versus Analytical Engine</span>
         </div>
-        <span className="text-xs text-indigo-300/80 font-mono">Versus Analytical Engine</span>
-      </div>
+      </LegoBlock>
 
       {/* Center Versus Arena */}
       <div 
@@ -141,145 +144,153 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = (props) => {
         className={`flex-1 my-4 ${getWidthClass()} mx-auto w-full grid grid-cols-11 gap-4 items-center relative z-10 min-h-0`}
       >
         {/* Left Side: Topic A */}
-        <div
-          style={{
-            transform: `translateX(${(1 - slideLeft) * -80}px)`,
-            opacity: slideLeft,
-          }}
-          className={`col-span-5 ${getThemeClass(true)} rounded-2xl p-6 h-full flex flex-col justify-between shadow-2xl backdrop-blur-md`}
-        >
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span
-                style={{ fontSize: `${badgeFontSize}px` }}
-                className="rounded-full bg-blue-500/20 text-blue-400 font-mono font-bold border border-blue-500/40 px-3 py-0.5"
-              >
-                {safeTopicA.badge}
-              </span>
-              <span className="text-xs text-blue-300/70 font-mono">01</span>
-            </div>
-            <h3
-              style={{ fontSize: `${topicTitleFontSize}px`, lineHeight: 1.25 }}
-              className="font-black text-blue-200"
-            >
-              {safeTopicA.title}
-            </h3>
-          </div>
-
-          {/* Points list centered and balanced */}
+        <LegoBlock id="left-column" label={`Cột Trái: ${safeTopicA.title}`} kind="card" className="col-span-5 h-full">
           <div
-            className="flex-1 flex flex-col justify-center my-4"
-            style={{ gap: `${gapSize}px` }}
+            style={{
+              transform: `translateX(${(1 - slideLeft) * -80}px)`,
+              opacity: slideLeft,
+            }}
+            className={`${getThemeClass(true)} rounded-2xl p-6 h-full flex flex-col justify-between shadow-2xl backdrop-blur-md`}
           >
-            {safeTopicA.points.map((pt, idx) => (
-              <div
-                key={idx}
-                className="flex items-start gap-3.5 text-slate-100"
-                style={{ fontSize: `${baseFontSize}px`, lineHeight: 1.45 }}
-              >
+            <div>
+              <div className="flex items-center justify-between mb-2">
                 <span
-                  style={{
-                    width: `${checkSize}px`,
-                    height: `${checkSize}px`,
-                    fontSize: `${Math.round(baseFontSize * 0.55)}px`,
-                  }}
-                  className="rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/40 flex items-center justify-center shrink-0 mt-1 font-bold"
+                  style={{ fontSize: `${badgeFontSize}px` }}
+                  className="rounded-full bg-blue-500/20 text-blue-400 font-mono font-bold border border-blue-500/40 px-3 py-0.5"
                 >
-                  ✓
+                  {safeTopicA.badge}
                 </span>
-                <span className="leading-snug font-medium">{pt}</span>
+                <span className="text-xs text-blue-300/70 font-mono">01</span>
               </div>
-            ))}
-          </div>
+              <h3
+                style={{ fontSize: `var(--lego-font-size, ${topicTitleFontSize}px)`, lineHeight: 1.25 }}
+                className="font-black text-blue-200"
+              >
+                {safeTopicA.title}
+              </h3>
+            </div>
 
-          <div className="text-[11px] font-mono text-blue-400/80 border-t border-blue-900/50 pt-2 flex justify-between">
-            <span>Đặc trưng cốt lõi</span>
-            <span>Mô hình định lượng</span>
+            {/* Points list centered and balanced */}
+            <div
+              className="flex-1 flex flex-col justify-center my-4"
+              style={{ gap: `${gapSize}px` }}
+            >
+              {safeTopicA.points.map((pt, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-3.5 text-slate-100"
+                  style={{ fontSize: `var(--lego-font-size, ${baseFontSize}px)`, lineHeight: 1.45 }}
+                >
+                  <span
+                    style={{
+                      width: `${checkSize}px`,
+                      height: `${checkSize}px`,
+                      fontSize: `${Math.round(baseFontSize * 0.55)}px`,
+                    }}
+                    className="rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/40 flex items-center justify-center shrink-0 mt-1 font-bold"
+                  >
+                    ✓
+                  </span>
+                  <span className="leading-snug font-medium">{pt}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-[11px] font-mono text-blue-400/80 border-t border-blue-900/50 pt-2 flex justify-between">
+              <span>Đặc trưng cốt lõi</span>
+              <span>Mô hình định lượng</span>
+            </div>
           </div>
-        </div>
+        </LegoBlock>
 
         {/* Center: VS Badge */}
         <div className="col-span-1 flex justify-center items-center">
-          <div
-            style={{ transform: `scale(${Math.max(0, vsBadgeScale)})` }}
-            className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-500 text-white font-black text-lg flex items-center justify-center shadow-lg shadow-rose-500/30 border-2 border-white/20 italic"
-          >
-            VS
-          </div>
+          <LegoBlock id="vs-badge" label="Huy hiệu VS trung tâm" kind="badge">
+            <div
+              style={{ transform: `scale(${Math.max(0, vsBadgeScale)})` }}
+              className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-500 text-white font-black text-lg flex items-center justify-center shadow-lg shadow-rose-500/30 border-2 border-white/20 italic"
+            >
+              VS
+            </div>
+          </LegoBlock>
         </div>
 
         {/* Right Side: Topic B */}
-        <div
-          style={{
-            transform: `translateX(${(1 - slideRight) * 80}px)`,
-            opacity: Math.max(0, slideRight),
-          }}
-          className={`col-span-5 ${getThemeClass(false)} rounded-2xl p-6 h-full flex flex-col justify-between shadow-2xl backdrop-blur-md`}
-        >
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span
-                style={{ fontSize: `${badgeFontSize}px` }}
-                className="rounded-full bg-amber-500/20 text-amber-400 font-mono font-bold border border-amber-500/40 px-3 py-0.5"
-              >
-                {safeTopicB.badge}
-              </span>
-              <span className="text-xs text-amber-300/70 font-mono">02</span>
-            </div>
-            <h3
-              style={{ fontSize: `${topicTitleFontSize}px`, lineHeight: 1.25 }}
-              className="font-black text-amber-200"
-            >
-              {safeTopicB.title}
-            </h3>
-          </div>
-
-          {/* Points list centered and balanced */}
+        <LegoBlock id="right-column" label={`Cột Phải: ${safeTopicB.title}`} kind="card" className="col-span-5 h-full">
           <div
-            className="flex-1 flex flex-col justify-center my-4"
-            style={{ gap: `${gapSize}px` }}
+            style={{
+              transform: `translateX(${(1 - slideRight) * 80}px)`,
+              opacity: Math.max(0, slideRight),
+            }}
+            className={`${getThemeClass(false)} rounded-2xl p-6 h-full flex flex-col justify-between shadow-2xl backdrop-blur-md`}
           >
-            {safeTopicB.points.map((pt, idx) => (
-              <div
-                key={idx}
-                className="flex items-start gap-3.5 text-slate-100"
-                style={{ fontSize: `${baseFontSize}px`, lineHeight: 1.45 }}
-              >
+            <div>
+              <div className="flex items-center justify-between mb-2">
                 <span
-                  style={{
-                    width: `${checkSize}px`,
-                    height: `${checkSize}px`,
-                    fontSize: `${Math.round(baseFontSize * 0.55)}px`,
-                    marginTop: `${Math.max(2, Math.round(baseFontSize * 0.08))}px`,
-                  }}
-                  className="rounded-full bg-amber-500/25 text-amber-400 font-mono flex items-center justify-center shrink-0 font-bold border border-amber-500/40"
+                  style={{ fontSize: `${badgeFontSize}px` }}
+                  className="rounded-full bg-amber-500/20 text-amber-400 font-mono font-bold border border-amber-500/40 px-3 py-0.5"
                 >
-                  ✓
+                  {safeTopicB.badge}
                 </span>
-                <span className="leading-snug font-medium">{pt}</span>
+                <span className="text-xs text-amber-300/70 font-mono">02</span>
               </div>
-            ))}
-          </div>
+              <h3
+                style={{ fontSize: `var(--lego-font-size, ${topicTitleFontSize}px)`, lineHeight: 1.25 }}
+                className="font-black text-amber-200"
+              >
+                {safeTopicB.title}
+              </h3>
+            </div>
 
-          <div className="text-[11px] font-mono text-amber-400/80 border-t border-amber-900/50 pt-2 flex justify-between">
-            <span>Đặc trưng cốt lõi</span>
-            <span>Mô hình định lượng</span>
+            {/* Points list centered and balanced */}
+            <div
+              className="flex-1 flex flex-col justify-center my-4"
+              style={{ gap: `${gapSize}px` }}
+            >
+              {safeTopicB.points.map((pt, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-3.5 text-slate-100"
+                  style={{ fontSize: `var(--lego-font-size, ${baseFontSize}px)`, lineHeight: 1.45 }}
+                >
+                  <span
+                    style={{
+                      width: `${checkSize}px`,
+                      height: `${checkSize}px`,
+                      fontSize: `${Math.round(baseFontSize * 0.55)}px`,
+                      marginTop: `${Math.max(2, Math.round(baseFontSize * 0.08))}px`,
+                    }}
+                    className="rounded-full bg-amber-500/25 text-amber-400 font-mono flex items-center justify-center shrink-0 font-bold border border-amber-500/40"
+                  >
+                    ✓
+                  </span>
+                  <span className="leading-snug font-medium">{pt}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-[11px] font-mono text-amber-400/80 border-t border-amber-900/50 pt-2 flex justify-between">
+              <span>Đặc trưng cốt lõi</span>
+              <span>Mô hình định lượng</span>
+            </div>
           </div>
-        </div>
+        </LegoBlock>
       </div>
 
       {/* Bottom: Conclusion Banner */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 flex items-center gap-3 relative z-10 shadow-lg">
-        <span className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 text-xs font-mono font-bold shrink-0 border border-emerald-500/30">
-          KẾT LUẬN SƯ PHẠM
-        </span>
-        <p
-          className="text-slate-200 font-medium leading-normal"
-          style={{ fontSize: `${conclusionFontSize}px` }}
-        >
-          {conclusion}
-        </p>
-      </div>
+      <LegoBlock id="conclusion-banner" label="Thanh Kết luận Sư phạm" kind="subtitle" className="relative z-10">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 flex items-center gap-3 shadow-lg">
+          <span className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 text-xs font-mono font-bold shrink-0 border border-emerald-500/30">
+            KẾT LUẬN SƯ PHẠM
+          </span>
+          <p
+            className="text-slate-200 font-medium leading-normal"
+            style={{ fontSize: `var(--lego-font-size, ${conclusionFontSize}px)` }}
+          >
+            {conclusion}
+          </p>
+        </div>
+      </LegoBlock>
 
     </FlatStage>
   );

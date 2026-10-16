@@ -5,6 +5,7 @@ import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { MathFormulaProps } from '@/types/stem';
 import { renderLatexToString } from '@/utils/latex';
 import { FlatStage } from '../flat/FlatStage';
+import { LegoBlock } from '../lego/LegoBlock';
 
 export const MathFormulaStep: React.FC<MathFormulaProps> = ({
   title = 'Công Thức Trọng Tâm',
@@ -80,30 +81,34 @@ export const MathFormulaStep: React.FC<MathFormulaProps> = ({
     <FlatStage ambience="lab" className="flex flex-col justify-between p-16">
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4 relative z-10">
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-1 rounded bg-blue-600/20 text-blue-400 font-mono text-xs font-bold uppercase tracking-wider border border-blue-500/30">
-            MATH FORMULA STEP
-          </span>
-          <h2 className="text-3xl font-bold text-slate-100">{title}</h2>
+      <LegoBlock id="header" label="Thanh Tiêu đề (Header)" kind="title" className="relative z-10">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded bg-blue-600/20 text-blue-400 font-mono text-xs font-bold uppercase tracking-wider border border-blue-500/30">
+              MATH FORMULA STEP
+            </span>
+            <h2 className="text-3xl font-bold text-slate-100" style={{ fontSize: 'var(--lego-font-size, 30px)' }}>{title}</h2>
+          </div>
+          <span className="text-sm text-slate-400 font-mono">KaTeX Realtime Engine</span>
         </div>
-        <span className="text-sm text-slate-400 font-mono">KaTeX Realtime Engine</span>
-      </div>
+      </LegoBlock>
 
       {/* Main Core Formula Box */}
-      <div 
-        style={{ transform: `scale(${mainFormulaScale * (cardScale || 1.0)})`, transformOrigin: 'center center' }}
-        className={`my-auto mx-auto ${getWidthClass()} w-full ${getThemeClass()} rounded-2xl p-8 relative z-10 flex flex-col items-center`}
-      >
-        <div className="text-xs uppercase font-mono text-blue-400 font-semibold mb-3 tracking-widest">
-          Công thức cốt lõi (Main Equation)
-        </div>
+      <LegoBlock id="formula-card" label="Khung Công thức Cốt lõi (KaTeX)" kind="formula" className={`my-auto mx-auto ${getWidthClass()} w-full relative z-10`}>
         <div 
-          style={{ fontSize: `${formulaFontSize}px` }}
-          className="text-blue-300 font-serif py-2 overflow-x-auto max-w-full transition-all"
-          dangerouslySetInnerHTML={renderLatex(latex)}
-        />
-      </div>
+          style={{ transform: `scale(${mainFormulaScale * (cardScale || 1.0)})`, transformOrigin: 'center center' }}
+          className={`w-full ${getThemeClass()} rounded-2xl p-8 flex flex-col items-center`}
+        >
+          <div className="text-xs uppercase font-mono text-blue-400 font-semibold mb-3 tracking-widest">
+            Công thức cốt lõi (Main Equation)
+          </div>
+          <div 
+            style={{ fontSize: `var(--lego-font-size, ${formulaFontSize}px)` }}
+            className="text-blue-300 font-serif py-2 overflow-x-auto max-w-full transition-all"
+            dangerouslySetInnerHTML={renderLatex(latex)}
+          />
+        </div>
+      </LegoBlock>
 
       {/* Progressive Step Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
@@ -119,29 +124,30 @@ export const MathFormulaStep: React.FC<MathFormulaProps> = ({
           });
 
           return (
-            <div
-              key={idx}
-              style={{
-                opacity: stepOpacity,
-                transform: `translateY(${stepTranslateY}px)`,
-              }}
-              className={`${getStepThemeClass()} rounded-xl p-5 relative transition-colors`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-amber-400 font-mono">BƯỚC {idx + 1}</span>
-                <span className="text-xs text-slate-400">{step.label}</span>
-              </div>
-              <div 
-                className="text-lg text-slate-100 font-mono py-1.5"
-                dangerouslySetInnerHTML={renderLatex(step.latexSnippet)}
-              />
-              <p 
-                style={{ fontSize: `${stepTextFontSize}px` }}
-                className="text-slate-400 mt-2 line-clamp-2"
+            <LegoBlock key={idx} id={`step-${idx}`} label={`Thẻ Bước #${idx + 1}`} kind="step">
+              <div
+                style={{
+                  opacity: stepOpacity,
+                  transform: `translateY(${stepTranslateY}px)`,
+                }}
+                className={`${getStepThemeClass()} rounded-xl p-5 relative transition-colors h-full`}
               >
-                {step.explanation}
-              </p>
-            </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-amber-400 font-mono">BƯỚC {idx + 1}</span>
+                  <span className="text-xs text-slate-400">{step.label}</span>
+                </div>
+                <div 
+                  className="text-lg text-slate-100 font-mono py-1.5"
+                  dangerouslySetInnerHTML={renderLatex(step.latexSnippet)}
+                />
+                <p 
+                  style={{ fontSize: `var(--lego-font-size, ${stepTextFontSize}px)` }}
+                  className="text-slate-400 mt-2 line-clamp-2"
+                >
+                  {step.explanation}
+                </p>
+              </div>
+            </LegoBlock>
           );
         })}
       </div>

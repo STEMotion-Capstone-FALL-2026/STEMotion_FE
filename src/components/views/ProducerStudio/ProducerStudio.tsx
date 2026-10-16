@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PlusCircle, Image, Play, Cpu, Sparkles, Send } from 'lucide-react';
 import { STEMScript, SceneData } from '../../../types/stem';
 import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
@@ -52,6 +52,12 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   onOpenPublishModal,
   onSubmitForReview,
 }) => {
+  const [activeLegoPieceId, setActiveLegoPieceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActiveLegoPieceId(null);
+  }, [activeSceneId, selectedScene.type]);
+
   return (
     <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Top Bar Studio */}
@@ -156,6 +162,8 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
               activeSceneId={selectedScene.id}
               onSceneChange={(id) => setActiveSceneId(id)}
               updateSceneProperty={updateSceneProperty}
+              activeLegoPieceId={activeLegoPieceId}
+              onSelectLegoPiece={setActiveLegoPieceId}
             />
 
             {/* BullMQ Render Progress Simulator (Khi bấm Kết Xuất MP4) */}
@@ -184,6 +192,8 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
           selectedScene={selectedScene}
           updateSceneProperty={updateSceneProperty}
           onStartRender={startRender}
+          activeLegoPieceId={activeLegoPieceId}
+          onSelectLegoPiece={setActiveLegoPieceId}
         />
       </div>
     </section>

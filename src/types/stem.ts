@@ -19,6 +19,41 @@ export type SceneType =
 
 export type STEMTemplateType = SceneType;
 
+export type LegoTheme =
+  | 'default'
+  | 'dark'
+  | 'contrast'
+  | 'glass'
+  | 'light'
+  | 'emerald'
+  | 'cyan'
+  | 'purple'
+  | 'amber'
+  | 'blue'
+  | 'rose'
+  | 'slate';
+
+export interface LegoComponentLayout {
+  /** Horizontal offset in 1920x1080 canvas pixels */
+  dx?: number;
+  /** Vertical offset in 1920x1080 canvas pixels */
+  dy?: number;
+  /** Horizontal scale multiplier (default 1) */
+  scaleX?: number;
+  /** Vertical scale multiplier (default 1) */
+  scaleY?: number;
+  /** Uniform scale multiplier (default 1) */
+  scale?: number;
+  /** Per-component font size override (px) */
+  fontSize?: number;
+  /** Per-component theme/color style override */
+  theme?: LegoTheme;
+  /** Hide/show toggle for this specific Lego piece */
+  hidden?: boolean;
+  /** Z-index stacking order */
+  zIndex?: number;
+}
+
 export interface SceneBase {
   id: string;
   /** Optional additive director plan; legacy scenes keep their existing renderer. */
@@ -37,6 +72,10 @@ export interface SceneBase {
   cardScale?: number; // 0.8 to 1.5 scale factor for inner component box
   cardTheme?: 'dark' | 'contrast' | 'glass' | 'light' | 'emerald' | 'cyan' | 'purple' | 'amber';
   cardWidth?: 'compact' | 'standard' | 'wide' | 'full';
+  /** Per-component Lego layout, position, scale, theme & visibility overrides */
+  componentLayouts?: Record<string, LegoComponentLayout>;
+  /** Extra freeform Lego blocks added onto any template scene */
+  extraBlocks?: ComposedBlock[];
 }
 
 export interface TitleHeroProps extends SceneBase {
@@ -233,6 +272,14 @@ export interface ComposedBlock {
   motion?: ComposedMotion;
   emphasis?: ComposedEmphasis;
   tone?: ComposedTone;
+  /** Optional custom freeform rect on the 1920x1080 canvas (overrides slot rect when dragged/resized) */
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  scale?: number;
+  fontSize?: number;
+  hidden?: boolean;
 }
 
 export interface ComposedProps extends SceneBase {

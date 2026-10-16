@@ -4,6 +4,7 @@ import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { STEMQuizProps } from '@/types/stem';
 import { FlatStage } from '../flat/FlatStage';
+import { LegoBlock } from '../lego/LegoBlock';
 
 export const STEMQuizCard: React.FC<STEMQuizProps> = ({
   title = 'Câu Hỏi Trắc Nghiệm',
@@ -55,31 +56,35 @@ export const STEMQuizCard: React.FC<STEMQuizProps> = ({
     <FlatStage ambience="cell" className="flex flex-col justify-between p-16">
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4 relative z-10">
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-1 rounded bg-rose-600/20 text-rose-400 font-mono text-xs font-bold uppercase tracking-wider border border-rose-500/30">
-            CHECKPOINT QUIZ
+      <LegoBlock id="header" label="Tiêu đề Câu hỏi" kind="title" className="relative z-10">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded bg-rose-600/20 text-rose-400 font-mono text-xs font-bold uppercase tracking-wider border border-rose-500/30">
+              CHECKPOINT QUIZ
+            </span>
+            <h2 className="text-2xl font-bold text-slate-100" style={{ fontSize: `var(--lego-font-size, ${Math.round(baseSize * 0.95)}px)` }}>{title}</h2>
+          </div>
+          <span className="text-sm font-mono text-slate-400">
+            {isAnswerRevealed ? 'Đáp án chính xác' : `Đếm ngược giải mã: ${Math.max(0, Math.ceil((answerRevealFrame - frame) / fps))}s`}
           </span>
-          <h2 className="text-2xl font-bold text-slate-100" style={{ fontSize: `${Math.round(baseSize * 0.95)}px` }}>{title}</h2>
         </div>
-        <span className="text-sm font-mono text-slate-400">
-          {isAnswerRevealed ? 'Đáp án chính xác' : `Đếm ngược giải mã: ${Math.max(0, Math.ceil((answerRevealFrame - frame) / fps))}s`}
-        </span>
-      </div>
+      </LegoBlock>
 
       {/* Main Question & Option Cards */}
       <div 
         style={{ transform: `scale(${cardScale * userCardScale})`, transformOrigin: 'center center' }}
         className={`my-auto ${getWidthClass()} w-full mx-auto relative z-10 flex flex-col gap-6`}
       >
-        <div className="bg-slate-900/90 border border-slate-700 rounded-2xl p-6 shadow-2xl">
-          <span className="text-xs uppercase font-mono text-rose-400 font-bold tracking-wider mb-2 block">
-            Câu hỏi kiểm tra nhận thức
-          </span>
-          <p className="text-2xl font-semibold text-slate-100 leading-snug" style={{ fontSize: `${questionFontSize}px` }}>
-            {question}
-          </p>
-        </div>
+        <LegoBlock id="question-box" label="Khung Câu hỏi chính" kind="quiz">
+          <div className="bg-slate-900/90 border border-slate-700 rounded-2xl p-6 shadow-2xl">
+            <span className="text-xs uppercase font-mono text-rose-400 font-bold tracking-wider mb-2 block">
+              Câu hỏi kiểm tra nhận thức
+            </span>
+            <p className="text-2xl font-semibold text-slate-100 leading-snug" style={{ fontSize: `var(--lego-font-size, ${questionFontSize}px)` }}>
+              {question}
+            </p>
+          </div>
+        </LegoBlock>
 
         {/* Options Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -96,29 +101,32 @@ export const STEMQuizCard: React.FC<STEMQuizProps> = ({
             }
 
             return (
-              <div
-                key={idx}
-                className={`p-4 rounded-xl border flex items-center gap-4 transition-all duration-300 ${optionStyle}`}
-              >
-                <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-sm shrink-0 ${
-                  isAnswerRevealed && isCorrect ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-300'
-                }`}>
-                  {String.fromCharCode(65 + idx)}
-                </span>
-                <span className="text-base font-medium" style={{ fontSize: `${optionFontSize}px` }}>{option}</span>
-              </div>
+              <LegoBlock key={idx} id={`option-${idx}`} label={`Đáp án ${String.fromCharCode(65 + idx)}`} kind="card">
+                <div
+                  className={`p-4 rounded-xl border flex items-center gap-4 transition-all duration-300 ${optionStyle}`}
+                >
+                  <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-sm shrink-0 ${
+                    isAnswerRevealed && isCorrect ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-300'
+                  }`}>
+                    {String.fromCharCode(65 + idx)}
+                  </span>
+                  <span className="text-base font-medium" style={{ fontSize: `var(--lego-font-size, ${optionFontSize}px)` }}>{option}</span>
+                </div>
+              </LegoBlock>
             );
           })}
         </div>
 
         {/* Explanation Alert when revealed */}
         {isAnswerRevealed && (
-          <div className="p-4 rounded-xl bg-emerald-900/30 border border-emerald-500/40 text-emerald-200 text-sm animate-fade-in flex items-start gap-3">
-            <span className="text-emerald-400 font-bold font-mono uppercase text-xs px-2 py-0.5 bg-emerald-950 rounded border border-emerald-500/50">
-              Giải thích
-            </span>
-            <p className="text-slate-300" style={{ fontSize: `${Math.max(14, Math.round(baseSize * 0.6))}px` }}>{explanation}</p>
-          </div>
+          <LegoBlock id="explanation-box" label="Khung Giải thích Đáp án" kind="subtitle">
+            <div className="p-4 rounded-xl bg-emerald-900/30 border border-emerald-500/40 text-emerald-200 text-sm animate-fade-in flex items-start gap-3">
+              <span className="text-emerald-400 font-bold font-mono uppercase text-xs px-2 py-0.5 bg-emerald-950 rounded border border-emerald-500/50">
+                Giải thích
+              </span>
+              <p className="text-slate-300" style={{ fontSize: `var(--lego-font-size, ${Math.max(14, Math.round(baseSize * 0.6))}px)` }}>{explanation}</p>
+            </div>
+          </LegoBlock>
         )}
       </div>
 
