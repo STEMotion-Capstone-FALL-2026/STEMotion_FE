@@ -146,3 +146,9 @@ export const STEM_TEMPLATES_CATALOG: STEMTemplateCatalogItem[] = [
     bgBadge: 'bg-sky-50 text-sky-700 border-sky-200',
   },
 ];
+
+/** Display name of a scene type; composed scenes are parameterised templates assembled from blocks. */
+export const getTemplateLabel = (type: SceneData['type']): string =>
+  type === 'COMPOSED'
+    ? 'Cảnh lắp ghép'
+    : STEM_TEMPLATES_CATALOG.find((t) => t.type === type)?.title ?? type;

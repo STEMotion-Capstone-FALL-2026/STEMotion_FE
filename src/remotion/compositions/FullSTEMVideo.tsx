@@ -91,8 +91,10 @@ export class SceneErrorBoundary extends React.Component<
 export const FullSTEMVideo: React.FC<{ script: STEMScript }> = ({ script }) => {
   const scenes = script?.scenes || [];
   return (
-    // The script id seeds this video's tint, accent order and camera moves (flat/variation.ts).
-    <VideoSeedContext.Provider value={script?.id || ''}>
+    // The workspace seeds the tint, accent order and arrival style, so every clip of a
+    // department shares one look (the proposal's "consistent STEM clips"); scenes still
+    // vary their camera move and composition side (flat/variation.ts).
+    <VideoSeedContext.Provider value={script?.workspaceId || ''}>
     <Series>
       {scenes.map((scene) => {
         const narrationUrl = (scene as SceneData & { narrationAudioUrl?: string }).narrationAudioUrl;

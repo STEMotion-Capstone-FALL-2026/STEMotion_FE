@@ -19,8 +19,13 @@ export type SceneType =
 
 export type STEMTemplateType = SceneType;
 
+/** The five activities of a STEM lesson in Công văn 3089/BGDĐT-GDTrH (see src/lib/stemPhases.ts). */
+export type StemPhase = 'PROBLEM' | 'RESEARCH' | 'SOLUTION' | 'PROTOTYPE' | 'SHARE';
+
 export interface SceneBase {
   id: string;
+  /** Which STEM lesson activity the scene serves. Optional. */
+  stemPhase?: StemPhase;
   /** Optional additive director plan; legacy scenes keep their existing renderer. */
   visualPlan?: import('../remotion/director/plan').ScenePlan;
   /**
@@ -261,6 +266,8 @@ export type STEMScene = SceneData;
 
 export interface STEMScript {
   id: string;
+  /** The workspace (subject department) the clip belongs to; it fixes the clip's visual theme. */
+  workspaceId?: string;
   title: string;
   subject: STEMSubject;
   gradeLevel: string;

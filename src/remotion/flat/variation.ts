@@ -2,16 +2,14 @@ import React from 'react';
 import { random } from 'remotion';
 
 /**
- * Per-video and per-scene variation.
+ * Per-workspace theme and per-scene variation.
  *
- * Two videos built from the same scene types should not look like copies of
- * each other. Everything here is derived deterministically from the script and
- * scene ids, so a video looks the same on every render and in the Player, but
- * different videos get their own tint, accent order and arrival style, and
- * scenes inside one video get their own camera move and composition side.
- *
- * Video-level choices stay fixed across all scenes of one video, so a video
- * keeps one consistent look; scene-level choices change from scene to scene.
+ * The proposal sets out to stop "visual style drifting between videos", so the
+ * theme (tint, accent order, arrival style) is seeded by the workspace: every
+ * clip of one subject department shares it, while departments are told apart.
+ * Inside a clip, scenes still get their own camera move and composition side
+ * so the frame keeps moving. Everything is deterministic, so a clip looks the
+ * same in the Player and in every render.
  */
 
 export type CameraMove = 'push-left' | 'push-right' | 'pull-back' | 'rise';

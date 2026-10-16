@@ -31,6 +31,8 @@ import { PublishModal } from './components/modals/PublishModal';
 import { CreateProjectModal } from './components/modals/CreateProjectModal';
 import { ManageMembersModal } from './components/modals/ManageMembersModal';
 import { ChangePasswordModal } from './components/modals/ChangePasswordModal';
+import { DraftReviewModal, PendingDraft } from './components/modals/DraftReviewModal';
+import { PipelineStatusBar } from './components/layout/PipelineBoard';
 import { WorkspacePickerModal } from './components/modals/WorkspacePickerModal';
 import { VersionDiffModal } from './components/modals/VersionDiffModal';
 
@@ -452,6 +454,73 @@ export default function App() {
     }
   };
 
+  // An AI draft waiting for the writer's decision; nothing is saved until they choose.
+  const [pendingDraft, setPendingDraft] = useState<
+    (PendingDraft & { subject: STEMSubject; grade: string; requestId?: string }) | null
+  >(null);
+
+  const recordDraftDecision = async (requestId: string | undefined, decision: 'ACCEPTED' | 'IGNORED') => {
+    if (!requestId) return;
+    try {
+      await scriptService.decideAiRequest(requestId, decision);
+    } catch {
+      showToast('Đã tạo dự án; chưa lưu được quyết định với gợi ý AI.', 'warn');
+    }
+  };
+
+  /** Opens another project of the workspace, e.g. from the pipeline board. */
+  const openProject = async (projectId: string) => {
+    try {
+      const full = await projectService.getProjectById(projectId);
+      setScript(full);
+      setActiveSceneId(full.scenes?.[0]?.id || '');
+      setComments(await reviewService.getComments(full.id));
+    } catch (err: any) {
+      showToast('Không mở được dự án: ' + (err?.message || 'lỗi máy chủ'), 'warn');
+    }
+  };
+
+  const openNewProject = (newScript: STEMScript) => {
+    setScript(newScript);
+    setActiveSceneId(newScript.scenes[0]?.id || '');
+    setCurrentRole('writer');
+  };
+
+  const acceptDraft = async () => {
+    if (!pendingDraft) return;
+    try {
+      const newScript = await projectService.createProject({
+        title: pendingDraft.title,
+        subject: pendingDraft.subject,
+        gradeLevel: pendingDraft.grade,
+        scenes: pendingDraft.scenes,
+      });
+      await recordDraftDecision(pendingDraft.requestId, 'ACCEPTED');
+      setPendingDraft(null);
+      openNewProject(newScript);
+      showToast(`Đã dùng bản nháp AI (${newScript.scenes.length} cảnh). Hãy chỉnh lại trước khi gửi duyệt.`, 'success');
+    } catch (err: any) {
+      showToast('Không tạo được dự án: ' + (err?.message || 'lỗi máy chủ'), 'warn');
+    }
+  };
+
+  const ignoreDraft = async () => {
+    if (!pendingDraft) return;
+    try {
+      const newScript = await projectService.createProject({
+        title: pendingDraft.title,
+        subject: pendingDraft.subject,
+        gradeLevel: pendingDraft.grade,
+      });
+      await recordDraftDecision(pendingDraft.requestId, 'IGNORED');
+      setPendingDraft(null);
+      openNewProject(newScript);
+      showToast('Đã bỏ qua bản nháp AI. Dự án trống đã sẵn sàng để bạn tự viết.', 'info');
+    } catch (err: any) {
+      showToast('Không tạo được dự án: ' + (err?.message || 'lỗi máy chủ'), 'warn');
+    }
+  };
+
   const handleCreateNewProject = async (
     title: string,
     subject: STEMSubject,
@@ -462,26 +531,18 @@ export default function App() {
   ) => {
     try {
       if (useAi) {
-        showToast(`Đang dùng AI để soạn kịch bản STEM: "${title}"...`, 'info');
+        showToast(`AI đang soạn bản nháp gợi ý cho "${title}"...`, 'info');
         const aiDraft = await scriptService.generateScriptWithAI(title, subject, grade, targetDurationSec, approach);
-        const newScript = await projectService.createProject({
+        // Shown to the writer first; the project is created only after they decide.
+        setPendingDraft({
           title: aiDraft.title,
+          scenes: aiDraft.scenes,
+          approachName: aiDraft.approachName,
+          flow: aiDraft.flow,
           subject,
-          gradeLevel: grade,
-          scenes: aiDraft.scenes
+          grade,
+          requestId: aiDraft.aiRequestId,
         });
-        if (aiDraft.aiRequestId) {
-          try { await scriptService.decideAiRequest(aiDraft.aiRequestId, 'ACCEPTED'); }
-          catch { showToast('Dự án đã tạo; chưa lưu được quyết định AI.','warn'); }
-        }
-        setScript(newScript);
-        setActiveSceneId(newScript.scenes[0]?.id || '');
-        setCurrentRole('writer');
-        showToast(
-          `AI đã soạn kịch bản hoàn tất: "${newScript.title}" (${newScript.scenes.length} phân cảnh)` +
-            (aiDraft.approachName ? `, dẫn dắt theo cách "${aiDraft.approachName}"` : '') + '!',
-          'success'
-        );
         return;
       }
       const newScript = await projectService.createProject({
@@ -674,6 +735,11 @@ export default function App() {
         onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
       />
 
+      {/* The proposal's state-driven pipeline: where the open project is and whose turn it is. */}
+      {!hasNoWorkspace && currentRole !== 'admin' && (
+        <PipelineStatusBar script={script} onOpenProject={(id) => void openProject(id)} />
+      )}
+
       {hasNoWorkspace && currentUser.role !== 'admin' && (
         <main className="flex-1 bg-slate-50 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-4 shadow-sm">
@@ -840,6 +906,10 @@ export default function App() {
           void bootstrapFromApi();
         }}
       />
+
+      {pendingDraft && (
+        <DraftReviewModal draft={pendingDraft} onAccept={acceptDraft} onIgnore={ignoreDraft} />
+      )}
 
       {workspaceChoices && !isChangePasswordModalOpen && (
         <WorkspacePickerModal

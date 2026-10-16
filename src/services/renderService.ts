@@ -18,7 +18,22 @@ export interface RenderJobStatus {
   createdAt: string;
 }
 
+/** One past render of a project, as listed by the render history. */
+export interface RenderHistoryEntry {
+  jobId: string;
+  status: string;
+  videoUrl?: string | null;
+  createdAt?: string;
+  scriptVersionNo?: number | null;
+}
+
 export const renderService = {
+  /** Every render of the project, newest first; used to compare re-rendered clips. */
+  async getHistory(projectId: string): Promise<RenderHistoryEntry[]> {
+    const jobs = await apiClient.get<RenderHistoryEntry[]>(`/render/projects/${projectId}/jobs`);
+    return Array.isArray(jobs) ? jobs : [];
+  },
+
   /** Maps the backend RenderJobResponse onto the shape the UI renders. */
   _toRenderJobStatus(job: any, resolution = '1080p', fps = 30): RenderJobStatus {
     return {

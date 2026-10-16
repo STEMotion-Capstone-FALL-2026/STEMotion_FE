@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertCircle, Loader2, LogIn } from 'lucide-react';
 import { authService, UserProfile } from '../services';
+import { GoogleSignInButton } from './GoogleSignInButton';
 
 interface LoginScreenProps {
   onAuthenticated: (user: UserProfile) => void;
@@ -108,6 +109,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
 
           <p className="text-xs text-slate-500">Tài khoản do quản trị viên cấp. Liên hệ quản trị viên nếu bạn chưa có tài khoản.</p>
         </form>
+
+        <div className="mt-4">
+          <GoogleSignInButton
+            onCredential={async (credential) => {
+              setError(null);
+              setIsSubmitting(true);
+              try {
+                onAuthenticated(await authService.loginWithGoogle(credential));
+              } catch (err: any) {
+                setError(err?.message || 'Đăng nhập Google không thành công.');
+              } finally {
+                setIsSubmitting(false);
+              }
+            }}
+          />
+        </div>
 
       </div>
     </div>

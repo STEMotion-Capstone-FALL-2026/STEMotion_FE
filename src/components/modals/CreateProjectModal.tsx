@@ -25,7 +25,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   const [newProjTitle, setNewProjTitle] = useState('');
   const [newProjSubject, setNewProjSubject] = useState<STEMSubject>('Physics');
   const [newProjGrade, setNewProjGrade] = useState('Lớp 10');
-  const [useAi, setUseAi] = useState(true);
+  // Writers write the script; an AI draft is an optional suggestion they review first.
+  const [useAi, setUseAi] = useState(false);
   const [targetDurationSec, setTargetDurationSec] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   // 'auto': the AI invents an approach; 'own': the writer's idea; a number: one of the suggestions.
@@ -219,9 +220,9 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
             <label htmlFor="useAiGenerate" className="text-indigo-950 font-medium cursor-pointer select-none">
               <span className="font-bold flex items-center gap-1.5 text-xs text-indigo-950">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                Soạn kịch bản thông minh bằng Google Gemini AI
+                Nhờ AI gợi ý bản nháp kịch bản
               </span>
-              <span className="text-[10px] text-indigo-600 block">Tự động phân tích độ sâu chủ đề (4–10 phân cảnh), lời thoại thuyết minh & minh họa Kurzgesagt</span>
+              <span className="text-[10px] text-indigo-600 block">Bạn xem từng cảnh rồi quyết định dùng hay tự viết; không bật thì mở dự án trống để tự viết.</span>
             </label>
           </div>
 
@@ -242,12 +243,12 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
               {isLoading ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Gemini AI Đang Soạn Kịch Bản...</span>
+                  <span>{useAi ? 'AI đang soạn bản nháp...' : 'Đang tạo dự án...'}</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Khởi Tạo & Mở Studio</span>
+                  <span>{useAi ? 'Xem bản nháp AI' : 'Tạo & mở Writer Studio'}</span>
                 </>
               )}
             </button>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Columns2,
   FileText,
   Play,
   RotateCcw,
@@ -16,6 +17,7 @@ import { STEMScript, SceneData, FeedbackComment } from '../../../types/stem';
 import { UserRole, reviewService } from '../../../services';
 import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
 import { renderLatexToString } from '../../../utils/latex';
+import { ClipCompareModal } from '../../modals/ClipCompareModal';
 
 interface ReviewerStudioProps {
   script: STEMScript;
@@ -57,6 +59,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   showToast,
 }) => {
   const [decisionPending, setDecisionPending] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [reviewNote, setReviewNote] = useState('');
   const decide = async (decision: 'APPROVED' | 'CHANGE_REQUESTED' | 'VIDEO_APPROVED' | 'VIDEO_RETURNED') => {
     if (decisionPending) return;
@@ -143,6 +146,14 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
             </>
           ) : (
             <>
+              <button
+                onClick={() => setCompareOpen(true)}
+                className="px-3 py-1.5 bg-purple-50 border border-purple-300 hover:bg-purple-100 text-purple-800 rounded-lg font-bold flex items-center space-x-1"
+                title="Đặt hai bản render của clip cạnh nhau"
+              >
+                <Columns2 className="w-3.5 h-3.5" />
+                <span>So sánh bản render</span>
+              </button>
               <button
                 onClick={() => void decide('VIDEO_RETURNED')}
                 disabled={decisionPending}
@@ -590,6 +601,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
           </aside>
         </div>
       )}
+      {compareOpen && <ClipCompareModal projectId={script.id} onClose={() => setCompareOpen(false)} />}
     </section>
   );
 };

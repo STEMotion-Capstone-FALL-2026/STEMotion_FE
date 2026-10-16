@@ -22,6 +22,7 @@ import { sceneSaveQueue } from '../../../services/sceneSaveQueue';
 import { renderLatexToString } from '../../../utils/latex';
 import { MetaphorPanel } from './MetaphorPanel';
 import { ComposedBlocksEditor } from './ComposedBlocksEditor';
+import { STEM_PHASES, phaseCoverage, phaseLabel } from '../../../lib/stemPhases';
 
 interface WriterStudioProps {
   script: STEMScript;
@@ -166,6 +167,33 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
             </span>
           </div>
 
+          {/* Độ phủ 5 pha bài học STEM (Công văn 3089) */}
+          {(() => {
+            const coverage = phaseCoverage(script.scenes);
+            return (
+              <div className="p-2 rounded-lg border border-slate-200 bg-slate-50 space-y-1">
+                <div className="flex flex-wrap gap-1">
+                  {STEM_PHASES.map((p) => (
+                    <span
+                      key={p.id}
+                      title={p.label}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                        coverage.covered.has(p.id) ? 'bg-emerald-100 text-emerald-800' : 'bg-white text-slate-400 border border-slate-200'
+                      }`}
+                    >
+                      {p.short}
+                    </span>
+                  ))}
+                </div>
+                {coverage.missingRequired.length > 0 && (
+                  <p className="text-[9px] text-amber-700">
+                    CV 3089: còn thiếu {coverage.missingRequired.map((p) => phaseLabel(p)).join(', ')}.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Danh sách cảnh */}
           <div className="space-y-2 flex-1 overflow-y-auto pr-1">
             {script.scenes.map((sc, i) => {
@@ -223,6 +251,11 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                       <span className="font-mono text-slate-400">
                         {Math.round((sc.durationInFrames || 150) / 30)}s
                       </span>
+                      {phaseLabel(sc.stemPhase) && (
+                        <span className="px-1 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
+                          {phaseLabel(sc.stemPhase)}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       {i > 0 && (
@@ -335,6 +368,21 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                 placeholder="VD: Khảo sát định luật bảo toàn cơ năng..."
                 className="w-full text-sm font-bold text-slate-900 p-2.5 border border-slate-200 rounded-xl focus:border-brand-500 focus:outline-none shadow-2xs"
               />
+              <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-600">
+                <span className="font-semibold shrink-0">Pha bài học STEM (CV 3089):</span>
+                <select
+                  value={selectedScene.stemPhase ?? ''}
+                  onChange={(e) =>
+                    updateSceneProperty((s) => ({ ...s, stemPhase: e.target.value || undefined }))
+                  }
+                  className="flex-1 p-1.5 border border-slate-200 rounded-lg bg-white text-[11px]"
+                >
+                  <option value="">— Chưa gắn —</option>
+                  {STEM_PHASES.map((p) => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             {/* 2. Lời Thoại Thuyết Minh (TTS Audio Script) với Đếm Từ */}

@@ -77,6 +77,20 @@ const response = await apiClient.post<any>('/auth/login', {
     return this.getCurrentUser();
   },
 
+  /** Signs in with a Google ID token; only accounts an admin provisioned are accepted. */
+  async loginWithGoogle(credential: string): Promise<UserProfile> {
+    const response = await apiClient.post<any>('/auth/google', { credential });
+    if (response?.accessToken) {
+      apiClient.setAuthToken(response.accessToken);
+    }
+    if (response?.user) {
+      const user = this._toProfile(response.user);
+      this.setCurrentUser(user);
+      return user;
+    }
+    return this.getCurrentUser();
+  },
+
   /** Re-reads the signed-in user from the backend, e.g. after a reload. */
   async fetchCurrentUser(): Promise<UserProfile> {
     if (!apiClient.getAuthToken()) {
