@@ -24,6 +24,7 @@ import { WriterStudio } from './components/views/WriterStudio/WriterStudio';
 import { ReviewerStudio } from './components/views/ReviewerStudio/ReviewerStudio';
 import { AdminPortal } from './components/views/AdminPortal/AdminPortal';
 import { MediaLibraryView } from './components/views/MediaLibrary/MediaLibraryView';
+import { ProjectDashboardView } from './components/views/ProjectDashboard/ProjectDashboardView';
 
 // Modals
 import { TemplateCatalogModal } from './components/modals/TemplateCatalogModal';
@@ -35,6 +36,7 @@ import { DraftReviewModal, PendingDraft } from './components/modals/DraftReviewM
 import { PipelineStatusBar } from './components/layout/PipelineBoard';
 import { WorkspacePickerModal } from './components/modals/WorkspacePickerModal';
 import { VersionDiffModal } from './components/modals/VersionDiffModal';
+import { pipelineStage } from './lib/pipeline';
 
 /** Shape the studio renders before the first script arrives. */
 const EMPTY_SCRIPT: STEMScript = {
@@ -84,6 +86,9 @@ export default function App() {
   // Starts empty: everything on screen comes from the backend, so an empty
   // workspace shows an empty studio rather than somebody else's lesson.
   const [script, setScript] = useState<STEMScript>(EMPTY_SCRIPT);
+  const [projectsList, setProjectsList] = useState<STEMScript[]>([]);
+  const [isInStudio, setIsInStudio] = useState<boolean>(false);
+  const [isFetchingProjects, setIsFetchingProjects] = useState<boolean>(false);
   const [activeSceneId, setActiveSceneId] = useState<string>('');
   const [comments, setComments] = useState<FeedbackComment[]>([]);
   const [seekTimestampSec, setSeekTimestampSec] = useState<number | null>(null);
@@ -200,13 +205,8 @@ export default function App() {
         }
 
         const list = await projectService.getProjects();
+        setProjectsList(list);
         if (list.length > 0) {
-          const full = await projectService.getProjectById(list[0].id);
-          setScript(full);
-          setActiveSceneId(full.scenes?.[0]?.id || '');
-
-          const qa = await reviewService.getComments(full.id);
-          setComments(qa);
           showToast(`Đã tải ${list.length} kịch bản từ máy chủ`, 'success');
         } else {
           setScript(EMPTY_SCRIPT);
@@ -268,12 +268,30 @@ export default function App() {
 
   // Dynamic Scene Updater (Live Props Binding via Service Layer)
   const canEditScript = () => {
-    if (!['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)
-      || !['writer', 'admin'].includes(currentUser.role)) {
-      showToast('Kịch bản đã gửi duyệt được khóa. Dựng video cần bản composition riêng.', 'warn');
+    const isWriter = currentUser.role === 'writer';
+    const isProducer = currentUser.role === 'producer';
+    const isAdmin = currentUser.role === 'admin';
+
+    if (isAdmin) return true;
+
+    if (isWriter) {
+      if (['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)) {
+        return true;
+      }
+      showToast('Kịch bản đã gửi duyệt hoặc đã được phê duyệt, Writer không thể chỉnh sửa.', 'warn');
       return false;
     }
-    return true;
+
+    if (isProducer) {
+      if (['APPROVED', 'IN_PRODUCTION'].includes(script.scriptStatus)) {
+        return true;
+      }
+      showToast('Producer chỉ dựng và chỉnh sửa video khi kịch bản đã được phê duyệt.', 'warn');
+      return false;
+    }
+
+    showToast('Tài khoản của bạn không có quyền chỉnh sửa phân cảnh này.', 'warn');
+    return false;
   };
   const updateSceneProperty = (updater: (s: any) => any) => {
     if (!canEditScript()) return;
@@ -468,13 +486,49 @@ export default function App() {
     }
   };
 
-  /** Opens another project of the workspace, e.g. from the pipeline board. */
+  const refreshProjectsList = async () => {
+    setIsFetchingProjects(true);
+    try {
+      const list = await projectService.getProjects();
+      setProjectsList(list);
+    } catch (e: any) {
+      showToast('Không làm mới được danh sách: ' + (e?.message || 'lỗi máy chủ'), 'warn');
+    } finally {
+      setIsFetchingProjects(false);
+    }
+  };
+
+  /** Opens another project of the workspace, e.g. from the dashboard or pipeline board. */
   const openProject = async (projectId: string) => {
     try {
       const full = await projectService.getProjectById(projectId);
+      const stage = pipelineStage(full);
+
+      // Guard: Producer chỉ mở khi kịch bản đã được duyệt
+      if (currentRole === 'producer' && (stage === 'DRAFT' || stage === 'SCRIPT_REVIEW')) {
+        showToast('Kịch bản chưa được phê duyệt. Producer chỉ sản xuất khi kịch bản ở trạng thái Approved.', 'warn');
+        return;
+      }
+
+      // Guard: Reviewer chỉ mở khi kịch bản đã gửi duyệt hoặc video cần duyệt
+      if (currentRole === 'reviewer' && stage === 'DRAFT') {
+        showToast('Kịch bản này còn đang là Bản nháp của tác giả, chưa gửi duyệt.', 'info');
+        return;
+      }
+
+      // Tự động chọn chế độ duyệt phù hợp: chỉ vào duyệt video khi Producer đã nộp video
+      if (currentRole === 'reviewer') {
+        const isVideoReady =
+          full.videoStatus === 'IN_QA' ||
+          full.videoStatus === 'APPROVED' ||
+          full.videoStatus === 'PUBLISHED';
+        setReviewerMode(isVideoReady ? 'video' : 'script');
+      }
+
       setScript(full);
       setActiveSceneId(full.scenes?.[0]?.id || '');
       setComments(await reviewService.getComments(full.id));
+      setIsInStudio(true);
     } catch (err: any) {
       showToast('Không mở được dự án: ' + (err?.message || 'lỗi máy chủ'), 'warn');
     }
@@ -484,6 +538,8 @@ export default function App() {
     setScript(newScript);
     setActiveSceneId(newScript.scenes[0]?.id || '');
     setCurrentRole('writer');
+    setIsInStudio(true);
+    void refreshProjectsList();
   };
 
   const acceptDraft = async () => {
@@ -553,6 +609,8 @@ export default function App() {
       setScript(newScript);
       setActiveSceneId(newScript.scenes[0]?.id || '');
       setCurrentRole('writer');
+      setIsInStudio(true);
+      void refreshProjectsList();
       showToast(`Đã tạo dự án mới: "${title}"! Đang mở Writer Studio.`);
     } catch (err: any) {
       // No local fallback: a project that only exists in the browser would be
@@ -729,15 +787,23 @@ export default function App() {
           setScript(EMPTY_SCRIPT);
           setComments([]);
           setActiveSceneId('');
+          setIsInStudio(false);
           void bootstrapFromApi();
         }}
         onOpenManageMembersModal={() => setIsManageMembersModalOpen(true)}
         onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
+        onNavigateToDashboard={() => setIsInStudio(false)}
+        isInStudio={isInStudio}
       />
 
       {/* The proposal's state-driven pipeline: where the open project is and whose turn it is. */}
-      {!hasNoWorkspace && currentRole !== 'admin' && (
-        <PipelineStatusBar script={script} onOpenProject={(id) => void openProject(id)} />
+      {!hasNoWorkspace && currentRole !== 'admin' && isInStudio && script.id && (
+        <PipelineStatusBar
+          script={script}
+          onOpenProject={(id) => void openProject(id)}
+          onBackToDashboard={() => setIsInStudio(false)}
+          currentRole={currentRole}
+        />
       )}
 
       {hasNoWorkspace && currentUser.role !== 'admin' && (
@@ -765,31 +831,51 @@ export default function App() {
       )}
 
       {/* Main Role View Container */}
-      {!hasNoWorkspace && script.scenes.length === 0 && currentRole !== 'admin' && currentRole !== 'library' && (
+      {!hasNoWorkspace && currentRole !== 'admin' && currentRole !== 'library' && !isInStudio && (
+        <ProjectDashboardView
+          scripts={projectsList}
+          currentRole={currentRole}
+          activeGroupName={activeGroup.name}
+          onSelectProject={(projectId) => void openProject(projectId)}
+          onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
+          onRefresh={() => void refreshProjectsList()}
+          isRefreshing={isFetchingProjects}
+        />
+      )}
+
+      {!hasNoWorkspace && isInStudio && script.scenes.length === 0 && currentRole !== 'admin' && currentRole !== 'library' && (
         <main className="flex-1 bg-slate-50 flex items-center justify-center p-6">
           <div className="max-w-md text-center space-y-3">
             <div className="text-4xl">📄</div>
             <h2 className="text-lg font-bold text-slate-800">
-              {isBootstrapping ? 'Đang tải kịch bản...' : 'Chưa có kịch bản nào'}
+              {isBootstrapping ? 'Đang tải kịch bản...' : 'Kịch bản chưa có phân cảnh'}
             </h2>
             <p className="text-xs text-slate-500">
               {isBootstrapping
                 ? 'Đang lấy dữ liệu từ máy chủ.'
-                : 'Tổ bộ môn này chưa có kịch bản. Tạo kịch bản đầu tiên để bắt đầu.'}
+                : 'Kịch bản này chưa có nội dung. Thêm phân cảnh hoặc quay lại danh sách.'}
             </p>
-            {!isBootstrapping && currentRole === 'writer' && (
+            <div className="flex items-center justify-center gap-2 pt-2">
               <button
-                onClick={() => setIsCreateProjectModalOpen(true)}
-                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold"
+                onClick={() => setIsInStudio(false)}
+                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
               >
-                + Tạo kịch bản đầu tiên
+                ← Về kho kịch bản
               </button>
-            )}
+              {!isBootstrapping && currentRole === 'writer' && (
+                <button
+                  onClick={() => handleAddNewScene('MATH_FORMULA')}
+                  className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  + Thêm phân cảnh
+                </button>
+              )}
+            </div>
           </div>
         </main>
       )}
 
-      {script.scenes.length > 0 && currentRole === 'producer' && (
+      {isInStudio && script.scenes.length > 0 && currentRole === 'producer' && (
         <ProducerStudio
           script={script}
           selectedScene={selectedScene}
@@ -821,7 +907,7 @@ export default function App() {
         />
       )}
 
-      {script.scenes.length > 0 && currentRole === 'reviewer' && (
+      {isInStudio && script.scenes.length > 0 && currentRole === 'reviewer' && (
         <ReviewerStudio
           script={script}
           setScript={setScript}
@@ -843,7 +929,7 @@ export default function App() {
         />
       )}
 
-      {script.scenes.length > 0 && currentRole === 'writer' && (
+      {isInStudio && script.scenes.length > 0 && currentRole === 'writer' && (
         <WriterStudio
           script={script}
           setScript={setScript}

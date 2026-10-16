@@ -4,6 +4,7 @@ import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { DiagramExplainerProps } from '@/types/stem';
 import { FlatStage } from '../flat/FlatStage';
+import { LegoBlock } from '../lego/LegoBlock';
 
 export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
   title = 'Sơ đồ cơ chế khoa học',
@@ -59,15 +60,17 @@ export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
     <FlatStage ambience="lab" className="flex flex-col justify-between p-16">
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4 relative z-10">
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-1 rounded bg-purple-600/20 text-purple-400 font-mono text-xs font-bold uppercase tracking-wider border border-purple-500/30">
-            DIAGRAM EXPLAINER
-          </span>
-          <h2 className="text-2xl font-bold text-slate-100" style={{ fontSize: `${Math.round(baseSize * 0.95)}px` }}>{title}</h2>
+      <LegoBlock id="header" label="Tiêu đề Sơ đồ" kind="title" className="relative z-10">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded bg-purple-600/20 text-purple-400 font-mono text-xs font-bold uppercase tracking-wider border border-purple-500/30">
+              DIAGRAM EXPLAINER
+            </span>
+            <h2 className="text-2xl font-bold text-slate-100" style={{ fontSize: `var(--lego-font-size, ${Math.round(baseSize * 0.95)}px)` }}>{title}</h2>
+          </div>
+          <span className="text-sm text-slate-400 font-mono" style={{ fontSize: `${Math.max(12, Math.round(baseSize * 0.5))}px` }}>{diagramTitle}</span>
         </div>
-        <span className="text-sm text-slate-400 font-mono" style={{ fontSize: `${Math.max(12, Math.round(baseSize * 0.5))}px` }}>{diagramTitle}</span>
-      </div>
+      </LegoBlock>
 
       {/* Main Diagram Area with Interactive Pins / Annotations */}
       <div 
@@ -79,39 +82,41 @@ export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
         className={`my-auto ${getWidthClass()} w-full mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center relative z-10`}
       >
         {/* SVG Schematic Area */}
-        <div 
-          style={{ transform: `scale(${diagramScale})` }}
-          className={`w-full h-80 ${getThemeClass()} rounded-2xl relative flex items-center justify-center p-6 shadow-2xl overflow-hidden`}
-        >
-          {/* Animated SVG Graphic (Simulating Physics Pendulum / Anatomy) */}
-          <svg className="w-full h-full" viewBox="0 0 400 300">
-            {/* Ceiling */}
-            <line x1="100" y1="30" x2="300" y2="30" stroke="#64748b" strokeWidth="4" strokeLinecap="round" />
-            
-            {/* Pivot */}
-            <circle cx="200" cy="30" r="6" fill="#38bdf8" />
-            
-            {/* Pendulum rod moving */}
-            {(() => {
-              const angle = Math.sin(frame / 15) * 28;
-              const rad = (angle * Math.PI) / 180;
-              const length = 180;
-              const bobX = 200 + length * Math.sin(rad);
-              const bobY = 30 + length * Math.cos(rad);
-              return (
-                <g>
-                  <line x1="200" y1="30" x2={bobX} y2={bobY} stroke="#94a3b8" strokeWidth="3" strokeDasharray="4 2" />
-                  <circle cx={bobX} cy={bobY} r="22" fill="#a855f7" className="filter drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]" />
-                  <text x={bobX} y={bobY + 5} fill="#ffffff" fontSize="11" textAnchor="middle" fontWeight="bold">m</text>
-                  <circle cx={bobX} cy={bobY} r="32" fill="none" stroke="#e879f9" strokeWidth="1.5" opacity="0.6" />
-                </g>
-              );
-            })()}
+        <LegoBlock id="center-diagram" label={`Khung Sơ đồ (${diagramTitle})`} kind="diagram">
+          <div 
+            style={{ transform: `scale(${diagramScale})` }}
+            className={`w-full h-80 ${getThemeClass()} rounded-2xl relative flex items-center justify-center p-6 shadow-2xl overflow-hidden`}
+          >
+            {/* Animated SVG Graphic (Simulating Physics Pendulum / Anatomy) */}
+            <svg className="w-full h-full" viewBox="0 0 400 300">
+              {/* Ceiling */}
+              <line x1="100" y1="30" x2="300" y2="30" stroke="#64748b" strokeWidth="4" strokeLinecap="round" />
+              
+              {/* Pivot */}
+              <circle cx="200" cy="30" r="6" fill="#38bdf8" />
+              
+              {/* Pendulum rod moving */}
+              {(() => {
+                const angle = Math.sin(frame / 15) * 28;
+                const rad = (angle * Math.PI) / 180;
+                const length = 180;
+                const bobX = 200 + length * Math.sin(rad);
+                const bobY = 30 + length * Math.cos(rad);
+                return (
+                  <g>
+                    <line x1="200" y1="30" x2={bobX} y2={bobY} stroke="#94a3b8" strokeWidth="3" strokeDasharray="4 2" />
+                    <circle cx={bobX} cy={bobY} r="22" fill="#a855f7" className="filter drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]" />
+                    <text x={bobX} y={bobY + 5} fill="#ffffff" fontSize="11" textAnchor="middle" fontWeight="bold">m</text>
+                    <circle cx={bobX} cy={bobY} r="32" fill="none" stroke="#e879f9" strokeWidth="1.5" opacity="0.6" />
+                  </g>
+                );
+              })()}
 
-            {/* Reference dashed vertical line */}
-            <line x1="200" y1="30" x2="200" y2="250" stroke="#475569" strokeWidth="1.5" strokeDasharray="6 4" />
-          </svg>
-        </div>
+              {/* Reference dashed vertical line */}
+              <line x1="200" y1="30" x2="200" y2="250" stroke="#475569" strokeWidth="1.5" strokeDasharray="6 4" />
+            </svg>
+          </div>
+        </LegoBlock>
 
         {/* Labels and Descriptions List */}
         <div className="flex flex-col gap-4">
@@ -127,22 +132,23 @@ export const DiagramExplainer: React.FC<DiagramExplainerProps> = ({
             });
 
             return (
-              <div
-                key={idx}
-                style={{
-                  opacity: labelOpacity,
-                  transform: `translateX(${labelX}px)`,
-                }}
-                className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm flex items-start gap-4 hover:border-purple-500/50 transition-colors"
-              >
-                <div className="w-8 h-8 rounded-lg bg-purple-600/30 border border-purple-500/40 text-purple-300 font-bold flex items-center justify-center shrink-0 text-sm">
-                  0{idx + 1}
+              <LegoBlock key={idx} id={`label-${idx}`} label={`Nhãn chú thích #${idx + 1}: ${item.name}`} kind="card">
+                <div
+                  style={{
+                    opacity: labelOpacity,
+                    transform: `translateX(${labelX}px)`,
+                  }}
+                  className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm flex items-start gap-4 hover:border-purple-500/50 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-purple-600/30 border border-purple-500/40 text-purple-300 font-bold flex items-center justify-center shrink-0 text-sm">
+                    0{idx + 1}
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-100 text-base" style={{ fontSize: `var(--lego-font-size, ${Math.round(baseSize * 0.65)}px)` }}>{item.name}</h4>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed" style={{ fontSize: `var(--lego-font-size, ${Math.max(13, Math.round(baseSize * 0.5))}px)` }}>{item.description}</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-semibold text-slate-100 text-base" style={{ fontSize: `${Math.round(baseSize * 0.65)}px` }}>{item.name}</h4>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed" style={{ fontSize: `${Math.max(13, Math.round(baseSize * 0.5))}px` }}>{item.description}</p>
-                </div>
-              </div>
+              </LegoBlock>
             );
           })}
         </div>

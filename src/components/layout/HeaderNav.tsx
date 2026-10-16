@@ -11,6 +11,7 @@ import {
   Shield,
   LogOut,
   Library,
+  FolderKanban,
 } from 'lucide-react';
 import { UserRole } from '../../services';
 
@@ -47,6 +48,8 @@ interface HeaderNavProps {
   onSelectGroup: (workspaceId: string) => void;
   onOpenManageMembersModal?: () => void;
   onOpenCreateProjectModal: () => void;
+  onNavigateToDashboard?: () => void;
+  isInStudio?: boolean;
 }
 
 export const HeaderNav: React.FC<HeaderNavProps> = ({
@@ -62,6 +65,8 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   onSelectGroup,
   onOpenManageMembersModal,
   onOpenCreateProjectModal,
+  onNavigateToDashboard,
+  isInStudio = false,
 }) => {
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
 
@@ -72,8 +77,15 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-6 py-2.5 flex items-center justify-between shadow-xs">
       <div className="flex items-center space-x-4">
         <div
-          onClick={() => onRoleChange(studios[0])}
+          onClick={() => {
+            if (onNavigateToDashboard) {
+              onNavigateToDashboard();
+            } else {
+              onRoleChange(studios[0]);
+            }
+          }}
           className="flex items-center space-x-2.5 cursor-pointer"
+          title="Về danh sách kịch bản & dự án"
         >
           <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm">
             S
@@ -82,6 +94,18 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         </div>
 
         <span className="text-slate-300">|</span>
+
+        {/* Nút quay lại kho kịch bản khi đang ở Studio */}
+        {isInStudio && onNavigateToDashboard && (
+          <button
+            onClick={onNavigateToDashboard}
+            title="Quay lại danh sách kịch bản của tổ"
+            className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-brand-500 hover:bg-blue-50 text-xs font-bold text-slate-700 hover:text-brand-700 flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer"
+          >
+            <FolderKanban className="w-3.5 h-3.5 text-brand-600" />
+            <span>Kho kịch bản</span>
+          </button>
+        )}
 
         {/* WORKSPACE SELECTOR */}
         <div className="relative flex items-center space-x-1.5">
@@ -225,7 +249,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           )}
         </div>
 
-        <button
+        {/* <button
           onClick={() => onRoleChange('library')}
           className={`px-3 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 text-xs font-bold flex items-center space-x-1.5 transition-colors ${
             currentRole === 'library'
@@ -235,7 +259,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         >
           <Library className="w-3.5 h-3.5 text-indigo-600" />
           <span>Thư Viện Media</span>
-        </button>
+        </button> */}
       </div>
 
       {/* User Profile */}

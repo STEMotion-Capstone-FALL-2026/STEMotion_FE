@@ -11,6 +11,7 @@ import { Swarm } from '../flat/Swarm';
 import { resolveStemIcon } from '../flat/stemIcons';
 import { FLAT_FONT, accentAt, glow, paletteFor, shade } from '../flat/theme';
 import { arrivalTransform, useVariation } from '../flat/variation';
+import { LegoBlock } from '../lego/LegoBlock';
 
 /**
  * Flat-explainer scene. One clear subject on a calm colour field: STEM objects
@@ -524,7 +525,10 @@ export const IllustratedExplainer: React.FC<IllustratedExplainerProps> = ({
         pan={layout === 'zoom' ? 0 : 24}
         move={variation.camera}
       >
-        <div
+        <LegoBlock
+          id="hero-illustration"
+          label={`Sân khấu Minh họa (${layout})`}
+          kind="diagram"
           style={{
             position: 'absolute',
             inset: 0,
@@ -545,16 +549,21 @@ export const IllustratedExplainer: React.FC<IllustratedExplainerProps> = ({
           ) : (
             <FocusLayout icons={safeIcons} tone={tone} accent={accent} mirror={variation.mirror} stage={stage} />
           )}
-        </div>
+        </LegoBlock>
       </CameraDrift>
       </AbsoluteFill>
 
-      <div style={{ position: 'absolute', top: 64, zIndex: 20, ...headlineBox }}>
+      <LegoBlock
+        id="header"
+        label="Tiêu đề & Phụ đề Minh họa (Headline)"
+        kind="title"
+        style={{ position: 'absolute', top: 64, zIndex: 20, ...headlineBox }}
+      >
         <PopIn delay={2} from={0.7}>
           <div
             style={{
               fontWeight: 800,
-              fontSize: headlineSize,
+              fontSize: `var(--lego-font-size, ${headlineSize}px)`,
               lineHeight: 1.1,
               color: palette.text,
               textShadow: palette.light ? '0 4px 0 rgba(42,27,94,0.12)' : '0 6px 0 rgba(0,0,0,0.25)',
@@ -570,7 +579,7 @@ export const IllustratedExplainer: React.FC<IllustratedExplainerProps> = ({
             </div>
           </PopIn>
         ) : null}
-      </div>
+      </LegoBlock>
     </AbsoluteFill>
   );
 };

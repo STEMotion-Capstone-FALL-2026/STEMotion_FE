@@ -2,62 +2,23 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Player, PlayerRef } from '@remotion/player';
 import { Audio } from 'remotion';
 import { STEMScript, SceneData } from '../types/stem';
-import { FullSTEMVideo, SceneErrorBoundary } from '../remotion/compositions/FullSTEMVideo';
-import { TitleHeroReveal } from '../remotion/compositions/TitleHeroReveal';
-import { MathFormulaStep } from '../remotion/compositions/MathFormulaStep';
-import { DiagramExplainer } from '../remotion/compositions/DiagramExplainer';
-import { DataChartVisual } from '../remotion/compositions/DataChartVisual';
-import { AlgorithmWalkthrough } from '../remotion/compositions/AlgorithmWalkthrough';
-import { STEMQuizCard } from '../remotion/compositions/STEMQuizCard';
-import { OutroCard } from '../remotion/compositions/OutroCard';
-import { ChemicalReaction } from '../remotion/compositions/ChemicalReaction';
-import { ComparisonSplit } from '../remotion/compositions/ComparisonSplit';
-import { ProcessTimeline } from '../remotion/compositions/ProcessTimeline';
-import { GeometrySpace } from '../remotion/compositions/GeometrySpace';
-import { IllustratedExplainer } from '../remotion/compositions/IllustratedExplainer';
+import { FullSTEMVideo, SceneErrorBoundary, renderSceneComponent } from '../remotion/compositions/FullSTEMVideo';
+import { SceneSeedContext, VideoSeedContext } from '../remotion/flat/variation';
 import { Play, Pause, RotateCcw, Sparkles, Maximize, Minimize, Volume2, VolumeX } from 'lucide-react';
 import { CanvaInteractiveOverlay } from './CanvaInteractiveOverlay';
 
-const getSingleComponent = (scene: SceneData) => {
-  switch (scene.type) {
-    case 'TITLE_HERO':
-      return TitleHeroReveal;
-    case 'MATH_FORMULA':
-      return MathFormulaStep;
-    case 'DIAGRAM_EXPLAINER':
-      return DiagramExplainer;
-    case 'DATA_CHART':
-      return DataChartVisual;
-    case 'ALGORITHM_WALKTHROUGH':
-      return AlgorithmWalkthrough;
-    case 'STEM_QUIZ':
-      return STEMQuizCard;
-    case 'OUTRO':
-      return OutroCard;
-    case 'CHEMICAL_REACTION':
-      return ChemicalReaction;
-    case 'COMPARISON_SPLIT':
-      return ComparisonSplit;
-    case 'PROCESS_TIMELINE':
-      return ProcessTimeline;
-    case 'GEOMETRY_SPACE':
-      return GeometrySpace;
-    case 'ILLUSTRATED_EXPLAINER':
-      return IllustratedExplainer;
-    default:
-      return TitleHeroReveal;
-  }
-};
-
-const SingleSceneRenderer: React.FC<{ scene: SceneData }> = ({ scene }) => {
-  const Comp = getSingleComponent(scene);
+const SingleSceneRenderer: React.FC<{ scene: SceneData; workspaceId?: string }> = ({ scene, workspaceId }) => {
   const narrationUrl = (scene as any).narrationAudioUrl;
 
   return (
-    <SceneErrorBoundary scene={scene}>
-      <Comp {...(scene as any)} />
-      {narrationUrl && <Audio src={narrationUrl} />}
-    </SceneErrorBoundary>
+    <VideoSeedContext.Provider value={workspaceId || ''}>
+      <SceneErrorBoundary scene={scene}>
+        <SceneSeedContext.Provider value={scene.id}>
+          {renderSceneComponent(scene)}
+        </SceneSeedContext.Provider>
+        {narrationUrl && <Audio src={narrationUrl} />}
+      </SceneErrorBoundary>
+    </VideoSeedContext.Provider>
   );
 };
 
@@ -68,6 +29,8 @@ interface RemotionPlayerWrapperProps {
   seekTimestampSec?: number | null;
   onFrameUpdate?: (currentFrame: number, currentSec: number) => void;
   updateSceneProperty?: (updater: (s: any) => any) => void;
+  activeLegoPieceId?: string | null;
+  onSelectLegoPiece?: (pieceId: string | null) => void;
 }
 
 export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
@@ -77,9 +40,12 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
   seekTimestampSec,
   onFrameUpdate,
   updateSceneProperty,
+  activeLegoPieceId,
+  onSelectLegoPiece,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<PlayerRef>(null);
+  const canvasStageRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCanvaModeEnabled, setIsCanvaModeEnabled] = useState(true);
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -159,7 +125,25 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
 
   // Calculate total frames
   const totalFrames = script.scenes.reduce((sum, sc) => sum + (sc.durationInFrames || 150), 0);
-  const selectedScene = script.scenes.find((s) => s.id === activeSceneId) || script.scenes[0];
+  const selectedSceneIndex = Math.max(
+    0,
+    script.scenes.findIndex((s) => s.id === activeSceneId)
+  );
+  const selectedScene = script.scenes[selectedSceneIndex] || script.scenes[0];
+
+  const getSettledFrameForScene = (sceneIndex: number, mode: 'FULL' | 'SINGLE') => {
+    const sc = script.scenes[sceneIndex] || script.scenes[0];
+    const dur = sc?.durationInFrames || 150;
+    const settledLocal = Math.min(Math.max(0, dur - 5), Math.max(60, Math.round(dur * 0.65)));
+    if (mode === 'SINGLE') {
+      return settledLocal;
+    }
+    let startFrame = 0;
+    for (let i = 0; i < sceneIndex; i++) {
+      startFrame += script.scenes[i].durationInFrames || 150;
+    }
+    return startFrame + settledLocal;
+  };
 
   const togglePlay = () => {
     if (!playerRef.current) return;
@@ -187,13 +171,18 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
   };
 
   const fullInputProps = useMemo(() => ({ script }), [script]);
-  const singleInputProps = useMemo(() => ({ scene: selectedScene }), [selectedScene]);
+  const singleInputProps = useMemo(
+    () => ({ scene: selectedScene, workspaceId: script.workspaceId }),
+    [selectedScene, script.workspaceId]
+  );
 
-  // Reset player when switching mode or scene to prevent audio overlap
+  // Seek player to active scene's settled frame when switching mode or scene so all Lego blocks are visible
   useEffect(() => {
     if (playerRef.current) {
-      playerRef.current.seekTo(0);
-      setCurrentFrame(0);
+      const targetFrame = getSettledFrameForScene(selectedSceneIndex, viewMode);
+      playerRef.current.pause();
+      playerRef.current.seekTo(targetFrame);
+      setCurrentFrame(targetFrame);
       setIsPlaying(false);
     }
   }, [viewMode, activeSceneId]);
@@ -208,45 +197,50 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
       }`}
     >
       {/* Player Top Bar */}
-      <div className="px-5 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-xs font-mono font-bold text-slate-300 uppercase">
-              REMOTION 4.0 LIVE PLAYER
+      <div className="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+            <span className="text-[11px] font-mono font-bold text-slate-300 uppercase tracking-tight">
+              REMOTION 4.0
             </span>
           </div>
-          <span className="text-xs text-slate-400 truncate max-w-md font-medium">
+          <span
+            className="text-xs text-slate-400 truncate min-w-0 flex-1 font-medium"
+            title={script.title}
+          >
             {script.title}
           </span>
-          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
-            <Volume2 className="w-3 h-3 text-emerald-400" />
+          <span className="hidden xl:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 shrink-0 whitespace-nowrap">
+            <Volume2 className="w-3 h-3 text-emerald-400 shrink-0" />
             <span>Voiceover: BẬT</span>
           </span>
         </div>
 
         {/* Switch Full Video vs Single Scene Mode & Canva Mode */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0">
           {/* Nút Bật/Tắt chế độ tương tác Canva WYSIWYG */}
           {updateSceneProperty && (
             <button
+              type="button"
               onClick={() => setIsCanvaModeEnabled(!isCanvaModeEnabled)}
-              className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all border ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap cursor-pointer ${
                 isCanvaModeEnabled
                   ? 'bg-blue-600/20 text-blue-400 border-blue-500/50 shadow-xs'
                   : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
               }`}
               title="Click trực tiếp lên video để sửa chữ, chỉnh cỡ như Canva"
             >
-              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+              <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0" />
               <span>Canva Mode: {isCanvaModeEnabled ? 'BẬT' : 'TẮT'}</span>
             </button>
           )}
 
-          <div className="bg-slate-900 p-0.5 rounded-lg border border-slate-800 flex items-center text-xs">
+          <div className="bg-slate-900 p-0.5 rounded-lg border border-slate-800 flex items-center text-[11px] shrink-0 whitespace-nowrap">
             <button
+              type="button"
               onClick={() => setViewMode('FULL')}
-              className={`px-3 py-1 rounded-md font-medium transition-all ${
+              className={`px-2.5 py-1 rounded-md font-medium transition-all whitespace-nowrap cursor-pointer ${
                 viewMode === 'FULL'
                   ? 'bg-blue-600 text-white shadow'
                   : 'text-slate-400 hover:text-white'
@@ -255,8 +249,9 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
               Full Series ({Math.round(totalFrames / 30)}s)
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('SINGLE')}
-              className={`px-3 py-1 rounded-md font-medium transition-all ${
+              className={`px-2.5 py-1 rounded-md font-medium transition-all whitespace-nowrap cursor-pointer ${
                 viewMode === 'SINGLE'
                   ? 'bg-blue-600 text-white shadow'
                   : 'text-slate-400 hover:text-white'
@@ -269,7 +264,10 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
       </div>
 
       {/* Main Remotion Player Canvas */}
-      <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
+      <div
+        ref={canvasStageRef}
+        className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden"
+      >
         {viewMode === 'FULL' ? (
           <Player
             ref={playerRef}
@@ -304,12 +302,16 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
           />
         )}
 
-        {/* Lớp Tương Tác Trực Tiếp Canva WYSIWYG phủ lên Canvas */}
+        {/* Lớp Tương Tác Trực Tiếp Canva / Lego WYSIWYG phủ lên Canvas */}
         {isCanvaModeEnabled && updateSceneProperty && (
           <CanvaInteractiveOverlay
             scene={selectedScene}
             updateSceneProperty={updateSceneProperty}
             isPlaying={isPlaying}
+            currentFrame={currentFrame}
+            stageContainerRef={canvasStageRef}
+            activeLegoPieceId={activeLegoPieceId}
+            onSelectLegoPiece={onSelectLegoPiece}
             onPauseVideo={() => {
               if (playerRef.current?.isPlaying()) {
                 playerRef.current.pause();
@@ -330,13 +332,12 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
               key={sc.id}
               onClick={() => {
                 if (onSceneChange) onSceneChange(sc.id);
-                // In full mode, jump to start frame of that scene
-                if (viewMode === 'FULL' && playerRef.current) {
-                  let startFrame = 0;
-                  for (let i = 0; i < idx; i++) {
-                    startFrame += script.scenes[i].durationInFrames || 150;
-                  }
-                  playerRef.current.seekTo(startFrame);
+                if (playerRef.current) {
+                  const target = getSettledFrameForScene(idx, viewMode);
+                  playerRef.current.pause();
+                  playerRef.current.seekTo(target);
+                  setCurrentFrame(target);
+                  setIsPlaying(false);
                 }
               }}
               className={`px-2.5 py-1 rounded-md font-mono whitespace-nowrap transition-all flex items-center gap-1.5 ${
@@ -354,49 +355,51 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
       </div>
 
       {/* Playback Control Bar */}
-      <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="px-4 py-3 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 shrink-0">
           <button
+            type="button"
             onClick={togglePlay}
-            className="w-10 h-10 rounded-xl bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 transition-transform active:scale-95"
+            className="w-9 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 transition-transform active:scale-95 shrink-0 cursor-pointer"
           >
-            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
+            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
           </button>
           <button
+            type="button"
             onClick={restartVideo}
-            className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
             title="Xem lại từ đầu"
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={toggleMute}
-            className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
             title={isMuted ? 'Bật âm thanh thuyết minh (Unmute)' : 'Tắt âm thanh (Mute)'}
           >
             {isMuted ? (
-              <VolumeX className="w-4 h-4 text-rose-400" />
+              <VolumeX className="w-3.5 h-3.5 text-rose-400" />
             ) : (
-              <Volume2 className="w-4 h-4 text-emerald-400" />
+              <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
             )}
           </button>
 
           {/* Timecode */}
-          <div className="font-mono text-xs text-slate-300 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
+          <div className="font-mono text-xs text-slate-300 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 whitespace-nowrap shrink-0">
             <span className="text-blue-400 font-bold">{formatTime(currentFrame)}</span>
-            <span className="text-slate-600 mx-1.5">/</span>
+            <span className="text-slate-600 mx-1">/</span>
             <span className="text-slate-400">
               {formatTime(viewMode === 'FULL' ? totalFrames : selectedScene.durationInFrames || 150)}
             </span>
-            <span className="text-slate-600 ml-2 font-light text-[10px]">
+            <span className="text-slate-600 ml-1.5 font-light text-[10px] hidden sm:inline">
               (f: {currentFrame})
             </span>
           </div>
         </div>
 
         {/* Timeline Slider / Progress */}
-        <div className="flex-1 max-w-xl mx-4">
+        <div className="flex-1 min-w-[100px] mx-1">
           <input
             type="range"
             min={0}
@@ -413,17 +416,17 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
           />
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span className="px-2 py-1 bg-slate-900 rounded border border-slate-800 font-mono text-[11px] hidden sm:inline-block">
+        <div className="flex items-center gap-2 text-xs text-slate-400 shrink-0 whitespace-nowrap">
+          <span className="px-2 py-1 bg-slate-900 rounded border border-slate-800 font-mono text-[11px] hidden xl:inline-block">
             1080p • 30fps
           </span>
           <button
             type="button"
             onClick={handleToggleFullscreen}
-            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg border border-slate-700 font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg border border-slate-700 font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer whitespace-nowrap"
             title={isFullscreen ? 'Thu nhỏ màn hình (Esc)' : 'Phóng to toàn màn hình'}
           >
-            {isFullscreen ? <Minimize className="w-3.5 h-3.5 text-blue-400" /> : <Maximize className="w-3.5 h-3.5 text-blue-400" />}
+            {isFullscreen ? <Minimize className="w-3.5 h-3.5 text-blue-400 shrink-0" /> : <Maximize className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
             <span>{isFullscreen ? 'Thu Nhỏ' : 'Toàn Màn Hình'}</span>
           </button>
         </div>

@@ -196,7 +196,15 @@ export const layoutBlocks = (frame: ComposedFrame, timed: Timed[]): Map<string, 
     let y = area.y;
     lanes.forEach((lane, i) => {
       const h = (free * weights[i]) / total;
-      for (const t of lane) rects.set(t.block.id, { x: area.x, y, w: area.w, h });
+      for (const t of lane) {
+        const baseRect: Rect = { x: area.x, y, w: area.w, h };
+        rects.set(t.block.id, {
+          x: typeof t.block.x === 'number' && Number.isFinite(t.block.x) ? t.block.x : baseRect.x,
+          y: typeof t.block.y === 'number' && Number.isFinite(t.block.y) ? t.block.y : baseRect.y,
+          w: typeof t.block.w === 'number' && Number.isFinite(t.block.w) ? Math.max(80, t.block.w) : baseRect.w,
+          h: typeof t.block.h === 'number' && Number.isFinite(t.block.h) ? Math.max(50, t.block.h) : baseRect.h,
+        });
+      }
       y += h + LANE_GAP;
     });
   }

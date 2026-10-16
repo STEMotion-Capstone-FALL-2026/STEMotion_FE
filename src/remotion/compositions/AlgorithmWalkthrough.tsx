@@ -4,6 +4,7 @@ import React from 'react';
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { AlgorithmWalkthroughProps } from '@/types/stem';
 import { FlatStage } from '../flat/FlatStage';
+import { LegoBlock } from '../lego/LegoBlock';
 
 export const AlgorithmWalkthrough: React.FC<AlgorithmWalkthroughProps> = ({
   title,
@@ -80,15 +81,17 @@ export const AlgorithmWalkthrough: React.FC<AlgorithmWalkthroughProps> = ({
     <FlatStage ambience="space" className="flex flex-col justify-between p-16">
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4 relative z-10">
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-1 rounded bg-amber-600/20 text-amber-400 font-mono text-xs font-bold uppercase tracking-wider border border-amber-500/30">
-            ALGORITHM WALKTHROUGH
-          </span>
-          <h2 className="text-2xl font-bold text-slate-100" style={{ fontSize: `${Math.round(baseSize * 0.95)}px` }}>{title}</h2>
+      <LegoBlock id="header" label="Tiêu đề Thuật toán" kind="title" className="relative z-10">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded bg-amber-600/20 text-amber-400 font-mono text-xs font-bold uppercase tracking-wider border border-amber-500/30">
+              ALGORITHM WALKTHROUGH
+            </span>
+            <h2 className="text-2xl font-bold text-slate-100" style={{ fontSize: `var(--lego-font-size, ${Math.round(baseSize * 0.95)}px)` }}>{title}</h2>
+          </div>
+          <span className="text-sm text-slate-400 font-mono uppercase">{language} Trace Mode</span>
         </div>
-        <span className="text-sm text-slate-400 font-mono uppercase">{language} Trace Mode</span>
-      </div>
+      </LegoBlock>
 
       {/* Main Code & State Side-by-side */}
       <div 
@@ -100,57 +103,61 @@ export const AlgorithmWalkthrough: React.FC<AlgorithmWalkthroughProps> = ({
         className={`my-auto ${getWidthClass()} w-full mx-auto grid grid-cols-12 gap-8 items-stretch relative z-10`}
       >
         {/* Code Box (Sub-component 1) */}
-        <div className={`${colSpans.code} ${getThemeClass()} rounded-xl overflow-hidden font-mono text-sm shadow-2xl flex flex-col`}>
-          <div className="bg-slate-800/80 px-4 py-2 border-b border-slate-700/80 flex items-center justify-between text-xs text-slate-400">
-            <span>source.{language === 'python' ? 'py' : 'ts'}</span>
-            <span className="text-amber-400">Line {activeStep?.lineHighlight || 1} executing</span>
+        <LegoBlock id="code-panel" label={`Khung Mã nguồn (${language || 'python'})`} kind="card" className={colSpans.code}>
+          <div className={`${getThemeClass()} rounded-xl overflow-hidden font-mono text-sm shadow-2xl flex flex-col h-full`}>
+            <div className="bg-slate-800/80 px-4 py-2 border-b border-slate-700/80 flex items-center justify-between text-xs text-slate-400">
+              <span>source.{language === 'python' ? 'py' : 'ts'}</span>
+              <span className="text-amber-400">Line {activeStep?.lineHighlight || 1} executing</span>
+            </div>
+            <div className="p-4 space-y-1 overflow-y-auto" style={{ fontSize: `var(--lego-font-size, ${Math.max(12, Math.round(baseSize * 0.48))}px)` }}>
+              {codeLines.map((line, idx) => {
+                const lineNumber = idx + 1;
+                const isHighlighted = lineNumber === activeStep?.lineHighlight;
+                return (
+                  <div 
+                    key={idx}
+                    className={`flex items-center gap-4 px-2 py-1 rounded transition-colors ${
+                      isHighlighted 
+                        ? 'bg-amber-500/20 border-l-4 border-amber-400 text-amber-200' 
+                        : 'text-slate-300'
+                    }`}
+                  >
+                    <span className="text-slate-600 select-none text-xs w-6 text-right">{lineNumber}</span>
+                    <span className="whitespace-pre">{line}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="p-4 space-y-1 overflow-y-auto" style={{ fontSize: `${Math.max(12, Math.round(baseSize * 0.48))}px` }}>
-            {codeLines.map((line, idx) => {
-              const lineNumber = idx + 1;
-              const isHighlighted = lineNumber === activeStep?.lineHighlight;
-              return (
-                <div 
-                  key={idx}
-                  className={`flex items-center gap-4 px-2 py-1 rounded transition-colors ${
-                    isHighlighted 
-                      ? 'bg-amber-500/20 border-l-4 border-amber-400 text-amber-200' 
-                      : 'text-slate-300'
-                  }`}
-                >
-                  <span className="text-slate-600 select-none text-xs w-6 text-right">{lineNumber}</span>
-                  <span className="whitespace-pre">{line}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        </LegoBlock>
 
         {/* Memory & Variable State Box (Sub-component 2) */}
-        <div className={`${colSpans.memory} flex flex-col justify-between ${getThemeClass()} rounded-xl p-6 shadow-2xl backdrop-blur-sm`}>
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
-              <span className="text-xs uppercase font-mono font-bold text-amber-400">Trạng thái bộ nhớ (Memory Heap)</span>
-              <span className="text-xs text-slate-400 font-mono">Step {Math.max(1, currentStepIndex + 1)} / {safeSteps.length}</span>
+        <LegoBlock id="memory-panel" label="Khung Trạng thái Bộ nhớ (Memory Heap)" kind="card" className={colSpans.memory}>
+          <div className={`flex flex-col justify-between ${getThemeClass()} rounded-xl p-6 shadow-2xl backdrop-blur-sm h-full`}>
+            <div>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+                <span className="text-xs uppercase font-mono font-bold text-amber-400">Trạng thái bộ nhớ (Memory Heap)</span>
+                <span className="text-xs text-slate-400 font-mono">Step {Math.max(1, currentStepIndex + 1)} / {safeSteps.length}</span>
+              </div>
+
+              <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 font-mono text-xs text-emerald-400 mb-4" style={{ fontSize: `var(--lego-font-size, ${Math.max(12, Math.round(baseSize * 0.48))}px)` }}>
+                <div className="text-slate-500 mb-1">// Variables Snapshot:</div>
+                <div>{activeStep?.variableState || '{ i: 0, arr: [2, 5, 8] }'}</div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <h4 className="text-xs font-bold text-amber-300 uppercase mb-1">Giải thích thao tác</h4>
+                <p className="text-sm text-slate-200 leading-relaxed" style={{ fontSize: `var(--lego-font-size, ${Math.max(13, Math.round(baseSize * 0.52))}px)` }}>
+                  {activeStep?.note || 'Đang thực thi lệnh tiếp theo trong thuật toán.'}
+                </p>
+              </div>
             </div>
 
-            <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 font-mono text-xs text-emerald-400 mb-4" style={{ fontSize: `${Math.max(12, Math.round(baseSize * 0.48))}px` }}>
-              <div className="text-slate-500 mb-1">// Variables Snapshot:</div>
-              <div>{activeStep?.variableState || '{ i: 0, arr: [2, 5, 8] }'}</div>
-            </div>
-
-            <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <h4 className="text-xs font-bold text-amber-300 uppercase mb-1">Giải thích thao tác</h4>
-              <p className="text-sm text-slate-200 leading-relaxed" style={{ fontSize: `${Math.max(13, Math.round(baseSize * 0.52))}px` }}>
-                {activeStep?.note || 'Đang thực thi lệnh tiếp theo trong thuật toán.'}
-              </p>
+            <div className="mt-4 pt-3 border-t border-slate-800/80 text-xs text-slate-500 font-mono">
+              Từng dòng mã được đồng bộ với lời bình narration
             </div>
           </div>
-
-          <div className="mt-4 pt-3 border-t border-slate-800/80 text-xs text-slate-500 font-mono">
-            Từng dòng mã được đồng bộ với lời bình narration
-          </div>
-        </div>
+        </LegoBlock>
       </div>
 
     </FlatStage>

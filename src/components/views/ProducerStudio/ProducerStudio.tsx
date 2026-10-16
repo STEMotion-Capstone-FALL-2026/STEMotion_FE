@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PlusCircle, Image, Play, Cpu, Sparkles, Send } from 'lucide-react';
 import { STEMScript, SceneData } from '../../../types/stem';
 import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
@@ -52,6 +52,12 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   onOpenPublishModal,
   onSubmitForReview,
 }) => {
+  const [activeLegoPieceId, setActiveLegoPieceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActiveLegoPieceId(null);
+  }, [activeSceneId, selectedScene.type]);
+
   return (
     <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Top Bar Studio */}
@@ -68,13 +74,13 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          <button
+          {/* <button
             onClick={onOpenCreateProjectModal}
             className="px-3 py-1.5 bg-blue-50 text-brand-700 hover:bg-blue-100 font-bold rounded-lg border border-blue-200 flex items-center space-x-1 shadow-xs"
           >
             <PlusCircle className="w-3.5 h-3.5" />
             <span>+ Đề Tài Mới</span>
-          </button>
+          </button> */}
           <button
             onClick={onOpenTemplateCatalog}
             className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-lg flex items-center space-x-1 shadow-xs"
@@ -156,6 +162,8 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
               activeSceneId={selectedScene.id}
               onSceneChange={(id) => setActiveSceneId(id)}
               updateSceneProperty={updateSceneProperty}
+              activeLegoPieceId={activeLegoPieceId}
+              onSelectLegoPiece={setActiveLegoPieceId}
             />
 
             {/* BullMQ Render Progress Simulator (Khi bấm Kết Xuất MP4) */}
@@ -184,6 +192,8 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
           selectedScene={selectedScene}
           updateSceneProperty={updateSceneProperty}
           onStartRender={startRender}
+          activeLegoPieceId={activeLegoPieceId}
+          onSelectLegoPiece={setActiveLegoPieceId}
         />
       </div>
     </section>
