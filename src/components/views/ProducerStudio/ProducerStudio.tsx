@@ -74,13 +74,13 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          <button
+          {/* <button
             onClick={onOpenCreateProjectModal}
             className="px-3 py-1.5 bg-blue-50 text-brand-700 hover:bg-blue-100 font-bold rounded-lg border border-blue-200 flex items-center space-x-1 shadow-xs"
           >
             <PlusCircle className="w-3.5 h-3.5" />
             <span>+ Đề Tài Mới</span>
-          </button>
+          </button> */}
           <button
             onClick={onOpenTemplateCatalog}
             className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-lg flex items-center space-x-1 shadow-xs"

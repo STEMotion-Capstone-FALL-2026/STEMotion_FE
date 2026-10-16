@@ -324,6 +324,8 @@ export interface STEMScript {
   version?: string;
   estimatedDurationSeconds?: number;
   targetAudience?: string;
+  sceneCount?: number;
+  ownerName?: string;
 }
 
 export interface FeedbackComment {

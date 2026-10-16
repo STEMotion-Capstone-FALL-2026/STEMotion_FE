@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Plus,
@@ -59,9 +59,150 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
   const [selectedSubject, setSelectedSubject] = useState<string>('ALL');
   const [selectedStage, setSelectedStage] = useState<string>('ALL');
 
-  // Filtered scripts
-  const filteredScripts = useMemo(() => {
+  // 1. Phân quyền hiển thị danh sách theo Role:
+  // - Producer: Chỉ xem các kịch bản từ khi ĐÃ DUYỆT (APPROVED) trở đi để dựng video. Không thấy DRAFT và SCRIPT_REVIEW.
+  // - Reviewer: Chỉ xem kịch bản đã gửi duyệt (SCRIPT_REVIEW) và video cần duyệt (CLIP_REVIEW) + các dự án đã duyệt/xuất bản. Không thấy DRAFT đang viết dở của Writer.
+  // - Writer: Xem bản nháp của mình và toàn bộ tiến trình kịch bản trong tổ.
+  // - Admin: Xem toàn bộ.
+  const roleAccessibleScripts = useMemo(() => {
     return scripts.filter((sc) => {
+      const stage = pipelineStage(sc);
+      if (currentRole === 'admin') return true;
+
+      if (currentRole === 'producer') {
+        return (
+          stage === 'APPROVED' ||
+          stage === 'IN_PRODUCTION' ||
+          stage === 'CLIP_REVIEW' ||
+          stage === 'PUBLISHED'
+        );
+      }
+
+      if (currentRole === 'reviewer') {
+        return (
+          stage === 'SCRIPT_REVIEW' ||
+          stage === 'APPROVED' ||
+          stage === 'IN_PRODUCTION' ||
+          stage === 'CLIP_REVIEW' ||
+          stage === 'PUBLISHED'
+        );
+      }
+
+      // Writer / default
+      return true;
+    });
+  }, [scripts, currentRole]);
+
+  // Statistics dựa trên danh sách phù hợp với role
+  const stats = useMemo(() => {
+    const total = roleAccessibleScripts.length;
+    const drafts = roleAccessibleScripts.filter((s) => pipelineStage(s) === 'DRAFT').length;
+    const inScriptReview = roleAccessibleScripts.filter((s) => pipelineStage(s) === 'SCRIPT_REVIEW').length;
+    const readyForProduce = roleAccessibleScripts.filter((s) => pipelineStage(s) === 'APPROVED').length;
+    const inProduction = roleAccessibleScripts.filter((s) => pipelineStage(s) === 'IN_PRODUCTION').length;
+    const inClipReview = roleAccessibleScripts.filter((s) => pipelineStage(s) === 'CLIP_REVIEW').length;
+    const published = roleAccessibleScripts.filter((s) => pipelineStage(s) === 'PUBLISHED').length;
+
+    return { total, drafts, inScriptReview, readyForProduce, inProduction, inClipReview, published };
+  }, [roleAccessibleScripts]);
+
+  // Bộ tab lọc giai đoạn hiển thị tương ứng với vai trò
+  const visibleTabs = useMemo(() => {
+    const tabs: Array<{
+      id: string;
+      label: string;
+      count: number;
+      activeClass: string;
+      inactiveClass: string;
+      badgeClass: string;
+    }> = [
+      {
+        id: 'ALL',
+        label: 'Tất cả',
+        count: stats.total,
+        activeClass: 'bg-slate-900 text-white shadow-xs',
+        inactiveClass: 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+        badgeClass: 'bg-white/20 text-current',
+      },
+    ];
+
+    if (currentRole === 'writer' || currentRole === 'admin') {
+      tabs.push({
+        id: 'DRAFT',
+        label: 'Bản nháp',
+        count: stats.drafts,
+        activeClass: 'bg-slate-700 text-white shadow-xs',
+        inactiveClass: 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+        badgeClass: 'bg-slate-300 text-slate-800',
+      });
+    }
+
+    if (currentRole === 'writer' || currentRole === 'reviewer' || currentRole === 'admin') {
+      tabs.push({
+        id: 'SCRIPT_REVIEW',
+        label: currentRole === 'reviewer' ? 'Cần duyệt kịch bản' : 'Chờ duyệt kịch bản',
+        count: stats.inScriptReview,
+        activeClass: 'bg-amber-600 text-white shadow-xs',
+        inactiveClass: 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100',
+        badgeClass: 'bg-amber-200 text-amber-900 font-bold',
+      });
+    }
+
+    if (currentRole === 'producer' || currentRole === 'reviewer' || currentRole === 'writer' || currentRole === 'admin') {
+      tabs.push({
+        id: 'APPROVED',
+        label: currentRole === 'producer' ? 'Sẵn sàng dựng video' : 'Đã duyệt (Chờ dựng)',
+        count: stats.readyForProduce,
+        activeClass: 'bg-emerald-600 text-white shadow-xs',
+        inactiveClass: 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100',
+        badgeClass: 'bg-emerald-200 text-emerald-900 font-bold',
+      });
+    }
+
+    if (currentRole === 'producer' || currentRole === 'reviewer' || currentRole === 'writer' || currentRole === 'admin') {
+      tabs.push({
+        id: 'IN_PRODUCTION',
+        label: 'Đang dựng video',
+        count: stats.inProduction,
+        activeClass: 'bg-indigo-600 text-white shadow-xs',
+        inactiveClass: 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100',
+        badgeClass: 'bg-indigo-200 text-indigo-900 font-bold',
+      });
+    }
+
+    if (currentRole === 'reviewer' || currentRole === 'producer' || currentRole === 'admin') {
+      tabs.push({
+        id: 'CLIP_REVIEW',
+        label: currentRole === 'reviewer' ? 'Cần duyệt video' : 'Chờ duyệt video',
+        count: stats.inClipReview,
+        activeClass: 'bg-purple-600 text-white shadow-xs',
+        inactiveClass: 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100',
+        badgeClass: 'bg-purple-200 text-purple-900 font-bold',
+      });
+    }
+
+    tabs.push({
+      id: 'PUBLISHED',
+      label: 'Đã xuất bản',
+      count: stats.published,
+      activeClass: 'bg-teal-600 text-white shadow-xs',
+      inactiveClass: 'bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100',
+      badgeClass: 'bg-teal-200 text-teal-900 font-bold',
+    });
+
+    return tabs;
+  }, [currentRole, stats]);
+
+  // Tự động đồng bộ lại tab lọc nếu chuyển role mà tab cũ không còn khả dụng
+  useEffect(() => {
+    if (selectedStage !== 'ALL' && !visibleTabs.some((t) => t.id === selectedStage)) {
+      setSelectedStage('ALL');
+    }
+  }, [currentRole, visibleTabs, selectedStage]);
+
+  // Áp dụng tìm kiếm và bộ lọc trên danh sách phù hợp với role
+  const filteredScripts = useMemo(() => {
+    return roleAccessibleScripts.filter((sc) => {
       const matchSearch =
         sc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         sc.gradeLevel?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -73,21 +214,7 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
 
       return matchSearch && matchSubject && matchStage;
     });
-  }, [scripts, searchTerm, selectedSubject, selectedStage]);
-
-  // Statistics
-  const stats = useMemo(() => {
-    const total = scripts.length;
-    const drafts = scripts.filter((s) => pipelineStage(s) === 'DRAFT').length;
-    const inScriptReview = scripts.filter((s) => pipelineStage(s) === 'SCRIPT_REVIEW').length;
-    const readyForProduce = scripts.filter(
-      (s) => pipelineStage(s) === 'APPROVED' || pipelineStage(s) === 'IN_PRODUCTION'
-    ).length;
-    const inClipReview = scripts.filter((s) => pipelineStage(s) === 'CLIP_REVIEW').length;
-    const published = scripts.filter((s) => pipelineStage(s) === 'PUBLISHED').length;
-
-    return { total, drafts, inScriptReview, readyForProduce, inClipReview, published };
-  }, [scripts]);
+  }, [roleAccessibleScripts, searchTerm, selectedSubject, selectedStage]);
 
   const canCreate = currentRole === 'writer' || currentRole === 'admin';
 
@@ -100,12 +227,26 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
             <div className="flex items-center space-x-2 text-xs font-semibold text-brand-600 uppercase tracking-wider mb-1">
               <FolderKanban className="w-4 h-4" />
               <span>Không gian làm việc: {activeGroupName}</span>
+              <span className="text-slate-300">•</span>
+              <span className="px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 font-bold normal-case">
+                {currentRole === 'producer'
+                  ? '🎬 Vai trò: Nhà Sản Xuất (Producer)'
+                  : currentRole === 'reviewer'
+                  ? '🔍 Vai trò: Người Thẩm Định (Reviewer)'
+                  : currentRole === 'writer'
+                  ? '✍️ Vai trò: Biên Kịch Viên (Writer)'
+                  : `Vai trò: ${currentRole}`}
+              </span>
             </div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">
               Kho Kịch Bản & Dự Án Video STEM
             </h1>
             <p className="text-xs text-slate-500 mt-1">
-              Chọn kịch bản bên dưới để bắt đầu soạn thảo, chỉnh sửa visual Lego hoặc thẩm định chất lượng.
+              {currentRole === 'producer'
+                ? 'Danh sách kịch bản đã được phê duyệt sẵn sàng để dựng video và các clip đang sản xuất.'
+                : currentRole === 'reviewer'
+                ? 'Thẩm định kịch bản do Biên kịch gửi lên và phê duyệt video thành phẩm từ Nhà sản xuất.'
+                : 'Chọn kịch bản bên dưới để soạn thảo, chỉnh sửa visual Lego hoặc theo dõi quy trình.'}
             </p>
           </div>
 
@@ -133,77 +274,20 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
 
         {/* Quick Stage Tabs / Stats Bar */}
         <div className="max-w-7xl mx-auto mt-6 flex items-center space-x-2 overflow-x-auto pb-1 text-xs">
-          <button
-            onClick={() => setSelectedStage('ALL')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-              selectedStage === 'ALL'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            <span>Tất cả</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">{stats.total}</span>
-          </button>
-
-          <button
-            onClick={() => setSelectedStage('DRAFT')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-              selectedStage === 'DRAFT'
-                ? 'bg-slate-700 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            <span>Bản nháp</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-300 text-slate-800">{stats.drafts}</span>
-          </button>
-
-          <button
-            onClick={() => setSelectedStage('SCRIPT_REVIEW')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-              selectedStage === 'SCRIPT_REVIEW'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
-            }`}
-          >
-            <span>Chờ duyệt kịch bản</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-200 text-amber-900 font-bold">{stats.inScriptReview}</span>
-          </button>
-
-          <button
-            onClick={() => setSelectedStage('APPROVED')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-              selectedStage === 'APPROVED'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
-            }`}
-          >
-            <span>Sẵn sàng dựng video</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-200 text-emerald-900 font-bold">{stats.readyForProduce}</span>
-          </button>
-
-          <button
-            onClick={() => setSelectedStage('CLIP_REVIEW')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-              selectedStage === 'CLIP_REVIEW'
-                ? 'bg-purple-600 text-white shadow-xs'
-                : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
-            }`}
-          >
-            <span>Chờ duyệt video</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-200 text-purple-900 font-bold">{stats.inClipReview}</span>
-          </button>
-
-          <button
-            onClick={() => setSelectedStage('PUBLISHED')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-              selectedStage === 'PUBLISHED'
-                ? 'bg-teal-600 text-white shadow-xs'
-                : 'bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100'
-            }`}
-          >
-            <span>Đã xuất bản</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-teal-200 text-teal-900 font-bold">{stats.published}</span>
-          </button>
+          {visibleTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setSelectedStage(tab.id)}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 cursor-pointer shrink-0 ${
+                selectedStage === tab.id ? tab.activeClass : tab.inactiveClass
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${tab.badgeClass}`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -247,11 +331,15 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
             </div>
             <h3 className="text-base font-bold text-slate-800">Không tìm thấy kịch bản phù hợp</h3>
             <p className="text-xs text-slate-400 max-w-sm mt-1">
-              {scripts.length === 0
-                ? 'Tổ bộ môn chưa có kịch bản nào. Hãy bấm "Tạo Kịch Bản Mới" để bắt đầu.'
+              {roleAccessibleScripts.length === 0
+                ? currentRole === 'producer'
+                  ? 'Chưa có kịch bản nào được phê duyệt để dựng video. Khi Reviewer duyệt kịch bản, dự án sẽ xuất hiện tại đây.'
+                  : currentRole === 'reviewer'
+                  ? 'Hiện chưa có kịch bản hoặc video nào cần thẩm định trong tổ này.'
+                  : 'Tổ bộ môn chưa có kịch bản nào. Hãy bấm "Tạo Kịch Bản Mới" để bắt đầu.'
                 : 'Thử đổi từ khóa tìm kiếm hoặc chọn bộ lọc trạng thái khác.'}
             </p>
-            {canCreate && scripts.length === 0 && (
+            {canCreate && roleAccessibleScripts.length === 0 && (
               <button
                 onClick={onOpenCreateProjectModal}
                 className="mt-4 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold cursor-pointer"
@@ -305,13 +393,13 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
                   <div className="grid grid-cols-2 gap-2 py-3 border-y border-slate-100 text-xs text-slate-500 mb-4">
                     <div className="flex items-center space-x-1.5">
                       <Layers className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{sc.scenes?.length || 0} Phân cảnh</span>
+                      <span>{sc.sceneCount ?? sc.scenes?.length ?? 0} Phân cảnh</span>
                     </div>
 
                     <div className="flex items-center space-x-1.5">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
                       <span>
-                        ~{sc.totalDurationSeconds || (sc.scenes?.length || 0) * 15}s thời lượng
+                        ~{sc.totalDurationSeconds || (sc.sceneCount ?? sc.scenes?.length ?? 0) * 15}s thời lượng
                       </span>
                     </div>
                   </div>
@@ -320,7 +408,7 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
                   <div className="mt-auto flex items-center justify-between pt-1">
                     <div className="text-[11px] text-slate-400 flex items-center space-x-1">
                       <User className="w-3 h-3" />
-                      <span>{(sc as any).ownerName || 'Thành viên tổ'}</span>
+                      <span>{sc.ownerName || 'Thành viên tổ'}</span>
                     </div>
 
                     {currentRole === 'producer' ? (

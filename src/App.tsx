@@ -36,6 +36,7 @@ import { DraftReviewModal, PendingDraft } from './components/modals/DraftReviewM
 import { PipelineStatusBar } from './components/layout/PipelineBoard';
 import { WorkspacePickerModal } from './components/modals/WorkspacePickerModal';
 import { VersionDiffModal } from './components/modals/VersionDiffModal';
+import { pipelineStage } from './lib/pipeline';
 
 /** Shape the studio renders before the first script arrives. */
 const EMPTY_SCRIPT: STEMScript = {
@@ -501,6 +502,20 @@ export default function App() {
   const openProject = async (projectId: string) => {
     try {
       const full = await projectService.getProjectById(projectId);
+      const stage = pipelineStage(full);
+
+      // Guard: Producer chỉ mở khi kịch bản đã được duyệt
+      if (currentRole === 'producer' && (stage === 'DRAFT' || stage === 'SCRIPT_REVIEW')) {
+        showToast('Kịch bản chưa được phê duyệt. Producer chỉ sản xuất khi kịch bản ở trạng thái Approved.', 'warn');
+        return;
+      }
+
+      // Guard: Reviewer chỉ mở khi kịch bản đã gửi duyệt hoặc video cần duyệt
+      if (currentRole === 'reviewer' && stage === 'DRAFT') {
+        showToast('Kịch bản này còn đang là Bản nháp của tác giả, chưa gửi duyệt.', 'info');
+        return;
+      }
+
       setScript(full);
       setActiveSceneId(full.scenes?.[0]?.id || '');
       setComments(await reviewService.getComments(full.id));
@@ -778,6 +793,7 @@ export default function App() {
           script={script}
           onOpenProject={(id) => void openProject(id)}
           onBackToDashboard={() => setIsInStudio(false)}
+          currentRole={currentRole}
         />
       )}
 

@@ -249,7 +249,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           )}
         </div>
 
-        <button
+        {/* <button
           onClick={() => onRoleChange('library')}
           className={`px-3 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 text-xs font-bold flex items-center space-x-1.5 transition-colors ${
             currentRole === 'library'
@@ -259,7 +259,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         >
           <Library className="w-3.5 h-3.5 text-indigo-600" />
           <span>Thư Viện Media</span>
-        </button>
+        </button> */}
       </div>
 
       {/* User Profile */}
