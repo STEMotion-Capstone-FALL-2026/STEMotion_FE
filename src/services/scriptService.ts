@@ -7,7 +7,6 @@ import { apiClient } from './apiClient';
 import { STEMScript, STEMSubject, SceneData, SceneType } from '../types/stem';
 import { sceneSaveQueue } from './sceneSaveQueue';
 import { ComposedContentError, composedPropsFrom } from './composed';
-import { isStemPhase } from '../lib/stemPhases';
 
 export type AiAction = 'resegment' | 'grade' | 'extract' | 'terms' | 'metaphor';
 
@@ -161,7 +160,6 @@ const res = await apiClient.post<any>('/ai/script/action', {
         title: sc.title || `Phân cảnh ${idx + 1}`,
         narration: sc.narration || '',
         durationInFrames,
-        ...(isStemPhase(sc.stemPhase ?? sc.props?.stemPhase) ? { stemPhase: sc.stemPhase ?? sc.props?.stemPhase } : {}),
       };
 
       if (type === 'TITLE_HERO') {

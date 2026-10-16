@@ -66,21 +66,3 @@ describe('AI drafting with a chosen approach', () => {
     expect(describeApproach(options[0])).toBe('Điều tra cầu chì. Mở đầu: Vì sao cầu chì cháy?. Mạch: Hiện trường → Thủ phạm');
   });
 });
-
-describe('AI draft keeps the STEM phase of each scene', () => {
-  afterEach(() => vi.restoreAllMocks());
-
-  it('passes a valid phase through and drops an invalid one', async () => {
-    vi.spyOn(apiClient, 'post').mockResolvedValue({
-      result: {
-        scenes: [
-          { type: 'TITLE_HERO', title: 'Mở đầu', narration: 'x', stemPhase: 'PROBLEM' },
-          { type: 'OUTRO', title: 'Kết', narration: 'y', stemPhase: 'HOMEWORK', summaryPoints: ['a'] },
-        ],
-      },
-    });
-    const draft = await scriptService.generateScriptWithAI('Ôm', 'Physics', '11');
-    expect(draft.scenes[0].stemPhase).toBe('PROBLEM');
-    expect(draft.scenes[1].stemPhase).toBeUndefined();
-  });
-});

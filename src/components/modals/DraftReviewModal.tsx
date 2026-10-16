@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { CheckCircle2, Loader2, PenLine, Sparkles } from 'lucide-react';
 import type { SceneData } from '../../types/stem';
 import { getTemplateLabel } from '../../constants/templatesCatalog';
-import { STEM_PHASES, phaseCoverage, phaseLabel } from '../../lib/stemPhases';
 
 export interface PendingDraft {
   title: string;
@@ -24,7 +23,6 @@ export const DraftReviewModal: React.FC<{
 }> = ({ draft, onAccept, onIgnore }) => {
   const [busy, setBusy] = useState<'accept' | 'ignore' | null>(null);
   const seconds = Math.round(draft.scenes.reduce((sum, s) => sum + (s.durationInFrames || 0), 0) / 30);
-  const coverage = phaseCoverage(draft.scenes);
 
   const run = async (which: 'accept' | 'ignore') => {
     setBusy(which);
@@ -48,25 +46,6 @@ export const DraftReviewModal: React.FC<{
             {draft.approachName ? ` · dẫn dắt theo cách “${draft.approachName}”` : ''}. Chưa có gì được lưu: hãy đọc từng
             cảnh, rồi quyết định dùng làm điểm xuất phát hay tự viết.
           </p>
-          <div className="flex flex-wrap gap-1 mt-2">
-            {STEM_PHASES.map((p) => (
-              <span
-                key={p.id}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                  coverage.covered.has(p.id)
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-slate-50 text-slate-400 border-slate-200'
-                }`}
-              >
-                {p.label}
-              </span>
-            ))}
-          </div>
-          {coverage.missingRequired.length > 0 && (
-            <p className="text-[10px] text-amber-700 mt-1">
-              Thiếu pha: {coverage.missingRequired.map((p) => phaseLabel(p)).join(', ')} (CV 3089). Có thể bổ sung sau khi dùng bản nháp.
-            </p>
-          )}
         </div>
 
         <ol className="flex-1 overflow-y-auto p-5 space-y-2">
@@ -76,15 +55,8 @@ export const DraftReviewModal: React.FC<{
                 <span className="font-bold text-slate-900">
                   {i + 1}. {s.title}
                 </span>
-                <span className="flex items-center gap-1 shrink-0">
-                  {phaseLabel(s.stemPhase) && (
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-semibold">
-                      {phaseLabel(s.stemPhase)}
-                    </span>
-                  )}
-                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-mono">
-                    {getTemplateLabel(s.type)}
-                  </span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-mono shrink-0">
+                  {getTemplateLabel(s.type)}
                 </span>
               </div>
               {s.narration && <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">{s.narration}</p>}
