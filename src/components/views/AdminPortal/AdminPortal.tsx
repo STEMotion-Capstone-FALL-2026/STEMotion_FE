@@ -483,7 +483,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                       <span>Giám Sát Chi Phí & Hiệu Năng AI (AI_Request Telemetry — FE-17)</span>
                     </h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Theo dõi lưu lượng sinh kịch bản Kurzgesagt, thẩm định sư phạm & tổng hợp giọng đọc tiếng Việt.
+                      Theo dõi lưu lượng sinh kịch bản AI, thẩm định sư phạm & tổng hợp giọng đọc tiếng Việt.
                     </p>
                   </div>
                   <span className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-mono text-[11px] font-bold border border-indigo-200">

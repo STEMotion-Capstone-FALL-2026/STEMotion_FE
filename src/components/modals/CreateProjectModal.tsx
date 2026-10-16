@@ -143,7 +143,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                 <option value={0}>✨ Tự động co giãn theo độ sâu chủ đề (4 – 9 cảnh)</option>
                 <option value={60}>⚡ Ngắn gọn / Cô đọng (4 – 5 cảnh | ~60s)</option>
                 <option value={90}>📘 Tiêu chuẩn bài giảng (6 – 7 cảnh | ~90s)</option>
-                <option value={135}>🚀 Chuyên sâu Kurzgesagt (8 – 10 cảnh | ~135s)</option>
+                <option value={135}>🚀 Chuyên sâu nhiều tầng kiến thức (8 – 10 cảnh | ~135s)</option>
               </select>
             </div>
           )}
