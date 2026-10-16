@@ -26,9 +26,10 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
       try {
         const list = await adminService.getUsers();
         if (!cancelled) {
-          setUsers(list);
-          if (list.length > 0) {
-            setLeaderUserId(list[0].id);
+          const eligibleLeaders = list.filter((u) => u.role !== 'ADMIN' && u.status === 'ACTIVE');
+          setUsers(eligibleLeaders);
+          if (eligibleLeaders.length > 0) {
+            setLeaderUserId(eligibleLeaders[0].id);
           }
         }
       } catch (err: any) {
@@ -55,6 +56,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
         leaderUserId,
         leaderRole,
       });
+      workspaceService.setActiveWorkspaceId(created.id);
       setCreatedName(created.name);
       setName('');
       setDepartment('');
@@ -116,7 +118,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
             className="mt-1 block w-full border border-slate-200 bg-white rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
           >
             {users.length === 0 ? (
-              <option value="">{loadingUsers ? 'Đang tải người dùng...' : 'Chưa có người dùng'}</option>
+              <option value="">{loadingUsers ? 'Đang tải người dùng...' : 'Chưa có giáo viên nào (vui lòng tạo tài khoản Giáo viên trước)'}</option>
             ) : (
               users.map((u) => (
                 <option key={u.id} value={u.id}>

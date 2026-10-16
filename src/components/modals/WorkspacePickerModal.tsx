@@ -40,7 +40,7 @@ export const WorkspacePickerModal: React.FC<{
             <div className="flex items-center justify-between gap-2">
               <span className="font-bold text-slate-900 text-sm">{w.name}</span>
               <span className="flex items-center gap-1">
-                {w.isLeader && (
+                {w.isLeader && w.myRole !== 'admin' && (
                   <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
                     <Crown className="w-3 h-3" /> Tổ trưởng
                   </span>

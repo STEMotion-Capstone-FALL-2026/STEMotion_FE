@@ -68,11 +68,43 @@ export const workspaceService = {
    * Cached for the rest of the page load so a screen that asks twice does not
    * cost two round trips.
    */
-  async getMyWorkspaces(): Promise<WorkspaceSummary[]> {
+  async getMyWorkspaces(forceRefresh = false): Promise<WorkspaceSummary[]> {
+    if (forceRefresh) cachedWorkspaces = null;
     if (cachedWorkspaces) return cachedWorkspaces;
-    const rawList = await apiClient.get<any[]>('/workspaces/mine');
-    cachedWorkspaces = (rawList || []).map((w) => this._toWorkspaceSummary(w));
+    let list: any[] = [];
+    try {
+      const mine = await apiClient.get<any[]>('/workspaces/mine');
+      if (Array.isArray(mine) && mine.length > 0) {
+        list = mine;
+      }
+    } catch {
+      // fallback
+    }
+    // If empty or failed, fallback to /workspaces (for ADMIN or system-level access)
+    if (list.length === 0) {
+      try {
+        const all = await apiClient.get<any[]>('/workspaces');
+        if (Array.isArray(all) && all.length > 0) {
+          list = all;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    cachedWorkspaces = list.map((w) => this._toWorkspaceSummary(w));
     return cachedWorkspaces;
+  },
+
+  async getAllWorkspaces(): Promise<WorkspaceSummary[]> {
+    try {
+      const all = await apiClient.get<any[]>('/workspaces');
+      if (Array.isArray(all) && all.length > 0) {
+        return all.map((w) => this._toWorkspaceSummary(w));
+      }
+    } catch {
+      // ignore
+    }
+    return this.getMyWorkspaces(true);
   },
 
   /**

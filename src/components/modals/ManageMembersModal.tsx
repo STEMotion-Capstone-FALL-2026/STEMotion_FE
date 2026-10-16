@@ -8,6 +8,8 @@ import {
   AlertCircle,
   CheckCircle2,
   RefreshCw,
+  Building,
+  ChevronDown,
 } from 'lucide-react';
 import {
   workspaceService,
@@ -16,6 +18,12 @@ import {
   UserRole,
 } from '../../services';
 
+export interface WorkspaceItemSummary {
+  id: string;
+  name: string;
+  department?: string;
+}
+
 interface ManageMembersModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -23,6 +31,8 @@ interface ManageMembersModalProps {
   workspaceName: string;
   isCurrentUserAdminOrLeader: boolean;
   onMembersUpdated?: () => void;
+  workspaces?: WorkspaceItemSummary[];
+  onSelectWorkspace?: (workspaceId: string) => void;
 }
 
 const initialsOf = (name: string): string => {
@@ -40,7 +50,11 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   workspaceName,
   isCurrentUserAdminOrLeader,
   onMembersUpdated,
+  workspaces,
+  onSelectWorkspace,
 }) => {
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(workspaceId);
+  const [workspaceList, setWorkspaceList] = useState<WorkspaceItemSummary[]>(workspaces || []);
   const [members, setMembers] = useState<WorkspaceMemberDto[]>([]);
   const [candidates, setCandidates] = useState<CandidateUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -53,19 +67,56 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   const [newMemberRole, setNewMemberRole] = useState<'WRITER' | 'REVIEWER' | 'PRODUCER'>('WRITER');
   const [newMemberIsLeader, setNewMemberIsLeader] = useState(false);
 
-  const loadData = useCallback(async () => {
-    if (!workspaceId) return;
+  // Fetch / sync workspace list whenever modal opens
+  useEffect(() => {
+    if (isOpen) {
+      void (async () => {
+        try {
+          const list = await workspaceService.getMyWorkspaces(true);
+          if (list && list.length > 0) {
+            const mapped = list.map((w) => ({ id: w.id, name: w.name, department: w.department }));
+            setWorkspaceList(mapped);
+            if (!activeWorkspaceId || !mapped.some((w) => w.id === activeWorkspaceId)) {
+              const matched = workspaceId && mapped.some((w) => w.id === workspaceId) ? workspaceId : mapped[0].id;
+              setActiveWorkspaceId(matched);
+            }
+          } else if (workspaceId) {
+            setActiveWorkspaceId(workspaceId);
+          }
+        } catch {
+          if (workspaceId) setActiveWorkspaceId(workspaceId);
+        }
+      })();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (workspaceId) {
+      setActiveWorkspaceId(workspaceId);
+    }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (workspaces && workspaces.length > 0) {
+      setWorkspaceList(workspaces);
+    }
+  }, [workspaces]);
+
+  const loadData = useCallback(async (targetWsId: string) => {
+    if (!targetWsId) return;
     setIsLoading(true);
     setError(null);
     try {
-      const memberList = await workspaceService.getMembers(workspaceId);
+      const memberList = await workspaceService.getMembers(targetWsId);
       setMembers(memberList);
 
       if (isCurrentUserAdminOrLeader) {
-        const candidateList = await workspaceService.getCandidates(workspaceId);
+        const candidateList = await workspaceService.getCandidates(targetWsId);
         setCandidates(candidateList);
-        if (candidateList.length > 0 && !selectedUserId) {
-          setSelectedUserId(candidateList[0].id);
+        if (candidateList.length > 0) {
+          setSelectedUserId((prev) => (candidateList.some((c) => c.id === prev) ? prev : candidateList[0].id));
+        } else {
+          setSelectedUserId('');
         }
       }
     } catch (err: any) {
@@ -73,26 +124,36 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceId, isCurrentUserAdminOrLeader]);
+  }, [isCurrentUserAdminOrLeader]);
 
   useEffect(() => {
-    if (isOpen) {
-      void loadData();
+    if (isOpen && activeWorkspaceId) {
+      void loadData(activeWorkspaceId);
       setError(null);
       setSuccessMsg(null);
     }
-  }, [isOpen, loadData]);
+  }, [isOpen, activeWorkspaceId, loadData]);
 
   if (!isOpen) return null;
 
+  const handleSwitchWorkspace = (newWsId: string) => {
+    if (newWsId === activeWorkspaceId) return;
+    setActiveWorkspaceId(newWsId);
+    workspaceService.setActiveWorkspaceId(newWsId);
+    setError(null);
+    setSuccessMsg(null);
+    onSelectWorkspace?.(newWsId);
+    onMembersUpdated?.();
+  };
+
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUserId) return;
+    if (!selectedUserId || !activeWorkspaceId) return;
     setActionBusy(true);
     setError(null);
     setSuccessMsg(null);
     try {
-      await workspaceService.addMember(workspaceId, {
+      await workspaceService.addMember(activeWorkspaceId, {
         userId: selectedUserId,
         role: newMemberRole,
         isLeader: newMemberIsLeader,
@@ -100,7 +161,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
       setSuccessMsg('Đã thêm thành viên vào tổ thành công.');
       setSelectedUserId('');
       setNewMemberIsLeader(false);
-      await loadData();
+      await loadData(activeWorkspaceId);
       onMembersUpdated?.();
     } catch (err: any) {
       setError(err?.message || 'Không thể thêm thành viên vào tổ.');
@@ -110,15 +171,16 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   };
 
   const handleUpdateRole = async (member: WorkspaceMemberDto, newRole: string) => {
+    if (!activeWorkspaceId) return;
     setActionBusy(true);
     setError(null);
     setSuccessMsg(null);
     try {
-      await workspaceService.updateMember(workspaceId, member.id, {
+      await workspaceService.updateMember(activeWorkspaceId, member.id, {
         role: newRole,
       });
       setSuccessMsg(`Đã đổi vai trò của ${member.name} thành ${newRole}.`);
-      await loadData();
+      await loadData(activeWorkspaceId);
       onMembersUpdated?.();
     } catch (err: any) {
       setError(err?.message || 'Không thể cập nhật vai trò.');
@@ -128,11 +190,12 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   };
 
   const handleToggleLeader = async (member: WorkspaceMemberDto) => {
+    if (!activeWorkspaceId) return;
     setActionBusy(true);
     setError(null);
     setSuccessMsg(null);
     try {
-      await workspaceService.updateMember(workspaceId, member.id, {
+      await workspaceService.updateMember(activeWorkspaceId, member.id, {
         isLeader: !member.isLeader,
       });
       setSuccessMsg(
@@ -140,7 +203,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
           ? `Đã bổ nhiệm ${member.name} làm Tổ trưởng.`
           : `Đã hạ quyền Tổ trưởng của ${member.name}.`
       );
-      await loadData();
+      await loadData(activeWorkspaceId);
       onMembersUpdated?.();
     } catch (err: any) {
       setError(err?.message || 'Không thể thay đổi quyền Tổ trưởng.');
@@ -150,16 +213,17 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   };
 
   const handleToggleStatus = async (member: WorkspaceMemberDto) => {
+    if (!activeWorkspaceId) return;
     setActionBusy(true);
     setError(null);
     setSuccessMsg(null);
     const newStatus = member.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     try {
-      await workspaceService.updateMember(workspaceId, member.id, {
+      await workspaceService.updateMember(activeWorkspaceId, member.id, {
         status: newStatus,
       });
       setSuccessMsg(`Đã chuyển trạng thái ${member.name} sang ${newStatus}.`);
-      await loadData();
+      await loadData(activeWorkspaceId);
       onMembersUpdated?.();
     } catch (err: any) {
       setError(err?.message || 'Không thể thay đổi trạng thái.');
@@ -168,17 +232,23 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     }
   };
 
+  const currentWsObj = workspaceList.find((w) => w.id === activeWorkspaceId);
+  const currentWsDisplayName =
+    currentWsObj?.name ||
+    (activeWorkspaceId === workspaceId && workspaceName !== 'Chưa có tổ' ? workspaceName : 'Tổ bộ môn');
+
   const handleRemoveMember = async (member: WorkspaceMemberDto) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa "${member.name}" khỏi tổ ${workspaceName}?`)) {
+    if (!activeWorkspaceId) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa "${member.name}" khỏi tổ ${currentWsDisplayName}?`)) {
       return;
     }
     setActionBusy(true);
     setError(null);
     setSuccessMsg(null);
     try {
-      await workspaceService.removeMember(workspaceId, member.id);
+      await workspaceService.removeMember(activeWorkspaceId, member.id);
       setSuccessMsg(`Đã xóa ${member.name} khỏi tổ.`);
-      await loadData();
+      await loadData(activeWorkspaceId);
       onMembersUpdated?.();
     } catch (err: any) {
       setError(err?.message || 'Không thể xóa thành viên khỏi tổ.');
@@ -192,17 +262,41 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
       <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 text-xs animate-fade-in max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center border border-brand-100">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center border border-brand-100 shrink-0">
               <Users className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="font-extrabold text-sm text-slate-900">
-                Quản Lý Thành Viên: {workspaceName}
-              </h3>
-              <p className="text-[11px] text-slate-500">
+            <div className="min-w-0">
+              <div className="flex items-center flex-wrap gap-2">
+                <h3 className="font-extrabold text-sm text-slate-900 shrink-0">
+                  Quản Lý Thành Viên:
+                </h3>
+                {workspaceList.length > 0 ? (
+                  <div className="relative inline-flex items-center">
+                    <Building className="w-3.5 h-3.5 text-brand-600 absolute left-2.5 pointer-events-none" />
+                    <select
+                      value={activeWorkspaceId}
+                      onChange={(e) => handleSwitchWorkspace(e.target.value)}
+                      className="font-bold text-xs text-brand-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg pl-8 pr-7 py-1 focus:ring-2 focus:ring-brand-500 focus:outline-hidden cursor-pointer transition-colors shadow-2xs appearance-none max-w-xs truncate"
+                      title="Chuyển đổi Tổ chuyên môn để quản lý"
+                    >
+                      {workspaceList.map((ws) => (
+                        <option key={ws.id} value={ws.id}>
+                          {ws.name} {ws.department ? `(${ws.department})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-brand-600 absolute right-2 pointer-events-none" />
+                  </div>
+                ) : (
+                  <span className="font-bold text-sm text-brand-600">
+                    {currentWsDisplayName}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
                 {isCurrentUserAdminOrLeader
-                  ? 'Gán thành viên trực tiếp, phân công vai trò và chỉ định Tổ trưởng.'
+                  ? 'Chuyển đổi tổ chuyên môn để quản lý thành viên, phân công vai trò và chỉ định Tổ trưởng.'
                   : 'Danh sách thành viên hiện tại trong tổ.'}
               </p>
             </div>
@@ -210,7 +304,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>

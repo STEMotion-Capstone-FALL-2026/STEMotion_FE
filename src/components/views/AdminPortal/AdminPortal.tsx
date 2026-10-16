@@ -29,6 +29,8 @@ import {
   DollarSign,
   ToggleLeft,
   ToggleRight,
+  Building2,
+  ChevronDown,
 } from 'lucide-react';
 
 interface AdminPortalProps {
@@ -73,6 +75,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   // FE-15 state
   const [users, setUsers] = useState<AdminUserDto[]>([]);
   const [members, setMembers] = useState<WorkspaceMemberDto[]>([]);
+  const [workspaceList, setWorkspaceList] = useState<WorkspaceSummary[]>([]);
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string>('');
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
@@ -132,19 +136,44 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   const loadUsersAndMembers = useCallback(async () => {
     setLoadingUsers(true);
     try {
-      const [allUsers, workspaceId] = await Promise.all([
+      const [allUsers, wsList, activeId] = await Promise.all([
         adminService.getAllUsers().catch(() => []),
+        workspaceService.getMyWorkspaces(true).catch(() => []),
         workspaceService.resolveActiveWorkspaceId().catch(() => ''),
       ]);
       setUsers(allUsers);
-      if (workspaceId) {
-        const wsMembers = await workspaceService.getMembers(workspaceId).catch(() => []);
+      setWorkspaceList(wsList);
+      const chosenId =
+        activeId && wsList.some((w) => w.id === activeId)
+          ? activeId
+          : wsList.length > 0
+          ? wsList[0].id
+          : '';
+      setCurrentWorkspaceId(chosenId);
+      if (chosenId) {
+        const wsMembers = await workspaceService.getMembers(chosenId).catch(() => []);
         setMembers(wsMembers);
+      } else {
+        setMembers([]);
       }
     } finally {
       setLoadingUsers(false);
     }
   }, []);
+
+  const handleSwitchWorkspace = async (newWsId: string) => {
+    setCurrentWorkspaceId(newWsId);
+    workspaceService.setActiveWorkspaceId(newWsId);
+    try {
+      const wsMembers = await workspaceService.getMembers(newWsId);
+      setMembers(wsMembers);
+      window.dispatchEvent(
+        new CustomEvent('stemotion:workspace-changed', { detail: { workspaceId: newWsId } })
+      );
+    } catch {
+      setMembers([]);
+    }
+  };
 
   const loadTemplates = useCallback(async () => {
     setLoadingTemplates(true);
@@ -185,7 +214,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
 
   const handleQuickAddToWorkspace = async (user: AdminUserDto) => {
     try {
-      const workspaceId = await workspaceService.resolveActiveWorkspaceId();
+      const workspaceId = currentWorkspaceId || (await workspaceService.resolveActiveWorkspaceId());
       if (!workspaceId) return;
       await workspaceService.addMember(workspaceId, { userId: user.id, role: 'writer' });
       await loadUsersAndMembers();
@@ -198,7 +227,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   const handleRemoveWorkspaceMember = async (member: WorkspaceMemberDto) => {
     if (!window.confirm(`Xóa ${member.name} (${member.email}) khỏi Tổ bộ môn hiện tại?`)) return;
     try {
-      const workspaceId = await workspaceService.resolveActiveWorkspaceId();
+      const workspaceId = currentWorkspaceId || (await workspaceService.resolveActiveWorkspaceId());
       if (!workspaceId) return;
       await workspaceService.removeMember(workspaceId, member.id);
       setMembers((prev) => prev.filter((m) => m.id !== member.id));
@@ -701,6 +730,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
 
               <CreateWorkspaceForm
                 onWorkspaceCreated={(workspace) => {
+                  workspaceService.setActiveWorkspaceId(workspace.id);
                   void loadUsersAndMembers();
                   onWorkspaceCreated?.(workspace);
                 }}
@@ -719,11 +749,38 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                   </div>
                   <button
                     onClick={onOpenManageMembersModal}
-                    className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-xs font-bold text-rose-600 hover:bg-rose-100 transition"
+                    className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-xs font-bold text-rose-600 hover:bg-rose-100 transition cursor-pointer"
                   >
                     + Thêm vào Tổ
                   </button>
                 </div>
+
+                {/* Workspace Switcher Selector */}
+                {workspaceList.length > 0 && (
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <Building2 className="w-4 h-4 text-brand-600 shrink-0" />
+                      <span className="text-xs font-semibold text-slate-700 shrink-0">Tổ:</span>
+                      <div className="relative inline-flex items-center">
+                        <select
+                          value={currentWorkspaceId}
+                          onChange={(e) => void handleSwitchWorkspace(e.target.value)}
+                          className="text-xs font-bold text-brand-700 bg-white border border-slate-300 rounded-lg pl-2 pr-6 py-1 focus:ring-2 focus:ring-brand-500 focus:outline-hidden cursor-pointer truncate max-w-[180px] appearance-none"
+                        >
+                          {workspaceList.map((ws) => (
+                            <option key={ws.id} value={ws.id}>
+                              {ws.name} {ws.department ? `(${ws.department})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-1.5 pointer-events-none" />
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-brand-700 font-semibold shrink-0">
+                      {currentWorkspaceId.slice(0, 6)}
+                    </span>
+                  </div>
+                )}
                 <div className="divide-y divide-slate-100 text-xs max-h-72 overflow-y-auto">
                   {members.map((m) => (
                     <div key={m.id} className="py-2.5 flex items-center justify-between gap-2">
@@ -843,7 +900,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                               </select>
                             </td>
                             <td className="py-3 px-3">
-                              {isInWorkspace ? (
+                              {u.role === 'ADMIN' ? (
+                                <span className="text-[10px] text-slate-400 font-medium">Toàn hệ thống</span>
+                              ) : isInWorkspace ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-brand-700 border border-blue-200">
                                   <CheckCircle2 className="w-3 h-3" />
                                   <span>Đã trong Tổ</span>

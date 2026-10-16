@@ -173,31 +173,32 @@ export default function App() {
 
       // Remembered before resolving, which would otherwise fall back to the first workspace.
       const remembered = workspaceService.getCachedWorkspaceId();
-      const myWorkspaces = await workspaceService.getMyWorkspaces();
-      if (myWorkspaces.length > 1 && !myWorkspaces.some((w) => w.id === remembered)) {
-        setWorkspaceChoices(myWorkspaces);
-        return;
-      }
-      setWorkspaceChoices(null);
-      const activeId = await workspaceService.resolveActiveWorkspaceId();
+      const myWorkspaces = await workspaceService.getMyWorkspaces(true);
+
       if (myWorkspaces.length > 0) {
         setHasNoWorkspace(false);
-        const active = myWorkspaces.find((w) => w.id === activeId) ?? myWorkspaces[0];
+        const active = myWorkspaces.find((w) => w.id === remembered) ?? myWorkspaces[0];
         workspaceService.setActiveWorkspaceId(active.id);
-        setWorkspaces(
-          myWorkspaces.map((w) => ({
-            id: w.id,
-            name: w.name,
-            department: w.department || '',
-            membersCount: w.membersCount,
-            activeProjects: w.activeProjects,
-            myRole: w.myRole,
-            isLeader: w.isLeader,
-          }))
-        );
+        const wsList = myWorkspaces.map((w) => ({
+          id: w.id,
+          name: w.name,
+          department: w.department || '',
+          membersCount: w.membersCount,
+          activeProjects: w.activeProjects,
+          myRole: w.myRole,
+          isLeader: w.isLeader,
+        }));
+        setWorkspaces(wsList);
         setActiveGroup({ name: active.name, code: active.id.slice(0, 6) });
         setIsLeader(Boolean(active.isLeader));
         setWorkspaceRole(active.myRole ?? null);
+
+        // Only show picker modal for regular users with multiple workspaces if not remembered
+        if (profile.role !== 'admin' && myWorkspaces.length > 1 && !remembered) {
+          setWorkspaceChoices(myWorkspaces);
+          return;
+        }
+        setWorkspaceChoices(null);
 
         if (profile.role === 'admin') {
           setCurrentRole('admin');
@@ -258,13 +259,22 @@ export default function App() {
     const onPasswordChangeReq = () => {
       setIsChangePasswordModalOpen(true);
     };
+    const onWorkspaceChanged = (e: any) => {
+      const wsId = e.detail?.workspaceId;
+      if (wsId) {
+        workspaceService.setActiveWorkspaceId(wsId);
+        void bootstrapFromApi();
+      }
+    };
     window.addEventListener('stemotion:unauthorized', onUnauthorized);
     window.addEventListener('stemotion:password-change-required', onPasswordChangeReq);
+    window.addEventListener('stemotion:workspace-changed', onWorkspaceChanged);
     return () => {
       window.removeEventListener('stemotion:unauthorized', onUnauthorized);
       window.removeEventListener('stemotion:password-change-required', onPasswordChangeReq);
+      window.removeEventListener('stemotion:workspace-changed', onWorkspaceChanged);
     };
-  }, []);
+  }, [bootstrapFromApi]);
 
   // Production Workspace (proposal): an approved script opens for the producer
   // as a draft of its own. The approved script stays as the reviewer saw it.
@@ -1042,7 +1052,8 @@ export default function App() {
       {currentRole === 'admin' && (
         <AdminPortal
           onOpenManageMembersModal={() => setIsManageMembersModalOpen(true)}
-          onWorkspaceCreated={() => {
+          onWorkspaceCreated={(workspace) => {
+            workspaceService.setActiveWorkspaceId(workspace.id);
             void bootstrapFromApi();
           }}
         />
@@ -1066,8 +1077,21 @@ export default function App() {
         isOpen={isManageMembersModalOpen}
         onClose={() => setIsManageMembersModalOpen(false)}
         workspaceId={workspaceService.getCachedWorkspaceId() || workspaces[0]?.id || ''}
-        workspaceName={activeGroup.name}
+        workspaceName={
+          workspaces.find(
+            (w) => w.id === (workspaceService.getCachedWorkspaceId() || workspaces[0]?.id)
+          )?.name || (activeGroup.name !== 'Chưa có tổ' ? activeGroup.name : (workspaces[0]?.name || 'Tổ chuyên môn'))
+        }
         isCurrentUserAdminOrLeader={currentUser.role === 'admin' || isLeader}
+        workspaces={workspaces}
+        onSelectWorkspace={(newWsId) => {
+          workspaceService.setActiveWorkspaceId(newWsId);
+          const found = workspaces.find((w) => w.id === newWsId);
+          if (found) {
+            setActiveGroup({ name: found.name, code: found.id.slice(0, 6) });
+          }
+          void bootstrapFromApi();
+        }}
         onMembersUpdated={() => {
           void bootstrapFromApi();
         }}
