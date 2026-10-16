@@ -425,13 +425,29 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
                     ) : currentRole === 'reviewer' ? (
                       <span
                         className={`text-xs font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1 transition-all ${
-                          isNeedsReviewer
+                          stage === 'CLIP_REVIEW'
+                            ? 'bg-purple-600 text-white shadow-xs group-hover:bg-purple-700'
+                            : stage === 'SCRIPT_REVIEW'
                             ? 'bg-amber-600 text-white shadow-xs group-hover:bg-amber-700'
                             : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
                         }`}
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>{isNeedsReviewer ? 'Thẩm Định Ngay' : 'Xem Chi Tiết'}</span>
+                        {stage === 'CLIP_REVIEW' ? (
+                          <>
+                            <PlayCircle className="w-3.5 h-3.5" />
+                            <span>Duyệt Video Thành Phẩm</span>
+                          </>
+                        ) : stage === 'SCRIPT_REVIEW' ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Duyệt Kịch Bản</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Xem Kịch Bản</span>
+                          </>
+                        )}
                       </span>
                     ) : (
                       <span

@@ -516,6 +516,15 @@ export default function App() {
         return;
       }
 
+      // Tự động chọn chế độ duyệt phù hợp: chỉ vào duyệt video khi Producer đã nộp video
+      if (currentRole === 'reviewer') {
+        const isVideoReady =
+          full.videoStatus === 'IN_QA' ||
+          full.videoStatus === 'APPROVED' ||
+          full.videoStatus === 'PUBLISHED';
+        setReviewerMode(isVideoReady ? 'video' : 'script');
+      }
+
       setScript(full);
       setActiveSceneId(full.scenes?.[0]?.id || '');
       setComments(await reviewService.getComments(full.id));
