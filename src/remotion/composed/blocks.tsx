@@ -63,6 +63,7 @@ const Shell: React.FC<{ t: Timed; rect: Rect; children: React.ReactNode }> = ({ 
   const motion = t.block.motion ?? DEFAULT_MOTION[t.block.kind];
   const out = exitProgress(frame, t.leave);
   const drift = useDrift(`blk-${t.block.id}`, 8, 0.02);
+  if (t.block.hidden) return null;
   if (frame < t.enter - 1 || out >= 1) return null;
 
   let transform = '';
@@ -76,10 +77,13 @@ const Shell: React.FC<{ t: Timed; rect: Rect; children: React.ReactNode }> = ({ 
   if (t.block.emphasis === 'pulse') transform += ` scale(${1 + 0.035 * Math.sin(since * 0.15)})`;
   if (t.block.emphasis === 'float') transform += ` translate(${drift.x}px, ${drift.y}px)`;
   if (t.block.emphasis === 'shake' && since > 14 && since < 34) transform += ` translateX(${Math.sin(since * 1.9) * 9}px)`;
+  const userScale = typeof t.block.scale === 'number' && Number.isFinite(t.block.scale) ? t.block.scale : 1;
 
   const struck = t.strike !== null ? interpolate(frame, [t.strike, t.strike + 12], [0, 1], clamp) : 0;
   return (
     <div
+      data-lego-id={t.block.id}
+      data-lego-kind={t.block.kind}
       style={{
         position: 'absolute',
         left: rect.x,
@@ -89,7 +93,7 @@ const Shell: React.FC<{ t: Timed; rect: Rect; children: React.ReactNode }> = ({ 
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        transform: `${transform} scale(${1 - 0.08 * out})`,
+        transform: `${transform} scale(${(1 - 0.08 * out) * userScale})`,
         opacity: opacity * (1 - out) * (1 - 0.45 * struck),
         fontFamily: FLAT_FONT,
       }}
@@ -132,7 +136,7 @@ const shadow = (ctx: BlockContext) => (ctx.palette.light ? '0 3px 0 rgba(42,27,9
 
 const Title: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect, ctx }) => {
   const text = t.block.text ?? '';
-  const size = fitFont(text, rect.w * 0.96, rect.h * 0.92, 92, 30, 1.1);
+  const size = t.block.fontSize || fitFont(text, rect.w * 0.96, rect.h * 0.92, 92, 30, 1.1);
   return (
     <div style={{ fontSize: size, fontWeight: 800, lineHeight: 1.1, textAlign: 'center', color: toneColor(t.block.tone, ctx), textShadow: shadow(ctx) }}>
       {text}
@@ -143,7 +147,7 @@ const Title: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect,
 const Text: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect, ctx }) => {
   const frame = useCurrentFrame();
   const text = t.block.text ?? '';
-  const size = fitFont(text, rect.w * 0.9, rect.h * 0.85, 52, 22, 1.3);
+  const size = t.block.fontSize || fitFont(text, rect.w * 0.9, rect.h * 0.85, 52, 22, 1.3);
   const typed = t.block.motion === 'type' ? Math.floor(interpolate(frame, [t.enter, t.enter + text.length * 0.9], [0, text.length], clamp)) : text.length;
   const color = t.block.tone && t.block.tone !== 'default' ? toneColor(t.block.tone, ctx) : ctx.palette.textSoft;
   // Right and wrong statements sit on a panel so red and green stay legible on any backdrop.
@@ -171,7 +175,7 @@ const List: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect, 
   const items = (t.block.items ?? []).slice(0, 6);
   const span = Math.min(Number.isFinite(t.leave) ? t.leave - t.enter - 20 : 999, 34 * items.length);
   const longest = items.reduce((a, b) => (b.length > a.length ? b : a), '');
-  const size = Math.min(fitFont(longest, rect.w * 0.78, (rect.h * 0.82) / Math.max(1, items.length), 46, 20, 1.25), 46);
+  const size = t.block.fontSize || Math.min(fitFont(longest, rect.w * 0.78, (rect.h * 0.82) / Math.max(1, items.length), 46, 20, 1.25), 46);
   return (
     <div style={{ ...panel(ctx), display: 'flex', flexDirection: 'column', gap: size * 0.45, maxWidth: rect.w }}>
       {items.map((item, i) => {
@@ -192,7 +196,7 @@ const Formula: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rec
   const frame = useCurrentFrame();
   const latex = t.block.latex ?? '';
   // Rendered TeX is far narrower per source character than prose.
-  const size = Math.min(fitFont(latex.replace(/\\[a-z]+/gi, 'x'), rect.w * 0.85, rect.h * 0.7, 80, 26, 1.6), 80);
+  const size = t.block.fontSize || Math.min(fitFont(latex.replace(/\\[a-z]+/gi, 'x'), rect.w * 0.85, rect.h * 0.7, 80, 26, 1.6), 80);
   const reveal = (t.block.motion ?? 'draw') === 'draw' ? interpolate(frame, [t.enter, t.enter + 26], [0, 100], clamp) : 100;
   const color = t.block.tone && t.block.tone !== 'default' ? toneColor(t.block.tone, ctx) : ctx.palette.text;
   return (
@@ -212,7 +216,7 @@ const Icon: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect, 
       color={t.block.tone && t.block.tone !== 'default' ? toneColor(t.block.tone, ctx) : ctx.accent(0)}
       size={size}
       delay={t.enter}
-      labelSize={Math.max(20, size * 0.16)}
+      labelSize={t.block.fontSize || Math.max(20, size * 0.16)}
       tone={ctx.tone}
       hero={t.block.emphasis === 'pulse'}
     />
@@ -233,7 +237,7 @@ const Icons: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect,
           color={ctx.accent(i)}
           size={size}
           delay={t.enter + i * 7}
-          labelSize={Math.max(18, size * 0.17)}
+          labelSize={t.block.fontSize || Math.max(18, size * 0.17)}
           tone={ctx.tone}
         />
       ))}
@@ -249,7 +253,7 @@ const NumberBlock: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t,
   const decimals = Number.isInteger(value) ? 0 : Math.min(3, String(value).split('.')[1]?.length ?? 1);
   const shown = (value * k).toLocaleString('vi-VN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   const label = t.block.text;
-  const size = fitFont(`${shown} ${t.block.unit ?? ''}`, rect.w * 0.9, rect.h * (label ? 0.6 : 0.85), 150, 36, 1.05);
+  const size = t.block.fontSize ? t.block.fontSize * 1.8 : fitFont(`${shown} ${t.block.unit ?? ''}`, rect.w * 0.9, rect.h * (label ? 0.6 : 0.85), 150, 36, 1.05);
   const color = t.block.tone && t.block.tone !== 'default' ? toneColor(t.block.tone, ctx) : ctx.accent(0);
   return (
     <div style={{ textAlign: 'center' }}>
@@ -275,7 +279,7 @@ const Chart: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect,
   const plotH = h - labelH * 2.2;
   const slot = w / Math.max(1, points.length);
   const bar = slot * 0.58;
-  const font = Math.max(16, Math.min(30, slot * 0.2, labelH * 0.7));
+  const font = t.block.fontSize || Math.max(16, Math.min(30, slot * 0.2, labelH * 0.7));
   return (
     <svg width={w} height={h} style={{ overflow: 'visible' }}>
       <line x1={0} y1={labelH + plotH} x2={w} y2={labelH + plotH} stroke={ctx.palette.textSoft} strokeOpacity={0.5} strokeWidth={4} />
@@ -308,7 +312,7 @@ const Choice: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect
   const revealed = t.reveal !== null ? interpolate(frame, [t.reveal, t.reveal + 10], [0, 1], clamp) : 0;
   const rows = options.length + (t.block.question ? 1.3 : 0);
   const longest = [t.block.question ?? '', ...options].reduce((a, b) => (b.length > a.length ? b : a), '');
-  const size = Math.min(44, fitFont(longest, rect.w * 0.8, (rect.h * 0.8) / Math.max(1, rows), 44, 20, 1.25));
+  const size = t.block.fontSize || Math.min(44, fitFont(longest, rect.w * 0.8, (rect.h * 0.8) / Math.max(1, rows), 44, 20, 1.25));
   return (
     <div style={{ ...panel(ctx), display: 'flex', flexDirection: 'column', gap: size * 0.4, minWidth: rect.w * 0.6, maxWidth: rect.w }}>
       {t.block.question ? (
@@ -376,7 +380,7 @@ const Guide: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect,
             ...panel(ctx),
             background: ctx.palette.light ? '#ffffff' : '#fff8e8',
             color: '#2b0a5e',
-            fontSize: fitFont(text, Math.max(200, bubbleW) * 0.85, rect.h * 0.55, 42, 20, 1.25),
+            fontSize: t.block.fontSize || fitFont(text, Math.max(200, bubbleW) * 0.85, rect.h * 0.55, 42, 20, 1.25),
             fontWeight: 700,
             lineHeight: 1.25,
             maxWidth: Math.max(200, bubbleW),

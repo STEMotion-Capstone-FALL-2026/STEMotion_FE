@@ -4,6 +4,7 @@ import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { ProcessTimelineProps } from '@/types/stem';
 import { FlatStage } from '../flat/FlatStage';
+import { LegoBlock } from '../lego/LegoBlock';
 
 export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
   title,
@@ -88,23 +89,27 @@ export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
     <FlatStage ambience="ocean" className="flex flex-col justify-between p-14">
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3 relative z-10">
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 font-mono text-xs font-bold uppercase tracking-wider border border-emerald-500/30">
-            TIẾN TRÌNH & CHU TRÌNH SINH HỌC
-          </span>
-          <h2 className="text-2xl font-extrabold text-slate-100">{title}</h2>
+      <LegoBlock id="header" label="Tiêu đề Tiến trình" kind="title" className="relative z-10">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 font-mono text-xs font-bold uppercase tracking-wider border border-emerald-500/30">
+              TIẾN TRÌNH & CHU TRÌNH SINH HỌC
+            </span>
+            <h2 className="text-2xl font-extrabold text-slate-100" style={{ fontSize: 'var(--lego-font-size, 24px)' }}>{title}</h2>
+          </div>
+          <span className="text-xs text-emerald-300/80 font-mono">Process Dynamic Flow</span>
         </div>
-        <span className="text-xs text-emerald-300/80 font-mono">Process Dynamic Flow</span>
-      </div>
+      </LegoBlock>
 
       {/* Title Subheader */}
-      <div className="text-center my-2 relative z-10">
-        <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest block">
-          Chủ Đề Chu Trình
-        </span>
-        <h3 className="text-xl font-bold text-slate-200 mt-0.5">{processTitle}</h3>
-      </div>
+      <LegoBlock id="process-subheader" label="Chủ đề Chu trình" kind="subtitle" className="relative z-10">
+        <div className="text-center my-2">
+          <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest block">
+            Chủ Đề Chu Trình
+          </span>
+          <h3 className="text-xl font-bold text-slate-200 mt-0.5" style={{ fontSize: 'var(--lego-font-size, 20px)' }}>{processTitle}</h3>
+        </div>
+      </LegoBlock>
 
       {/* Timeline Pipeline */}
       <div 
@@ -137,46 +142,47 @@ export const ProcessTimeline: React.FC<ProcessTimelineProps> = ({
             const isActive = frame >= delay;
 
             return (
-              <div
-                key={idx}
-                style={{
-                  transform: `translateY(${(1 - Math.max(0, cardSpring)) * 40}px)`,
-                  opacity: Math.max(0, cardSpring),
-                }}
-                className={`rounded-2xl p-5 border flex flex-col justify-between transition-all backdrop-blur-md ${
-                  isActive
-                    ? getThemeClass()
-                    : 'bg-slate-900/40 border-slate-800 opacity-60'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 font-mono text-sm font-black flex items-center justify-center border border-emerald-500/30">
-                      0{stg.stageNumber || idx + 1}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-[10px] font-mono text-slate-300 font-semibold">
-                      {stg.badge || `Pha ${idx + 1}`}
-                    </span>
+              <LegoBlock key={idx} id={`stage-${idx}`} label={`Giai đoạn #${idx + 1}: ${stg.title}`} kind="step">
+                <div
+                  style={{
+                    transform: `translateY(${(1 - Math.max(0, cardSpring)) * 40}px)`,
+                    opacity: Math.max(0, cardSpring),
+                  }}
+                  className={`rounded-2xl p-5 border flex flex-col justify-between transition-all backdrop-blur-md h-full ${
+                    isActive
+                      ? getThemeClass()
+                      : 'bg-slate-900/40 border-slate-800 opacity-60'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 font-mono text-sm font-black flex items-center justify-center border border-emerald-500/30">
+                        0{stg.stageNumber || idx + 1}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-800 text-[10px] font-mono text-slate-300 font-semibold">
+                        {stg.badge || `Pha ${idx + 1}`}
+                      </span>
+                    </div>
+                    <h4
+                      style={{ fontSize: `var(--lego-font-size, ${stageTitleSize}px)` }}
+                      className="font-bold text-slate-100 mb-2 leading-snug transition-all"
+                    >
+                      {stg.title}
+                    </h4>
+                    <p
+                      style={{ fontSize: `var(--lego-font-size, ${stageDescSize}px)` }}
+                      className="text-slate-300 leading-relaxed transition-all"
+                    >
+                      {stg.description}
+                    </p>
                   </div>
-                  <h4
-                    style={{ fontSize: `${stageTitleSize}px` }}
-                    className="font-bold text-slate-100 mb-2 leading-snug transition-all"
-                  >
-                    {stg.title}
-                  </h4>
-                  <p
-                    style={{ fontSize: `${stageDescSize}px` }}
-                    className="text-slate-300 leading-relaxed transition-all"
-                  >
-                    {stg.description}
-                  </p>
-                </div>
 
-                <div className="mt-4 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-emerald-400">
-                  <span>Tiếp diễn</span>
-                  <span>➔</span>
+                  <div className="mt-4 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-emerald-400">
+                    <span>Tiếp diễn</span>
+                    <span>➔</span>
+                  </div>
                 </div>
-              </div>
+              </LegoBlock>
             );
           })}
         </div>

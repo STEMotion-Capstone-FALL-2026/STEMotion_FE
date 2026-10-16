@@ -1,1508 +1,1025 @@
-import React, { useState } from 'react';
-import { SceneData } from '../types/stem';
-import { Edit3, Plus, Check, X, Sparkles, Type, Sliders, Maximize2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { ComposedBlock, LegoComponentLayout, LegoTheme, SceneData } from '../types/stem';
+import {
+  getSceneLegoPieces,
+  createLegoBlockPreset,
+  type LegoPieceDescriptor,
+} from '../remotion/lego/catalog';
+import { decomposeSceneToComposed } from '../remotion/lego/decompose';
+import {
+  Edit3,
+  Plus,
+  Check,
+  X,
+  Sparkles,
+  Type,
+  Maximize2,
+  Move,
+  RotateCcw,
+  EyeOff,
+  Trash2,
+  Layers,
+  Puzzle,
+  ArrowUp,
+  ArrowDown,
+  Palette,
+} from 'lucide-react';
 
 interface CanvaInteractiveOverlayProps {
   scene: SceneData;
   updateSceneProperty?: (updater: (s: any) => any) => void;
   isPlaying: boolean;
   onPauseVideo: () => void;
+  currentFrame?: number;
+  stageContainerRef?: React.RefObject<HTMLDivElement | null>;
+  activeLegoPieceId?: string | null;
+  onSelectLegoPiece?: (pieceId: string | null) => void;
 }
+
+type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+
+interface DragInteractionState {
+  mode: 'move' | 'resize';
+  piece: LegoPieceDescriptor;
+  handle?: ResizeHandle;
+  startClientX: number;
+  startClientY: number;
+  overlayWidth: number;
+  overlayHeight: number;
+  initialLayout: LegoComponentLayout;
+  initialRect: { x: number; y: number; w: number; h: number };
+  hasMoved: boolean;
+}
+
+const LEGO_THEMES: { id: LegoTheme; label: string; colorClass: string }[] = [
+  { id: 'cyan', label: 'Cyan', colorClass: 'bg-cyan-500' },
+  { id: 'purple', label: 'Tím', colorClass: 'bg-purple-500' },
+  { id: 'emerald', label: 'Xanh lá', colorClass: 'bg-emerald-500' },
+  { id: 'amber', label: 'Vàng cam', colorClass: 'bg-amber-500' },
+  { id: 'rose', label: 'Hồng đỏ', colorClass: 'bg-rose-500' },
+  { id: 'slate', label: 'Xám', colorClass: 'bg-slate-500' },
+];
 
 export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = ({
   scene,
   updateSceneProperty,
   isPlaying,
   onPauseVideo,
+  currentFrame = 0,
+  stageContainerRef,
+  activeLegoPieceId,
+  onSelectLegoPiece,
 }) => {
-  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [internalSelectedId, setInternalSelectedId] = useState<string | null>(null);
+  const selectedId = activeLegoPieceId !== undefined ? activeLegoPieceId : internalSelectedId;
 
-  // Nếu video đang chạy thì ẩn overlay để không che animation
+  const setSelectedId = useCallback(
+    (id: string | null) => {
+      setInternalSelectedId(id);
+      onSelectLegoPiece?.(id);
+    },
+    [onSelectLegoPiece]
+  );
+
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [editPrimary, setEditPrimary] = useState('');
+  const [editSecondary, setEditSecondary] = useState('');
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [measuredRects, setMeasuredRects] = useState<
+    Record<string, { x: number; y: number; w: number; h: number }>
+  >({});
+  const [dragState, setDragState] = useState<DragInteractionState | null>(null);
+
+  const pieces = useMemo(() => getSceneLegoPieces(scene), [scene]);
+  const visiblePieces = useMemo(
+    () =>
+      pieces.filter((p) => {
+        if (p.isComposedBlock && scene.type === 'COMPOSED') {
+          return !scene.blocks[p.blockIndex!]?.hidden;
+        }
+        if (p.isExtraBlock) {
+          return !scene.extraBlocks?.[p.blockIndex!]?.hidden;
+        }
+        return !scene.componentLayouts?.[p.id]?.hidden;
+      }),
+    [pieces, scene]
+  );
+
+  const selectedPiece = useMemo(
+    () => visiblePieces.find((p) => p.id === selectedId) || null,
+    [visiblePieces, selectedId]
+  );
+
+  // Measure real DOM bounding boxes of [data-lego-id] elements inside the Remotion Player
+  const measureDomBoxes = useCallback(() => {
+    const overlayEl = overlayRef.current;
+    const rootEl = stageContainerRef?.current || overlayEl?.parentElement;
+    if (!overlayEl || !rootEl) return;
+
+    const overlayBox = overlayEl.getBoundingClientRect();
+    if (overlayBox.width <= 0 || overlayBox.height <= 0) return;
+
+    const scaleX = 1920 / overlayBox.width;
+    const scaleY = 1080 / overlayBox.height;
+
+    const nodes = rootEl.querySelectorAll<HTMLElement>('[data-lego-id]');
+    const nextRects: Record<string, { x: number; y: number; w: number; h: number }> = {};
+
+    nodes.forEach((node) => {
+      const id = node.getAttribute('data-lego-id');
+      if (!id) return;
+      const r = node.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) return;
+      const x = (r.left - overlayBox.left) * scaleX;
+      const y = (r.top - overlayBox.top) * scaleY;
+      const w = r.width * scaleX;
+      const h = r.height * scaleY;
+      nextRects[id] = {
+        x: Math.round(x),
+        y: Math.round(y),
+        w: Math.round(w),
+        h: Math.round(h),
+      };
+    });
+
+    setMeasuredRects(nextRects);
+  }, [stageContainerRef]);
+
+  useEffect(() => {
+    if (isPlaying) return;
+    const raf = requestAnimationFrame(measureDomBoxes);
+    const timer = setTimeout(measureDomBoxes, 80);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, [isPlaying, scene, currentFrame, measureDomBoxes]);
+
+  useEffect(() => {
+    window.addEventListener('resize', measureDomBoxes);
+    return () => window.removeEventListener('resize', measureDomBoxes);
+  }, [measureDomBoxes]);
+
+  // Compute effective 1920x1080 rect for a Lego piece
+  const getEffectiveRect = useCallback(
+    (piece: LegoPieceDescriptor): { x: number; y: number; w: number; h: number } => {
+      if (piece.isComposedBlock && scene.type === 'COMPOSED') {
+        const block = scene.blocks[piece.blockIndex!];
+        if (
+          block &&
+          typeof block.x === 'number' &&
+          typeof block.y === 'number' &&
+          typeof block.w === 'number' &&
+          typeof block.h === 'number'
+        ) {
+          return { x: block.x, y: block.y, w: block.w, h: block.h };
+        }
+      }
+      if (piece.isExtraBlock && scene.extraBlocks?.[piece.blockIndex!]) {
+        const block = scene.extraBlocks[piece.blockIndex!];
+        if (
+          typeof block.x === 'number' &&
+          typeof block.y === 'number' &&
+          typeof block.w === 'number' &&
+          typeof block.h === 'number'
+        ) {
+          return { x: block.x, y: block.y, w: block.w, h: block.h };
+        }
+      }
+
+      const domRect = measuredRects[piece.id];
+      if (domRect) {
+        return domRect;
+      }
+
+      const layout = scene.componentLayouts?.[piece.id];
+      const base = piece.defaultRect;
+      if (!layout) return base;
+
+      const scale = layout.scale ?? 1;
+      const sx = (layout.scaleX ?? 1) * scale;
+      const sy = (layout.scaleY ?? 1) * scale;
+      const w = base.w * sx;
+      const h = base.h * sy;
+      const x = base.x + (layout.dx ?? 0) - (w - base.w) / 2;
+      const y = base.y + (layout.dy ?? 0) - (h - base.h) / 2;
+      return {
+        x: Math.round(x),
+        y: Math.round(y),
+        w: Math.round(w),
+        h: Math.round(h),
+      };
+    },
+    [measuredRects, scene]
+  );
+
+  // Pointer drag / resize lifecycle
+  useEffect(() => {
+    if (!dragState || !updateSceneProperty) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const deltaScreenX = e.clientX - dragState.startClientX;
+      const deltaScreenY = e.clientY - dragState.startClientY;
+      if (Math.abs(deltaScreenX) < 2 && Math.abs(deltaScreenY) < 2 && !dragState.hasMoved) {
+        return;
+      }
+      dragState.hasMoved = true;
+
+      const dxCanvas = Math.round((deltaScreenX / dragState.overlayWidth) * 1920);
+      const dyCanvas = Math.round((deltaScreenY / dragState.overlayHeight) * 1080);
+
+      const { piece, mode, handle, initialLayout, initialRect } = dragState;
+
+      // Case 1: Native COMPOSED block or Extra freeform block -> update x, y, w, h directly
+      if (piece.isComposedBlock || piece.isExtraBlock) {
+        let nextX = initialRect.x;
+        let nextY = initialRect.y;
+        let nextW = initialRect.w;
+        let nextH = initialRect.h;
+
+        if (mode === 'move') {
+          nextX = Math.max(0, Math.min(1840, initialRect.x + dxCanvas));
+          nextY = Math.max(0, Math.min(1020, initialRect.y + dyCanvas));
+        } else if (mode === 'resize' && handle) {
+          if (handle.includes('e')) nextW = Math.max(140, initialRect.w + dxCanvas);
+          if (handle.includes('s')) nextH = Math.max(70, initialRect.h + dyCanvas);
+          if (handle.includes('w')) {
+            const proposedW = Math.max(140, initialRect.w - dxCanvas);
+            nextX = initialRect.x + (initialRect.w - proposedW);
+            nextW = proposedW;
+          }
+          if (handle.includes('n')) {
+            const proposedH = Math.max(70, initialRect.h - dyCanvas);
+            nextY = initialRect.y + (initialRect.h - proposedH);
+            nextH = proposedH;
+          }
+        }
+
+        updateSceneProperty((s: SceneData) => {
+          if (piece.isComposedBlock && s.type === 'COMPOSED') {
+            const nextBlocks = [...s.blocks];
+            const idx = piece.blockIndex!;
+            if (nextBlocks[idx]) {
+              nextBlocks[idx] = {
+                ...nextBlocks[idx],
+                x: Math.round(nextX),
+                y: Math.round(nextY),
+                w: Math.round(nextW),
+                h: Math.round(nextH),
+              };
+            }
+            return { ...s, blocks: nextBlocks };
+          }
+          if (piece.isExtraBlock && s.extraBlocks) {
+            const nextExtra = [...s.extraBlocks];
+            const idx = piece.blockIndex!;
+            if (nextExtra[idx]) {
+              nextExtra[idx] = {
+                ...nextExtra[idx],
+                x: Math.round(nextX),
+                y: Math.round(nextY),
+                w: Math.round(nextW),
+                h: Math.round(nextH),
+              };
+            }
+            return { ...s, extraBlocks: nextExtra };
+          }
+          return s;
+        });
+        return;
+      }
+
+      // Case 2: Template sub-component -> update componentLayouts[piece.id]
+      if (mode === 'move') {
+        const nextDx = (initialLayout.dx ?? 0) + dxCanvas;
+        const nextDy = (initialLayout.dy ?? 0) + dyCanvas;
+        updateSceneProperty((s: SceneData) => ({
+          ...s,
+          componentLayouts: {
+            ...(s.componentLayouts || {}),
+            [piece.id]: {
+              ...(s.componentLayouts?.[piece.id] || {}),
+              dx: nextDx,
+              dy: nextDy,
+            },
+          },
+        }));
+      } else if (mode === 'resize' && handle) {
+        const baseW = Math.max(80, initialRect.w);
+        const baseH = Math.max(50, initialRect.h);
+        const startSx = initialLayout.scaleX ?? 1;
+        const startSy = initialLayout.scaleY ?? 1;
+        let factorX = 1;
+        let factorY = 1;
+        let shiftX = 0;
+        let shiftY = 0;
+
+        if (handle.includes('e')) {
+          factorX = Math.max(0.35, Math.min(2.5, (baseW + dxCanvas) / baseW));
+          shiftX = dxCanvas / 2;
+        }
+        if (handle.includes('w')) {
+          factorX = Math.max(0.35, Math.min(2.5, (baseW - dxCanvas) / baseW));
+          shiftX = dxCanvas / 2;
+        }
+        if (handle.includes('s')) {
+          factorY = Math.max(0.35, Math.min(2.5, (baseH + dyCanvas) / baseH));
+          shiftY = dyCanvas / 2;
+        }
+        if (handle.includes('n')) {
+          factorY = Math.max(0.35, Math.min(2.5, (baseH - dyCanvas) / baseH));
+          shiftY = dyCanvas / 2;
+        }
+
+        const nextScaleX = Number((startSx * factorX).toFixed(2));
+        const nextScaleY = Number((startSy * factorY).toFixed(2));
+        const nextDx = Math.round((initialLayout.dx ?? 0) + shiftX);
+        const nextDy = Math.round((initialLayout.dy ?? 0) + shiftY);
+
+        updateSceneProperty((s: SceneData) => ({
+          ...s,
+          componentLayouts: {
+            ...(s.componentLayouts || {}),
+            [piece.id]: {
+              ...(s.componentLayouts?.[piece.id] || {}),
+              dx: nextDx,
+              dy: nextDy,
+              scaleX: nextScaleX,
+              scaleY: nextScaleY,
+            },
+          },
+        }));
+      }
+    };
+
+    const handlePointerUp = () => {
+      setDragState(null);
+      setTimeout(measureDomBoxes, 40);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [dragState, updateSceneProperty, measureDomBoxes]);
+
   if (isPlaying || !updateSceneProperty) {
     return null;
   }
 
-  const curFontSize = (scene as any).customFontSize || 30;
+  const startDrag = (
+    e: React.PointerEvent,
+    piece: LegoPieceDescriptor,
+    mode: 'move' | 'resize',
+    handle?: ResizeHandle
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onPauseVideo();
+    setSelectedId(piece.id);
+    setShowAddMenu(false);
 
-  const setFontSize = (val: number) => {
-    const clamped = Math.min(60, Math.max(16, val));
-    updateSceneProperty((s) => ({ ...s, customFontSize: clamped }));
-  };
+    const overlayEl = overlayRef.current;
+    if (!overlayEl) return;
+    const rect = overlayEl.getBoundingClientRect();
 
-  const handleStartEdit = (field: string, initialText: string) => {
-    setEditingField(field);
-    setEditValue(initialText || '');
-  };
+    const currentLayout: LegoComponentLayout =
+      scene.componentLayouts?.[piece.id] || { dx: 0, dy: 0, scale: 1, scaleX: 1, scaleY: 1 };
 
-  const handleSaveField = () => {
-    if (!editingField) return;
-
-    updateSceneProperty((s) => {
-      const updated = { ...s } as any;
-      if (editingField === 'title') updated.title = editValue;
-      else if (editingField === 'subtitle') updated.subtitle = editValue;
-      else if (editingField === 'badgeText') updated.badgeText = editValue;
-      else if (editingField === 'gradeLevel') updated.gradeLevel = editValue;
-      else if (editingField === 'latex') updated.latex = editValue;
-      else if (editingField === 'equation') updated.equation = editValue;
-      else if (editingField === 'observation') updated.observation = editValue;
-      else if (editingField === 'reactants') updated.reactants = editValue;
-      else if (editingField === 'products') updated.products = editValue;
-      else if (editingField === 'condition') updated.condition = editValue;
-      else if (editingField === 'processTitle') updated.processTitle = editValue;
-      else if (editingField === 'question') updated.question = editValue;
-      else if (editingField === 'quiz_explanation') updated.explanation = editValue;
-      else if (editingField.startsWith('quiz_option_')) {
-        const idx = parseInt(editingField.replace('quiz_option_', ''), 10);
-        const opts = [...(updated.options || [])];
-        opts[idx] = editValue;
-        updated.options = opts;
-      }
-      else if (editingField === 'theoremName') updated.theoremName = editValue;
-      else if (editingField === 'geometry_latex') updated.formulaLatex = editValue;
-      else if (editingField === 'geom_side_a') {
-        updated.dimensions = { ...(updated.dimensions || {}), a: parseFloat(editValue) || 3 };
-      }
-      else if (editingField === 'geom_side_b') {
-        updated.dimensions = { ...(updated.dimensions || {}), b: parseFloat(editValue) || 4 };
-      }
-      else if (editingField === 'topicA_title') {
-        updated.topicA = { ...(updated.topicA || {}), title: editValue };
-      } else if (editingField === 'topicB_title') {
-        updated.topicB = { ...(updated.topicB || {}), title: editValue };
-      } else if (editingField === 'conclusion') updated.conclusion = editValue;
-      else if (editingField === 'codeSnippet') updated.codeSnippet = editValue;
-      else if (editingField === 'variableState') {
-        if (updated.steps && updated.steps[0]) {
-          updated.steps[0] = { ...updated.steps[0], variableState: editValue };
-        }
-      }
-      else if (editingField === 'stepNote') {
-        if (updated.steps && updated.steps[0]) {
-          updated.steps[0] = { ...updated.steps[0], note: editValue };
-        }
-      }
-      else if (editingField === 'instructorName') updated.instructorName = editValue;
-      else if (editingField === 'nextLessonSuggestion') updated.nextLessonSuggestion = editValue;
-      else if (editingField === 'diagramTitle') updated.diagramTitle = editValue;
-      else if (editingField.startsWith('math_step_')) {
-        const parts = editingField.split('_'); // ['math', 'step', idx, prop]
-        const idx = parseInt(parts[2], 10);
-        const prop = parts[3];
-        const steps = [...(updated.steps || [])];
-        if (steps[idx]) {
-          steps[idx] = { ...steps[idx], [prop]: editValue };
-          updated.steps = steps;
-        }
-      }
-      else if (editingField.startsWith('stage_')) {
-        const parts = editingField.split('_'); // ['stage', idx, prop]
-        const idx = parseInt(parts[1], 10);
-        const prop = parts[2];
-        const stages = [...(updated.stages || [])];
-        if (stages[idx]) {
-          stages[idx] = { ...stages[idx], [prop]: editValue };
-          updated.stages = stages;
-        }
-      }
-      else if (editingField.startsWith('diagram_label_')) {
-        const parts = editingField.split('_'); // ['diagram', 'label', idx, prop]
-        const idx = parseInt(parts[2], 10);
-        const prop = parts[3];
-        const labels = [...(updated.labels || [])];
-        if (labels[idx]) {
-          labels[idx] = { ...labels[idx], [prop]: editValue };
-          updated.labels = labels;
-        }
-      }
-      else if (editingField.startsWith('outro_summary_')) {
-        const idx = parseInt(editingField.replace('outro_summary_', ''), 10);
-        const pts = [...(updated.summaryPoints || [])];
-        pts[idx] = editValue;
-        updated.summaryPoints = pts;
-      }
-      return updated;
+    setDragState({
+      mode,
+      piece,
+      handle,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      overlayWidth: rect.width || 1920,
+      overlayHeight: rect.height || 1080,
+      initialLayout: { ...currentLayout },
+      initialRect: getEffectiveRect(piece),
+      hasMoved: false,
     });
-
-    setEditingField(null);
   };
 
-  // 4 chốt góc kiểu Canva (Bounding box handles)
-  const renderCanvaHandles = (color: string = 'border-blue-500') => (
-    <>
-      <div className={`absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 ${color} rounded-xs shadow-md z-30`} />
-      <div className={`absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 ${color} rounded-xs shadow-md z-30`} />
-      <div className={`absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 ${color} rounded-xs shadow-md z-30`} />
-      <div className={`absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 ${color} rounded-xs shadow-md z-30`} />
-    </>
-  );
+  const handleOpenTextEdit = (piece: LegoPieceDescriptor) => {
+    setEditPrimary(piece.textValue ?? '');
+    setEditSecondary(piece.subTextValue ?? '');
+    setIsEditingText(true);
+  };
 
-  // Bộ thanh trượt font size dùng chung
-  const renderFontSizeControl = (accent: 'blue' | 'amber' | 'emerald' | 'indigo' | 'rose' = 'blue') => {
-    const accentColor =
-      accent === 'amber'
-        ? 'accent-amber-500 text-amber-400 bg-amber-950/80 border-amber-500/40'
-        : accent === 'emerald'
-        ? 'accent-emerald-500 text-emerald-400 bg-emerald-950/80 border-emerald-500/40'
-        : accent === 'rose'
-        ? 'accent-rose-500 text-rose-400 bg-rose-950/80 border-rose-500/40'
-        : accent === 'indigo'
-        ? 'accent-indigo-500 text-indigo-400 bg-indigo-950/80 border-indigo-500/40'
-        : 'accent-blue-500 text-blue-400 bg-blue-950/80 border-blue-500/40';
-
-    return (
-      <div className="flex items-center gap-1.5 border-r border-slate-700 pr-2">
-        <Type className="w-3.5 h-3.5 opacity-80 shrink-0" />
-        <span className="text-[10px] opacity-80 font-bold shrink-0">Cỡ chữ:</span>
-
-        <button
-          type="button"
-          onClick={() => setFontSize(curFontSize - 2)}
-          className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center text-xs transition-colors"
-          title="Thu nhỏ chữ (-2px)"
-        >
-          -
-        </button>
-
-        <input
-          type="range"
-          min="18"
-          max="54"
-          step="2"
-          value={curFontSize}
-          onChange={(e) => setFontSize(Number(e.target.value))}
-          className={`w-20 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer ${accentColor.split(' ')[0]}`}
-          title="Kéo trượt để điều chỉnh cỡ chữ mượt mà"
-        />
-
-        <button
-          type="button"
-          onClick={() => setFontSize(curFontSize + 2)}
-          className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center text-xs transition-colors"
-          title="Phóng to chữ (+2px)"
-        >
-          +
-        </button>
-
-        <span className={`font-mono font-bold text-[11px] border px-1.5 py-0.5 rounded min-w-[34px] text-center ${accentColor.split(' ').slice(1).join(' ')}`}>
-          {curFontSize}px
-        </span>
-
-        {/* 3 Nấc chọn nhanh */}
-        <div className="flex items-center gap-1 ml-0.5">
-          <button
-            type="button"
-            onClick={() => setFontSize(24)}
-            className={`px-1 py-0.5 rounded text-[9px] font-bold ${
-              curFontSize === 24 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-            }`}
-          >
-            Nhỏ
-          </button>
-          <button
-            type="button"
-            onClick={() => setFontSize(32)}
-            className={`px-1 py-0.5 rounded text-[9px] font-bold ${
-              curFontSize === 32 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-            }`}
-          >
-            Vừa
-          </button>
-          <button
-            type="button"
-            onClick={() => setFontSize(42)}
-            className={`px-1 py-0.5 rounded text-[9px] font-bold ${
-              curFontSize === 42 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-            }`}
-          >
-            To
-          </button>
-        </div>
-      </div>
+  const handleSaveTextEdit = () => {
+    if (!selectedPiece?.buildTextPatch) {
+      setIsEditingText(false);
+      return;
+    }
+    const patch = selectedPiece.buildTextPatch(
+      editPrimary,
+      selectedPiece.subTextValue !== undefined ? editSecondary : undefined
     );
+    updateSceneProperty((s: SceneData) => ({ ...s, ...patch }));
+    setIsEditingText(false);
   };
 
-  // Helper điều chỉnh tỉ lệ khung component bên trong (Card Scale)
-  const renderCardScaleControl = (accentColor: string = 'text-indigo-400 border-indigo-500/40') => {
-    const curScale = (scene as any).cardScale || 1.0;
-    const setScale = (newScale: number) => {
-      const clamped = Math.max(0.7, Math.min(1.5, Number(newScale.toFixed(2))));
-      updateSceneProperty((s) => ({
+  const updateSelectedPieceLayout = (patch: Partial<LegoComponentLayout>) => {
+    if (!selectedPiece) return;
+
+    if (selectedPiece.isComposedBlock && scene.type === 'COMPOSED') {
+      const idx = selectedPiece.blockIndex!;
+      updateSceneProperty((s: SceneData) => {
+        if (s.type !== 'COMPOSED') return s;
+        const nextBlocks = [...s.blocks];
+        if (nextBlocks[idx]) {
+          nextBlocks[idx] = {
+            ...nextBlocks[idx],
+            ...(patch.scale !== undefined ? { scale: patch.scale } : {}),
+            ...(patch.fontSize !== undefined ? { fontSize: patch.fontSize } : {}),
+            ...(patch.hidden !== undefined ? { hidden: patch.hidden } : {}),
+          };
+        }
+        return { ...s, blocks: nextBlocks };
+      });
+      return;
+    }
+
+    if (selectedPiece.isExtraBlock) {
+      const idx = selectedPiece.blockIndex!;
+      updateSceneProperty((s: SceneData) => {
+        const nextExtra = [...(s.extraBlocks || [])];
+        if (nextExtra[idx]) {
+          nextExtra[idx] = {
+            ...nextExtra[idx],
+            ...(patch.scale !== undefined ? { scale: patch.scale } : {}),
+            ...(patch.fontSize !== undefined ? { fontSize: patch.fontSize } : {}),
+            ...(patch.hidden !== undefined ? { hidden: patch.hidden } : {}),
+          };
+        }
+        return { ...s, extraBlocks: nextExtra };
+      });
+      return;
+    }
+
+    updateSceneProperty((s: SceneData) => ({
+      ...s,
+      componentLayouts: {
+        ...(s.componentLayouts || {}),
+        [selectedPiece.id]: {
+          ...(s.componentLayouts?.[selectedPiece.id] || {}),
+          ...patch,
+        },
+      },
+    }));
+  };
+
+  const resetSelectedPiece = () => {
+    if (!selectedPiece) return;
+    if (selectedPiece.isComposedBlock && scene.type === 'COMPOSED') {
+      const idx = selectedPiece.blockIndex!;
+      updateSceneProperty((s: SceneData) => {
+        if (s.type !== 'COMPOSED') return s;
+        const nextBlocks = [...s.blocks];
+        if (nextBlocks[idx]) {
+          const { x, y, w, h, scale, fontSize, ...rest } = nextBlocks[idx];
+          nextBlocks[idx] = rest as ComposedBlock;
+        }
+        return { ...s, blocks: nextBlocks };
+      });
+      return;
+    }
+    updateSceneProperty((s: SceneData) => {
+      const nextLayouts = { ...(s.componentLayouts || {}) };
+      delete nextLayouts[selectedPiece.id];
+      return { ...s, componentLayouts: nextLayouts };
+    });
+  };
+
+  const deleteExtraOrComposedPiece = () => {
+    if (!selectedPiece) return;
+    if (selectedPiece.isExtraBlock) {
+      const idx = selectedPiece.blockIndex!;
+      updateSceneProperty((s: SceneData) => ({
         ...s,
-        cardScale: clamped,
+        extraBlocks: (s.extraBlocks || []).filter((_, i) => i !== idx),
       }));
-    };
-
-    return (
-      <div className="flex items-center gap-1.5 border-r border-slate-700 pr-2">
-        <Maximize2 className="w-3.5 h-3.5 opacity-80 shrink-0 text-indigo-400" />
-        <span className="text-[10px] opacity-80 font-bold shrink-0">Khung:</span>
-
-        <button
-          type="button"
-          onClick={() => setScale(curScale - 0.05)}
-          className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center text-xs transition-colors"
-          title="Thu nhỏ khung (-5%)"
-        >
-          -
-        </button>
-
-        <span className={`font-mono font-bold text-[11px] border px-1.5 py-0.5 rounded min-w-[34px] text-center ${accentColor.split(' ').slice(1).join(' ')}`}>
-          {Math.round(curScale * 100)}%
-        </span>
-
-        <button
-          type="button"
-          onClick={() => setScale(curScale + 0.05)}
-          className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center text-xs transition-colors"
-          title="Phóng to khung (+5%)"
-        >
-          +
-        </button>
-      </div>
-    );
+      setSelectedId(null);
+      return;
+    }
+    if (selectedPiece.isComposedBlock && scene.type === 'COMPOSED') {
+      const idx = selectedPiece.blockIndex!;
+      if (scene.blocks.length <= 1) return;
+      updateSceneProperty((s: SceneData) => {
+        if (s.type !== 'COMPOSED') return s;
+        return {
+          ...s,
+          blocks: s.blocks.filter((_, i) => i !== idx),
+        };
+      });
+      setSelectedId(null);
+    }
   };
+
+  const handleAddLegoBlock = (
+    preset: 'text' | 'formula' | 'number' | 'icon' | 'list' | 'guide'
+  ) => {
+    const seed =
+      (scene.type === 'COMPOSED' ? scene.blocks.length : scene.extraBlocks?.length || 0) + 1;
+    const newBlock = createLegoBlockPreset(preset, seed);
+
+    updateSceneProperty((s: SceneData) => {
+      if (s.type === 'COMPOSED') {
+        return {
+          ...s,
+          blocks: [...(s.blocks || []), newBlock],
+        };
+      }
+      return {
+        ...s,
+        extraBlocks: [...(s.extraBlocks || []), newBlock],
+      };
+    });
+    setShowAddMenu(false);
+    setSelectedId(newBlock.id);
+  };
+
+  const handleDecomposeScene = () => {
+    if (scene.type === 'COMPOSED') return;
+    const composed = decomposeSceneToComposed(scene);
+    updateSceneProperty(() => composed);
+    setSelectedId(composed.blocks[0]?.id || null);
+  };
+
+  const handleResetAllLayouts = () => {
+    updateSceneProperty((s: SceneData) => ({
+      ...s,
+      componentLayouts: {},
+      extraBlocks: [],
+    }));
+    setSelectedId(null);
+  };
+
+  const selectedLayout: LegoComponentLayout = selectedPiece
+    ? selectedPiece.isComposedBlock && scene.type === 'COMPOSED'
+      ? {
+          scale: scene.blocks[selectedPiece.blockIndex!]?.scale ?? 1,
+          fontSize: scene.blocks[selectedPiece.blockIndex!]?.fontSize,
+        }
+      : selectedPiece.isExtraBlock
+      ? {
+          scale: scene.extraBlocks?.[selectedPiece.blockIndex!]?.scale ?? 1,
+          fontSize: scene.extraBlocks?.[selectedPiece.blockIndex!]?.fontSize,
+        }
+      : scene.componentLayouts?.[selectedPiece.id] || {}
+    : {};
+
+  const curScale = selectedLayout.scale ?? 1;
+  const curFontSize = selectedLayout.fontSize ?? ((scene as any).customFontSize || 30);
 
   return (
     <div
-      onClick={(e) => {
+      ref={overlayRef}
+      onPointerDown={(e) => {
         if (e.target === e.currentTarget) {
-          setSelectedTarget(null);
-          setEditingField(null);
+          setSelectedId(null);
+          setIsEditingText(false);
+          setShowAddMenu(false);
         }
       }}
-      className="absolute inset-0 z-20 pointer-events-auto select-none"
+      className="absolute inset-0 z-20 pointer-events-auto select-none overflow-hidden"
     >
-      {/* Badge báo hiệu chế độ Canva WYSIWYG */}
-      <div className="absolute top-2.5 right-3 bg-slate-900/90 border border-blue-500/40 text-blue-400 px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 backdrop-blur-md shadow-lg pointer-events-none z-30">
-        <Sparkles className="w-3 h-3 text-brand-400 animate-pulse" />
-        <span>Canva Mode ({scene.type}): Click trực tiếp để tùy biến</span>
+      {/* Top Lego Studio Bar */}
+      <div
+        onPointerDown={(e) => e.stopPropagation()}
+        className="absolute top-2.5 left-3 right-3 flex items-center justify-between gap-2 pointer-events-none z-40"
+      >
+        <div className="flex items-center gap-1.5 pointer-events-auto bg-slate-950/90 border border-blue-500/40 px-2.5 py-1 rounded-xl backdrop-blur-md shadow-xl">
+          <Puzzle className="w-3.5 h-3.5 text-blue-400" />
+          <span className="text-[11px] font-bold text-slate-200">
+            Lego Mode ({visiblePieces.length} khối)
+          </span>
+          <span className="text-[10px] text-slate-400 hidden md:inline">
+            • Kéo để di chuyển, kéo góc để co giãn, đúp chuột để sửa chữ
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 pointer-events-auto">
+          {/* Add Freeform Lego Block Button */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowAddMenu((v) => !v)}
+              className="px-2.5 py-1 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-lg border border-emerald-400/40 cursor-pointer transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Thêm Khối Lego</span>
+            </button>
+
+            {showAddMenu && (
+              <div className="absolute right-0 mt-1.5 w-52 bg-slate-950/95 border border-slate-700 rounded-xl shadow-2xl p-1.5 z-50 backdrop-blur-md space-y-1">
+                <div className="px-2 py-1 text-[10px] font-mono uppercase text-slate-400 border-b border-slate-800">
+                  Chọn loại khối Lego mới
+                </div>
+                {[
+                  { id: 'text', label: '📝 Thẻ Ghi chú / Giải thích' },
+                  { id: 'formula', label: '∑ Công thức Toán / KaTeX' },
+                  { id: 'number', label: '🔢 Chỉ số Khoa học Nổi bật' },
+                  { id: 'icon', label: '⚛️ Biểu tượng STEM Minh họa' },
+                  { id: 'list', label: '📋 Danh sách Ý chính' },
+                  { id: 'guide', label: '🦉 Trợ giảng Cú Mèo (Guide)' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleAddLegoBlock(item.id as any)}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-slate-200 hover:bg-blue-600/30 hover:text-white transition-colors cursor-pointer"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Decompose Template into Freeform COMPOSED Scene */}
+          {scene.type !== 'COMPOSED' && (
+            <button
+              type="button"
+              onClick={handleDecomposeScene}
+              className="px-2.5 py-1 rounded-xl bg-indigo-600/90 hover:bg-indigo-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-lg border border-indigo-400/40 cursor-pointer transition-all"
+              title="Tách khuôn mẫu cố định thành cảnh COMPOSED tự do hoàn toàn"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Tách Lego Tự Do</span>
+            </button>
+          )}
+
+          {/* Reset All Layouts */}
+          {(Object.keys(scene.componentLayouts || {}).length > 0 ||
+            (scene.extraBlocks && scene.extraBlocks.length > 0)) && (
+            <button
+              type="button"
+              onClick={handleResetAllLayouts}
+              className="px-2 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 text-[11px] font-medium flex items-center gap-1 border border-slate-700 cursor-pointer"
+              title="Đặt lại toàn bộ vị trí các khối về mặc định"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span className="hidden lg:inline">Reset</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* 1. KHU VỰC TIÊU ĐỀ PHÂN CẢNH (TOP TITLE) - DÙNG CHUNG CHO TẤT CẢ SCENES */}
-      <div
-        onClick={(e) => {
-          e.stopPropagation();
-          setSelectedTarget('title');
-        }}
-        onDoubleClick={() => handleStartEdit('title', scene.title)}
-        className={`absolute top-3 left-7 right-44 h-11 rounded-lg transition-all cursor-pointer flex items-center px-2 group ${
-          selectedTarget === 'title'
-            ? 'ring-2 ring-blue-500 bg-blue-500/10 shadow-lg'
-            : 'hover:ring-1 hover:ring-blue-400/60 hover:bg-blue-500/5'
-        }`}
-      >
-        {selectedTarget === 'title' && renderCanvaHandles()}
+      {/* Interactive Bounding Boxes for Every Lego Piece */}
+      {visiblePieces.map((piece) => {
+        const rect = getEffectiveRect(piece);
+        const isSelected = selectedId === piece.id;
+        const leftPct = (rect.x / 1920) * 100;
+        const topPct = (rect.y / 1080) * 100;
+        const widthPct = (rect.w / 1920) * 100;
+        const heightPct = (rect.h / 1080) * 100;
 
-        {selectedTarget === 'title' && !editingField && (
-          <div className="absolute -bottom-11 left-0 bg-slate-900/95 border border-blue-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in">
-            {renderFontSizeControl('blue')}
+        const borderAccent = piece.isExtraBlock
+          ? 'border-emerald-400 ring-emerald-500'
+          : piece.isComposedBlock
+          ? 'border-indigo-400 ring-indigo-500'
+          : 'border-blue-400 ring-blue-500';
+
+        return (
+          <div
+            key={piece.id}
+            style={{
+              left: `${leftPct}%`,
+              top: `${topPct}%`,
+              width: `${widthPct}%`,
+              height: `${heightPct}%`,
+            }}
+            onPointerDown={(e) => startDrag(e, piece, 'move')}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              setSelectedId(piece.id);
+              if (piece.buildTextPatch) {
+                handleOpenTextEdit(piece);
+              }
+            }}
+            className={`absolute rounded-xl transition-shadow cursor-move group ${
+              isSelected
+                ? `ring-2 ${borderAccent} bg-blue-500/10 shadow-[0_0_25px_rgba(59,130,246,0.25)] z-30`
+                : 'hover:ring-1 hover:ring-blue-400/70 hover:bg-blue-500/5 z-20'
+            }`}
+          >
+            {/* Hover / Active Piece Badge */}
+            <div
+              className={`absolute -top-6 left-0 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold whitespace-nowrap flex items-center gap-1 pointer-events-none transition-opacity ${
+                isSelected
+                  ? 'opacity-100 bg-blue-600 text-white shadow-md'
+                  : 'opacity-0 group-hover:opacity-100 bg-slate-900/90 text-blue-300 border border-blue-500/40'
+              }`}
+            >
+              <Move className="w-2.5 h-2.5" />
+              <span>{piece.label}</span>
+              {(scene.componentLayouts?.[piece.id]?.dx ||
+                scene.componentLayouts?.[piece.id]?.dy) && (
+                <span className="opacity-80">
+                  ({scene.componentLayouts?.[piece.id]?.dx ?? 0},
+                  {scene.componentLayouts?.[piece.id]?.dy ?? 0})
+                </span>
+              )}
+            </div>
+
+            {/* 8-Point Resize Handles when Selected */}
+            {isSelected && (
+              <>
+                {(
+                  [
+                    { h: 'nw', cls: '-top-1.5 -left-1.5 cursor-nwse-resize' },
+                    { h: 'n', cls: '-top-1.5 left-1/2 -translate-x-1/2 cursor-ns-resize' },
+                    { h: 'ne', cls: '-top-1.5 -right-1.5 cursor-nesw-resize' },
+                    { h: 'e', cls: 'top-1/2 -translate-y-1/2 -right-1.5 cursor-ew-resize' },
+                    { h: 'se', cls: '-bottom-1.5 -right-1.5 cursor-nwse-resize' },
+                    { h: 's', cls: '-bottom-1.5 left-1/2 -translate-x-1/2 cursor-ns-resize' },
+                    { h: 'sw', cls: '-bottom-1.5 -left-1.5 cursor-nesw-resize' },
+                    { h: 'w', cls: 'top-1/2 -translate-y-1/2 -left-1.5 cursor-ew-resize' },
+                  ] as { h: ResizeHandle; cls: string }[]
+                ).map(({ h, cls }) => (
+                  <div
+                    key={h}
+                    onPointerDown={(e) => startDrag(e, piece, 'resize', h)}
+                    className={`absolute w-3 h-3 bg-white border-2 border-blue-600 rounded-xs shadow-md z-40 hover:scale-125 transition-transform ${cls}`}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Floating Inspector Toolbar for the Selected Lego Piece */}
+      {selectedPiece && !dragState?.hasMoved && (
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[96%] bg-slate-950/95 border border-blue-500/60 rounded-2xl shadow-2xl px-3 py-2 flex flex-wrap items-center gap-2 text-xs text-white z-40 backdrop-blur-md"
+        >
+          {/* Piece Name */}
+          <div className="flex items-center gap-1.5 pr-2 border-r border-slate-800">
+            <Layers className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <span className="font-bold text-blue-300 text-[11px] max-w-[180px] truncate">
+              {selectedPiece.label}
+            </span>
+          </div>
+
+          {/* Edit Text Button */}
+          {selectedPiece.buildTextPatch && (
             <button
-              onClick={() => handleStartEdit('title', scene.title)}
-              className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium flex items-center gap-1 text-[11px]"
+              type="button"
+              onClick={() => handleOpenTextEdit(selectedPiece)}
+              className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold flex items-center gap-1 text-[11px] cursor-pointer"
             >
               <Edit3 className="w-3 h-3" />
-              <span>Sửa Tên</span>
+              <span>Sửa Nội Dung</span>
             </button>
-            <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        )}
+          )}
 
-        {editingField === 'title' && (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="absolute inset-0 bg-slate-900 border-2 border-blue-500 rounded-lg flex items-center px-2 z-40 shadow-2xl"
-          >
-            <input
-              type="text"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSaveField();
-                if (e.key === 'Escape') setEditingField(null);
-              }}
-              autoFocus
-              className="w-full bg-transparent text-white font-bold text-sm outline-hidden"
-            />
-            <button onClick={handleSaveField} className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700 mr-1">
-              <Check className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={() => setEditingField(null)} className="p-1 bg-slate-700 text-slate-300 rounded hover:bg-slate-600">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 2. CÁC VÙNG TƯƠNG TÁC CHUYÊN BIỆT CHO TỪNG TEMPLATE */}
-
-      {/* TEMPLATE: COMPARISON_SPLIT */}
-      {scene.type === 'COMPARISON_SPLIT' && (
-        <>
-          {/* Cột A */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('topicA');
-            }}
-            className={`absolute top-16 bottom-14 left-7 w-[43%] rounded-xl transition-all cursor-pointer ${
-              selectedTarget === 'topicA'
-                ? 'ring-2 ring-blue-500 bg-blue-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-blue-400/50 hover:bg-blue-500/5'
-            }`}
-          >
-            {selectedTarget === 'topicA' && renderCanvaHandles('border-blue-500')}
-
-            {selectedTarget === 'topicA' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 left-0 bg-slate-900/95 border border-blue-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderFontSizeControl('blue')}
-                <button
-                  onClick={() => handleStartEdit('topicA_title', (scene as any).topicA?.title || 'Khái Niệm A')}
-                  className="px-2 py-0.5 rounded bg-blue-600/80 hover:bg-blue-600 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Tiêu Đề</span>
-                </button>
-                <button
-                  onClick={() => {
-                    const currentPoints = (scene as any).topicA?.points || [];
-                    updateSceneProperty((s) => ({
-                      ...s,
-                      topicA: { ...(s as any).topicA, points: [...currentPoints, 'Ý so sánh mới'] },
-                    }));
-                  }}
-                  className="px-2 py-0.5 rounded bg-emerald-600/80 hover:bg-emerald-600 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Thêm Ý</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Cột B */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('topicB');
-            }}
-            className={`absolute top-16 bottom-14 right-7 w-[43%] rounded-xl transition-all cursor-pointer ${
-              selectedTarget === 'topicB'
-                ? 'ring-2 ring-amber-500 bg-amber-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-amber-400/50 hover:bg-amber-500/5'
-            }`}
-          >
-            {selectedTarget === 'topicB' && renderCanvaHandles('border-amber-500')}
-
-            {selectedTarget === 'topicB' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 right-0 bg-slate-900/95 border border-amber-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderFontSizeControl('amber')}
-                <button
-                  onClick={() => handleStartEdit('topicB_title', (scene as any).topicB?.title || 'Khái Niệm B')}
-                  className="px-2 py-0.5 rounded bg-amber-600/80 hover:bg-amber-600 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Tiêu Đề</span>
-                </button>
-                <button
-                  onClick={() => {
-                    const currentPoints = (scene as any).topicB?.points || [];
-                    updateSceneProperty((s) => ({
-                      ...s,
-                      topicB: { ...(s as any).topicB, points: [...currentPoints, 'Ý so sánh mới'] },
-                    }));
-                  }}
-                  className="px-2 py-0.5 rounded bg-emerald-600/80 hover:bg-emerald-600 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Thêm Ý</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Kết luận */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('conclusion');
-            }}
-            onDoubleClick={() => handleStartEdit('conclusion', (scene as any).conclusion || '')}
-            className={`absolute bottom-3 left-7 right-7 h-9 rounded-lg transition-all cursor-pointer flex items-center px-3 ${
-              selectedTarget === 'conclusion'
-                ? 'ring-2 ring-emerald-500 bg-emerald-500/10 shadow-lg'
-                : 'hover:ring-1 hover:ring-emerald-400/50 hover:bg-emerald-500/5'
-            }`}
-          >
-            {selectedTarget === 'conclusion' && renderCanvaHandles('border-emerald-500')}
-            {selectedTarget === 'conclusion' && !editingField && (
-              <div className="absolute -top-9 left-0 bg-slate-900/95 border border-emerald-500/60 rounded-lg shadow-2xl p-1 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in">
-                <span className="text-[10px] text-emerald-400 font-bold px-1">Kết luận:</span>
-                <button
-                  onClick={() => handleStartEdit('conclusion', (scene as any).conclusion || '')}
-                  className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex items-center gap-1 text-[11px]"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Trực Tiếp</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* TEMPLATE 1: TITLE_HERO */}
-      {scene.type === 'TITLE_HERO' && (
-        <>
-          {/* Sub 1: Badge Phân Cấp / Lớp */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('heroBadge');
-            }}
-            className={`absolute top-14 left-1/3 right-1/3 h-10 rounded-full transition-all cursor-pointer flex items-center justify-center ${
-              selectedTarget === 'heroBadge'
-                ? 'ring-2 ring-emerald-500 bg-emerald-500/10 shadow-lg'
-                : 'hover:ring-1 hover:ring-emerald-400/50 hover:bg-emerald-500/5'
-            }`}
-          >
-            {selectedTarget === 'heroBadge' && renderCanvaHandles('border-emerald-500')}
-            {selectedTarget === 'heroBadge' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-11 bg-slate-900/95 border border-emerald-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                <button
-                  onClick={() => handleStartEdit('gradeLevel', (scene as any).gradeLevel || 'Lớp 12')}
-                  className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Khối Lớp</span>
-                </button>
-                <button
-                  onClick={() => handleStartEdit('badgeText', (scene as any).badgeText || 'STEMotion Studio')}
-                  className="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Nhãn Badge</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 2: Tiêu Đề Chính */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('heroTitle');
-            }}
-            className={`absolute top-28 left-8 right-8 h-28 rounded-2xl transition-all cursor-pointer flex flex-col items-center justify-center p-4 ${
-              selectedTarget === 'heroTitle'
-                ? 'ring-2 ring-blue-500 bg-blue-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-blue-400/50 hover:bg-blue-500/5'
-            }`}
-          >
-            {selectedTarget === 'heroTitle' && renderCanvaHandles('border-blue-500')}
-            {selectedTarget === 'heroTitle' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 bg-slate-900/95 border border-blue-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderFontSizeControl('blue')}
-                {renderCardScaleControl('text-blue-400 border-blue-500/40')}
-                <button
-                  onClick={() => handleStartEdit('title', scene.title)}
-                  className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Tiêu Đề</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 3: Phụ Đề */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('heroSubtitle');
-            }}
-            className={`absolute bottom-16 left-12 right-12 h-16 rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center p-3 ${
-              selectedTarget === 'heroSubtitle'
-                ? 'ring-2 ring-purple-500 bg-purple-500/10 shadow-xl'
-                : 'hover:ring-1 hover:ring-purple-400/50 hover:bg-purple-500/5'
-            }`}
-          >
-            {selectedTarget === 'heroSubtitle' && renderCanvaHandles('border-purple-500')}
-            {selectedTarget === 'heroSubtitle' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-11 bg-slate-900/95 border border-purple-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                <button
-                  onClick={() => handleStartEdit('subtitle', (scene as any).subtitle || '')}
-                  className="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Phụ Đề</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* TEMPLATE 2: MATH_FORMULA (TỪNG THẺ CON RIÊNG BIỆT) */}
-      {scene.type === 'MATH_FORMULA' && (
-        <>
-          {/* Sub 1: Thẻ Công Thức Cốt Lõi (Trung Tâm Phía Trên) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('mathMainFormula');
-            }}
-            className={`absolute top-14 bottom-36 left-12 right-12 rounded-2xl transition-all cursor-pointer flex flex-col items-center justify-center p-6 ${
-              selectedTarget === 'mathMainFormula'
-                ? 'ring-2 ring-blue-500 bg-blue-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-blue-400/50 hover:bg-blue-500/5'
-            }`}
-          >
-            {selectedTarget === 'mathMainFormula' && renderCanvaHandles('border-blue-500')}
-            {selectedTarget === 'mathMainFormula' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 bg-slate-900/95 border border-blue-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderFontSizeControl('blue')}
-                {renderCardScaleControl('text-blue-400 border-blue-500/40')}
-                <button
-                  onClick={() => handleStartEdit('latex', (scene as any).latex || '')}
-                  className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Mã LaTeX</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 2, 3, 4: 3 Thẻ Bước Triển Khai Phía Dưới */}
-          <div className="absolute bottom-6 h-28 left-10 right-10 grid grid-cols-3 gap-4 pointer-events-none">
-            {[0, 1, 2].map((stepIdx) => {
-              const targetKey = `mathStep_${stepIdx}`;
-              const isSelected = selectedTarget === targetKey;
-              const stepData = (scene as any).steps?.[stepIdx] || {};
-
-              return (
-                <div
-                  key={stepIdx}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedTarget(targetKey);
-                  }}
-                  className={`pointer-events-auto rounded-xl transition-all cursor-pointer relative p-3 flex flex-col justify-between ${
-                    isSelected
-                      ? 'ring-2 ring-amber-500 bg-amber-500/15 shadow-xl'
-                      : 'hover:ring-1 hover:ring-amber-400/50 hover:bg-amber-500/5'
-                  }`}
-                >
-                  {isSelected && renderCanvaHandles('border-amber-500')}
-
-                  {isSelected && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute -top-11 left-0 bg-slate-900/95 border border-amber-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-1.5 text-xs text-white z-40 backdrop-blur-md animate-fade-in whitespace-nowrap"
-                    >
-                      <span className="text-[10px] text-amber-400 font-bold font-mono">B{stepIdx + 1}:</span>
-                      <button
-                        onClick={() => handleStartEdit(`math_step_${stepIdx}_label`, stepData.label || `Bước ${stepIdx + 1}`)}
-                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-medium flex items-center gap-1"
-                      >
-                        <Edit3 className="w-2.5 h-2.5" />
-                        <span>Nhãn</span>
-                      </button>
-                      <button
-                        onClick={() => handleStartEdit(`math_step_${stepIdx}_latexSnippet`, stepData.latexSnippet || '')}
-                        className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-medium flex items-center gap-1 font-mono"
-                      >
-                        <Edit3 className="w-2.5 h-2.5" />
-                        <span>LaTeX</span>
-                      </button>
-                      <button
-                        onClick={() => handleStartEdit(`math_step_${stepIdx}_explanation`, stepData.explanation || '')}
-                        className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-medium flex items-center gap-1"
-                      >
-                        <Edit3 className="w-2.5 h-2.5" />
-                        <span>Diễn giải</span>
-                      </button>
-                      <button onClick={() => setSelectedTarget(null)} className="p-0.5 text-slate-400 hover:text-white">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {/* TEMPLATE 3: CHEMICAL_REACTION (TỪNG KHỐI RIÊNG BIỆT) */}
-      {scene.type === 'CHEMICAL_REACTION' && (
-        <>
-          {/* Sub 1: Khối Mô Phỏng Ống Nghiệm / Flask (Trái) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('chemFlask');
-            }}
-            className={`absolute top-14 bottom-14 left-8 w-[38%] rounded-2xl transition-all cursor-pointer flex flex-col items-center justify-center p-6 ${
-              selectedTarget === 'chemFlask'
-                ? 'ring-2 ring-rose-500 bg-rose-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-rose-400/50 hover:bg-rose-500/5'
-            }`}
-          >
-            {selectedTarget === 'chemFlask' && renderCanvaHandles('border-rose-500')}
-            {selectedTarget === 'chemFlask' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 left-0 bg-slate-900/95 border border-rose-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderCardScaleControl('text-rose-400 border-rose-500/40')}
-                <button
-                  onClick={() => handleStartEdit('condition', (scene as any).condition || 'Nhiệt độ phòng')}
-                  className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Điều Kiện</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 2: Khối Phương Trình Hóa Học (Phải Trên) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('chemEquation');
-            }}
-            className={`absolute top-14 left-[42%] right-8 h-26 rounded-2xl transition-all cursor-pointer flex flex-col justify-center p-4 ${
-              selectedTarget === 'chemEquation'
-                ? 'ring-2 ring-indigo-500 bg-indigo-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-indigo-400/50 hover:bg-indigo-500/5'
-            }`}
-          >
-            {selectedTarget === 'chemEquation' && renderCanvaHandles('border-indigo-500')}
-            {selectedTarget === 'chemEquation' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 right-0 bg-slate-900/95 border border-indigo-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderFontSizeControl('indigo')}
-                <button
-                  onClick={() => handleStartEdit('equation', (scene as any).equation || '')}
-                  className="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Phương Trình LaTeX</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 3: Khối Chất Tham Gia & Sản Phẩm (Phải Giữa) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('chemIO');
-            }}
-            className={`absolute top-44 left-[42%] right-8 h-24 rounded-2xl transition-all cursor-pointer flex flex-col justify-center p-4 ${
-              selectedTarget === 'chemIO'
-                ? 'ring-2 ring-amber-500 bg-amber-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-amber-400/50 hover:bg-amber-500/5'
-            }`}
-          >
-            {selectedTarget === 'chemIO' && renderCanvaHandles('border-amber-500')}
-            {selectedTarget === 'chemIO' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 right-0 bg-slate-900/95 border border-amber-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                <button
-                  onClick={() => handleStartEdit('reactants', (scene as any).reactants || '')}
-                  className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Chất Tham Gia</span>
-                </button>
-                <button
-                  onClick={() => handleStartEdit('products', (scene as any).products || '')}
-                  className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sản Phẩm</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 4: Hiện Tượng Quan Sát (Phải Dưới) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('chemObservation');
-            }}
-            className={`absolute bottom-14 left-[42%] right-8 h-20 rounded-2xl transition-all cursor-pointer flex flex-col justify-center p-4 ${
-              selectedTarget === 'chemObservation'
-                ? 'ring-2 ring-rose-500 bg-rose-500/10 shadow-xl'
-                : 'hover:ring-1 hover:ring-rose-400/50 hover:bg-rose-500/5'
-            }`}
-          >
-            {selectedTarget === 'chemObservation' && renderCanvaHandles('border-rose-500')}
-            {selectedTarget === 'chemObservation' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-11 right-0 bg-slate-900/95 border border-rose-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                <button
-                  onClick={() => handleStartEdit('observation', (scene as any).observation || '')}
-                  className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Hiện Tượng</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* TEMPLATE 5: PROCESS_TIMELINE (TIÊU ĐỀ & 4 PHA RIÊNG BIỆT) */}
-      {scene.type === 'PROCESS_TIMELINE' && (
-        <>
-          {/* Sub 1: Tiêu đề chu trình */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('timelineTitle');
-            }}
-            className={`absolute top-12 left-1/4 right-1/4 h-11 rounded-xl transition-all cursor-pointer flex items-center justify-center ${
-              selectedTarget === 'timelineTitle'
-                ? 'ring-2 ring-emerald-500 bg-emerald-500/10 shadow-lg'
-                : 'hover:ring-1 hover:ring-emerald-400/50 hover:bg-emerald-500/5'
-            }`}
-          >
-            {selectedTarget === 'timelineTitle' && renderCanvaHandles('border-emerald-500')}
-            {selectedTarget === 'timelineTitle' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-11 bg-slate-900/95 border border-emerald-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderFontSizeControl('emerald')}
-                <button
-                  onClick={() => handleStartEdit('processTitle', (scene as any).processTitle || '')}
-                  className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Tên Chu Trình</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 2: 4 Thẻ Giai Đoạn (Pipeline Stages) */}
-          <div className="absolute top-28 bottom-14 left-8 right-8 grid grid-cols-4 gap-3 pointer-events-none">
-            {[0, 1, 2, 3].map((stageIdx) => {
-              const targetKey = `timelineStage_${stageIdx}`;
-              const isSelected = selectedTarget === targetKey;
-              const stageData = (scene as any).stages?.[stageIdx] || {};
-
-              return (
-                <div
-                  key={stageIdx}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedTarget(targetKey);
-                  }}
-                  className={`pointer-events-auto rounded-xl transition-all cursor-pointer relative p-3 flex flex-col justify-between ${
-                    isSelected
-                      ? 'ring-2 ring-teal-500 bg-teal-500/15 shadow-xl'
-                      : 'hover:ring-1 hover:ring-teal-400/50 hover:bg-teal-500/5'
-                  }`}
-                >
-                  {isSelected && renderCanvaHandles('border-teal-500')}
-
-                  {isSelected && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute -top-11 left-0 bg-slate-900/95 border border-teal-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-1.5 text-xs text-white z-40 backdrop-blur-md animate-fade-in whitespace-nowrap"
-                    >
-                      {renderCardScaleControl('text-teal-400 border-teal-500/40')}
-                      <button
-                        onClick={() => handleStartEdit(`stage_${stageIdx}_title`, stageData.title || `Giai đoạn ${stageIdx + 1}`)}
-                        className="px-2 py-0.5 rounded bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-medium flex items-center gap-1"
-                      >
-                        <Edit3 className="w-2.5 h-2.5" />
-                        <span>Tên</span>
-                      </button>
-                      <button
-                        onClick={() => handleStartEdit(`stage_${stageIdx}_description`, stageData.description || '')}
-                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-medium flex items-center gap-1"
-                      >
-                        <Edit3 className="w-2.5 h-2.5" />
-                        <span>Mô tả</span>
-                      </button>
-                      <button onClick={() => setSelectedTarget(null)} className="p-0.5 text-slate-400 hover:text-white">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {/* TEMPLATE 6: STEM_QUIZ (CÂU HỎI & 4 LỰA CHỌN A-B-C-D RIÊNG BIỆT) */}
-      {scene.type === 'STEM_QUIZ' && (
-        <>
-          {/* Sub 1: Thẻ Câu Hỏi (Phía Trên) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('quizQuestion');
-            }}
-            className={`absolute top-14 left-10 right-10 h-28 rounded-2xl transition-all cursor-pointer flex flex-col justify-center p-5 ${
-              selectedTarget === 'quizQuestion'
-                ? 'ring-2 ring-rose-500 bg-rose-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-rose-400/50 hover:bg-rose-500/5'
-            }`}
-          >
-            {selectedTarget === 'quizQuestion' && renderCanvaHandles('border-rose-500')}
-            {selectedTarget === 'quizQuestion' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 left-0 bg-slate-900/95 border border-rose-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderFontSizeControl('rose')}
-                {renderCardScaleControl('text-rose-400 border-rose-500/40')}
-                <button
-                  onClick={() => handleStartEdit('question', (scene as any).question || '')}
-                  className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Câu Hỏi</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 2..5: Lưới 4 Phương Án A, B, C, D */}
-          <div className="absolute top-46 bottom-14 left-10 right-10 grid grid-cols-2 gap-4 pointer-events-none">
-            {['A', 'B', 'C', 'D'].map((letter, optIdx) => {
-              const targetKey = `quizOption_${optIdx}`;
-              const isSelected = selectedTarget === targetKey;
-              const optVal = (scene as any).options?.[optIdx] || '';
-              const isCorrect = (scene as any).correctIndex === optIdx;
-
-              return (
-                <div
-                  key={letter}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedTarget(targetKey);
-                  }}
-                  className={`pointer-events-auto rounded-xl transition-all cursor-pointer relative p-3 flex items-center ${
-                    isSelected
-                      ? 'ring-2 ring-emerald-500 bg-emerald-500/15 shadow-xl'
-                      : 'hover:ring-1 hover:ring-emerald-400/50 hover:bg-emerald-500/5'
-                  }`}
-                >
-                  {isSelected && renderCanvaHandles('border-emerald-500')}
-
-                  {isSelected && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute -top-11 left-0 bg-slate-900/95 border border-emerald-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in whitespace-nowrap"
-                    >
-                      <span className="text-[10px] text-emerald-400 font-bold font-mono">Phương án {letter}:</span>
-                      <button
-                        onClick={() => handleStartEdit(`quiz_option_${optIdx}`, optVal)}
-                        className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center gap-1"
-                      >
-                        <Edit3 className="w-3 h-3" />
-                        <span>Sửa Nội Dung</span>
-                      </button>
-                      <button
-                        onClick={() => updateSceneProperty((s) => ({ ...s, correctIndex: optIdx }))}
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 ${
-                          isCorrect ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        <Check className="w-3 h-3" />
-                        <span>{isCorrect ? 'Đáp Án Đúng ✓' : 'Chọn Làm Đáp Án Đúng'}</span>
-                      </button>
-                      <button onClick={() => setSelectedTarget(null)} className="p-0.5 text-slate-400 hover:text-white">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {/* TEMPLATE 7: GEOMETRY_SPACE (MÔ HÌNH HÌNH HỌC SVG & ĐỊNH LÝ) */}
-      {scene.type === 'GEOMETRY_SPACE' && (
-        <>
-          {/* Sub 1: Mô hình hình học SVG (Cột Trái) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('geomSvg');
-            }}
-            className={`absolute top-14 bottom-14 left-8 w-[40%] rounded-2xl transition-all cursor-pointer flex flex-col items-center justify-center p-4 ${
-              selectedTarget === 'geomSvg'
-                ? 'ring-2 ring-cyan-500 bg-cyan-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-cyan-400/50 hover:bg-cyan-500/5'
-            }`}
-          >
-            {selectedTarget === 'geomSvg' && renderCanvaHandles('border-cyan-500')}
-            {selectedTarget === 'geomSvg' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 left-0 bg-slate-900/95 border border-cyan-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderCardScaleControl('text-cyan-400 border-cyan-500/40')}
-                <button
-                  onClick={() => handleStartEdit('geom_side_a', String((scene as any).dimensions?.a || 3))}
-                  className="px-2 py-0.5 rounded bg-cyan-600 hover:bg-cyan-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Cạnh a</span>
-                </button>
-                <button
-                  onClick={() => handleStartEdit('geom_side_b', String((scene as any).dimensions?.b || 4))}
-                  className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Cạnh b</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 2: Tên Định Lý & KaTeX (Cột Phải Trên) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('geomTheorem');
-            }}
-            className={`absolute top-14 left-[44%] right-8 h-34 rounded-2xl transition-all cursor-pointer flex flex-col justify-center p-4 ${
-              selectedTarget === 'geomTheorem'
-                ? 'ring-2 ring-indigo-500 bg-indigo-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-indigo-400/50 hover:bg-indigo-500/5'
-            }`}
-          >
-            {selectedTarget === 'geomTheorem' && renderCanvaHandles('border-indigo-500')}
-            {selectedTarget === 'geomTheorem' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 right-0 bg-slate-900/95 border border-indigo-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderFontSizeControl('indigo')}
-                <button
-                  onClick={() => handleStartEdit('theoremName', (scene as any).theoremName || 'Định lý')}
-                  className="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Tên Định Lý</span>
-                </button>
-                <button
-                  onClick={() => handleStartEdit('geometry_latex', (scene as any).formulaLatex || '')}
-                  className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium flex items-center gap-1 font-mono"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Mã LaTeX</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 3: Tính Toán & Kích Thước (Cột Phải Dưới) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('geomProof');
-            }}
-            className={`absolute bottom-14 left-[44%] right-8 h-32 rounded-2xl transition-all cursor-pointer flex flex-col justify-center p-4 ${
-              selectedTarget === 'geomProof'
-                ? 'ring-2 ring-cyan-500 bg-cyan-500/10 shadow-xl'
-                : 'hover:ring-1 hover:ring-cyan-400/50 hover:bg-cyan-500/5'
-            }`}
-          >
-            {selectedTarget === 'geomProof' && renderCanvaHandles('border-cyan-500')}
-            {selectedTarget === 'geomProof' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-11 right-0 bg-slate-900/95 border border-cyan-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                <span className="text-[10px] text-cyan-400 font-mono">
-                  a={(scene as any).dimensions?.a} | b={(scene as any).dimensions?.b} | c={(scene as any).dimensions?.c}
-                </span>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* TEMPLATE 8: DATA_CHART */}
-      {scene.type === 'DATA_CHART' && (
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedTarget('dataChart');
-          }}
-          className={`absolute top-14 bottom-12 left-10 right-10 rounded-2xl transition-all cursor-pointer flex flex-col justify-center items-center p-6 ${
-            selectedTarget === 'dataChart'
-              ? 'ring-2 ring-emerald-500 bg-emerald-500/10 shadow-2xl'
-              : 'hover:ring-1 hover:ring-emerald-400/50 hover:bg-emerald-500/5'
-          }`}
-        >
-          {selectedTarget === 'dataChart' && renderCanvaHandles('border-emerald-500')}
-          {selectedTarget === 'dataChart' && (
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="absolute -top-12 bg-slate-900/95 border border-emerald-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
+          {/* Font Size Controls */}
+          <div className="flex items-center gap-1 border-r border-slate-800 pr-2">
+            <Type className="w-3.5 h-3.5 text-slate-400" />
+            <button
+              type="button"
+              onClick={() =>
+                updateSelectedPieceLayout({ fontSize: Math.max(12, curFontSize - 2) })
+              }
+              className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center cursor-pointer"
+              title="Giảm cỡ chữ khối này (-2px)"
             >
-              {renderFontSizeControl('emerald')}
-              {renderCardScaleControl('text-emerald-400 border-emerald-500/40')}
+              -
+            </button>
+            <span className="font-mono text-[11px] text-blue-300 px-1 min-w-[38px] text-center">
+              {curFontSize}px
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                updateSelectedPieceLayout({ fontSize: Math.min(96, curFontSize + 2) })
+              }
+              className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center cursor-pointer"
+              title="Tăng cỡ chữ khối này (+2px)"
+            >
+              +
+            </button>
+          </div>
+
+          {/* Scale Controls */}
+          <div className="flex items-center gap-1 border-r border-slate-800 pr-2">
+            <Maximize2 className="w-3.5 h-3.5 text-indigo-400" />
+            <button
+              type="button"
+              onClick={() =>
+                updateSelectedPieceLayout({
+                  scale: Number(Math.max(0.4, curScale - 0.08).toFixed(2)),
+                })
+              }
+              className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center cursor-pointer"
+              title="Thu nhỏ khối (-8%)"
+            >
+              -
+            </button>
+            <span className="font-mono text-[11px] text-indigo-300 px-1 min-w-[42px] text-center">
+              {Math.round(curScale * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                updateSelectedPieceLayout({
+                  scale: Number(Math.min(2.2, curScale + 0.08).toFixed(2)),
+                })
+              }
+              className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center cursor-pointer"
+              title="Phóng to khối (+8%)"
+            >
+              +
+            </button>
+          </div>
+
+          {/* Theme Color Dots (for Template Lego Pieces) */}
+          {!selectedPiece.isComposedBlock && !selectedPiece.isExtraBlock && (
+            <div className="flex items-center gap-1 border-r border-slate-800 pr-2">
+              <Palette className="w-3.5 h-3.5 text-slate-400 mr-0.5" />
+              {LEGO_THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => updateSelectedPieceLayout({ theme: t.id })}
+                  title={`Đổi màu nhấn: ${t.label}`}
+                  className={`w-4 h-4 rounded-full ${t.colorClass} cursor-pointer transition-transform ${
+                    selectedLayout.theme === t.id
+                      ? 'ring-2 ring-white scale-125'
+                      : 'opacity-70 hover:opacity-100'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Layer Z-Index Controls */}
+          {!selectedPiece.isComposedBlock && !selectedPiece.isExtraBlock && (
+            <div className="flex items-center gap-1 border-r border-slate-800 pr-2">
               <button
-                onClick={() => handleStartEdit('xAxisLabel', (scene as any).xAxisLabel || '')}
-                className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center gap-1"
+                type="button"
+                onClick={() =>
+                  updateSelectedPieceLayout({
+                    zIndex: (selectedLayout.zIndex ?? 10) + 5,
+                  })
+                }
+                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white cursor-pointer"
+                title="Đưa khối lên lớp trên"
               >
-                <Edit3 className="w-3 h-3" />
-                <span>Trục X</span>
+                <ArrowUp className="w-3 h-3" />
               </button>
               <button
-                onClick={() => handleStartEdit('yAxisLabel', (scene as any).yAxisLabel || '')}
-                className="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-medium flex items-center gap-1"
+                type="button"
+                onClick={() =>
+                  updateSelectedPieceLayout({
+                    zIndex: Math.max(1, (selectedLayout.zIndex ?? 10) - 5),
+                  })
+                }
+                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white cursor-pointer"
+                title="Đưa khối xuống lớp dưới"
               >
-                <Edit3 className="w-3 h-3" />
-                <span>Trục Y</span>
-              </button>
-              <button
-                onClick={() => {
-                  const pts = (scene as any).dataPoints || [];
-                  updateSceneProperty((s) => ({
-                    ...s,
-                    dataPoints: [
-                      ...pts,
-                      { label: `Mẫu ${pts.length + 1}`, value: Math.round((Math.random() * 4 + 1) * 100) / 100 },
-                    ],
-                  }));
-                }}
-                className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium flex items-center gap-1"
-              >
-                <Plus className="w-3 h-3" />
-                <span>Thêm Cột</span>
-              </button>
-              <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                <X className="w-3 h-3" />
+                <ArrowDown className="w-3 h-3" />
               </button>
             </div>
           )}
+
+          {/* Reset / Hide / Delete */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={resetSelectedPiece}
+              className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] flex items-center gap-1 cursor-pointer"
+              title="Đặt lại vị trí & kích thước mặc định cho khối này"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Đặt lại</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                updateSelectedPieceLayout({ hidden: true });
+                setSelectedId(null);
+              }}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-amber-600/30 text-slate-300 hover:text-amber-300 cursor-pointer"
+              title="Ẩn khối Lego này khỏi video"
+            >
+              <EyeOff className="w-3.5 h-3.5" />
+            </button>
+
+            {(selectedPiece.isExtraBlock ||
+              (selectedPiece.isComposedBlock &&
+                scene.type === 'COMPOSED' &&
+                scene.blocks.length > 1)) && (
+              <button
+                type="button"
+                onClick={deleteExtraOrComposedPiece}
+                className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-600 text-rose-300 hover:text-white cursor-pointer"
+                title="Xóa khối Lego này"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className="p-1 text-slate-400 hover:text-white cursor-pointer ml-1"
+              title="Đóng thanh công cụ"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* TEMPLATE 9: DIAGRAM_EXPLAINER (SƠ ĐỒ TRÁI & 3 NHÃN PHẢI) */}
-      {scene.type === 'DIAGRAM_EXPLAINER' && (
-        <>
-          {/* Sub 1: Sơ đồ tương tác (Trái) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('diagramCanvas');
-            }}
-            className={`absolute top-14 bottom-14 left-8 w-[45%] rounded-2xl transition-all cursor-pointer flex flex-col items-center justify-center p-6 ${
-              selectedTarget === 'diagramCanvas'
-                ? 'ring-2 ring-purple-500 bg-purple-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-purple-400/50 hover:bg-purple-500/5'
-            }`}
-          >
-            {selectedTarget === 'diagramCanvas' && renderCanvaHandles('border-purple-500')}
-            {selectedTarget === 'diagramCanvas' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 left-0 bg-slate-900/95 border border-purple-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderCardScaleControl('text-purple-400 border-purple-500/40')}
-                <button
-                  onClick={() => handleStartEdit('diagramTitle', (scene as any).diagramTitle || 'Sơ đồ cơ chế')}
-                  className="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Tiêu Đề</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 2..4: Danh sách các nhãn giải thích (Phải) */}
-          <div className="absolute top-14 bottom-14 right-8 left-[50%] flex flex-col justify-between pointer-events-none">
-            {[0, 1, 2].map((labelIdx) => {
-              const targetKey = `diagramLabel_${labelIdx}`;
-              const isSelected = selectedTarget === targetKey;
-              const labelData = (scene as any).labels?.[labelIdx] || {};
-
-              return (
-                <div
-                  key={labelIdx}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedTarget(targetKey);
-                  }}
-                  className={`pointer-events-auto h-22 rounded-xl transition-all cursor-pointer relative p-3 flex flex-col justify-center ${
-                    isSelected
-                      ? 'ring-2 ring-purple-500 bg-purple-500/15 shadow-xl'
-                      : 'hover:ring-1 hover:ring-purple-400/50 hover:bg-purple-500/5'
-                  }`}
-                >
-                  {isSelected && renderCanvaHandles('border-purple-500')}
-
-                  {isSelected && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute -top-11 left-0 bg-slate-900/95 border border-purple-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in whitespace-nowrap"
-                    >
-                      <span className="text-[10px] text-purple-400 font-bold font-mono">Nhãn 0{labelIdx + 1}:</span>
-                      <button
-                        onClick={() => handleStartEdit(`diagram_label_${labelIdx}_name`, labelData.name || `Nhãn ${labelIdx + 1}`)}
-                        className="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-medium flex items-center gap-1"
-                      >
-                        <Edit3 className="w-2.5 h-2.5" />
-                        <span>Sửa Tên</span>
-                      </button>
-                      <button
-                        onClick={() => handleStartEdit(`diagram_label_${labelIdx}_description`, labelData.description || '')}
-                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-medium flex items-center gap-1"
-                      >
-                        <Edit3 className="w-2.5 h-2.5" />
-                        <span>Sửa Mô Tả</span>
-                      </button>
-                      <button onClick={() => setSelectedTarget(null)} className="p-0.5 text-slate-400 hover:text-white">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {/* TEMPLATE 10: ALGORITHM_WALKTHROUGH (CODE & BỘ NHỚ) */}
-      {scene.type === 'ALGORITHM_WALKTHROUGH' && (
-        <>
-          {/* Sub-component 1: Khung Mã Nguồn Code (Bên Trái) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('codeBox');
-            }}
-            className={`absolute top-14 bottom-12 left-8 w-[46%] rounded-2xl transition-all cursor-pointer flex flex-col justify-center p-4 ${
-              selectedTarget === 'codeBox'
-                ? 'ring-2 ring-amber-500 bg-amber-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-amber-400/50 hover:bg-amber-500/5'
-            }`}
-          >
-            {selectedTarget === 'codeBox' && renderCanvaHandles('border-amber-500')}
-            {selectedTarget === 'codeBox' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 left-0 bg-slate-900/95 border border-amber-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderFontSizeControl('amber')}
-                <button
-                  onClick={() => handleStartEdit('codeSnippet', (scene as any).codeSnippet || '')}
-                  className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Code</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub-component 2: Khung Bộ Nhớ (Phải Trên) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('memoryBox');
-            }}
-            className={`absolute top-14 right-8 w-[46%] h-36 rounded-2xl transition-all cursor-pointer flex flex-col justify-center p-4 ${
-              selectedTarget === 'memoryBox'
-                ? 'ring-2 ring-emerald-500 bg-emerald-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-emerald-400/50 hover:bg-emerald-500/5'
-            }`}
-          >
-            {selectedTarget === 'memoryBox' && renderCanvaHandles('border-emerald-500')}
-            {selectedTarget === 'memoryBox' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 right-0 bg-slate-900/95 border border-emerald-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderCardScaleControl('text-emerald-400 border-emerald-500/40')}
-                <button
-                  onClick={() =>
-                    handleStartEdit(
-                      'variableState',
-                      (scene as any).steps?.[0]?.variableState || '{ i: 0, arr: [2, 5, 8] }'
-                    )
-                  }
-                  className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Biến Nhớ</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub-component 3: Lời bình thuật toán (Phải Dưới) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('noteBox');
-            }}
-            className={`absolute bottom-12 right-8 w-[46%] h-28 rounded-2xl transition-all cursor-pointer flex flex-col justify-center p-4 ${
-              selectedTarget === 'noteBox'
-                ? 'ring-2 ring-blue-500 bg-blue-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-blue-400/50 hover:bg-blue-500/5'
-            }`}
-          >
-            {selectedTarget === 'noteBox' && renderCanvaHandles('border-blue-500')}
-            {selectedTarget === 'noteBox' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-11 right-0 bg-slate-900/95 border border-blue-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                <button
-                  onClick={() =>
-                    handleStartEdit(
-                      'stepNote',
-                      (scene as any).steps?.[0]?.note || 'Đang thực thi lệnh tiếp theo...'
-                    )
-                  }
-                  className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Lời Bình</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* TEMPLATE 11: OUTRO (ĐIỂM CỐT LÕI & BÀI HỌC KẾ TIẾP) */}
-      {scene.type === 'OUTRO' && (
-        <>
-          {/* Sub 1: Thẻ Điểm Cốt Lõi (Trái) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('outroTakeaways');
-            }}
-            className={`absolute top-14 bottom-14 left-8 w-[46%] rounded-2xl transition-all cursor-pointer flex flex-col justify-center p-6 ${
-              selectedTarget === 'outroTakeaways'
-                ? 'ring-2 ring-indigo-500 bg-indigo-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-indigo-400/50 hover:bg-indigo-500/5'
-            }`}
-          >
-            {selectedTarget === 'outroTakeaways' && renderCanvaHandles('border-indigo-500')}
-            {selectedTarget === 'outroTakeaways' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 left-0 bg-slate-900/95 border border-indigo-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                {renderFontSizeControl('indigo')}
-                {renderCardScaleControl('text-indigo-400 border-indigo-500/40')}
-                <button
-                  onClick={() => {
-                    const curPts = (scene as any).summaryPoints || [];
-                    updateSceneProperty((s) => ({
-                      ...s,
-                      summaryPoints: [...curPts, 'Điểm ghi nhớ mới'],
-                    }));
-                  }}
-                  className="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Thêm Ý</span>
-                </button>
-                <button
-                  onClick={() => handleStartEdit('instructorName', (scene as any).instructorName || 'STEMotion Academy')}
-                  className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Giảng Viên</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Sub 2: Thẻ Bài Học Kế Tiếp (Phải) */}
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedTarget('outroUpNext');
-            }}
-            className={`absolute top-14 bottom-14 right-8 w-[46%] rounded-2xl transition-all cursor-pointer flex flex-col justify-center p-6 ${
-              selectedTarget === 'outroUpNext'
-                ? 'ring-2 ring-purple-500 bg-purple-500/10 shadow-2xl'
-                : 'hover:ring-1 hover:ring-purple-400/50 hover:bg-purple-500/5'
-            }`}
-          >
-            {selectedTarget === 'outroUpNext' && renderCanvaHandles('border-purple-500')}
-            {selectedTarget === 'outroUpNext' && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute -top-12 right-0 bg-slate-900/95 border border-purple-500/80 rounded-xl shadow-2xl p-1.5 flex items-center gap-2 text-xs text-white z-40 backdrop-blur-md animate-fade-in"
-              >
-                <button
-                  onClick={() => handleStartEdit('nextLessonSuggestion', (scene as any).nextLessonSuggestion || 'Bài học kế tiếp')}
-                  className="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-medium flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Sửa Tên Bài Học Kế Tiếp</span>
-                </button>
-                <button onClick={() => setSelectedTarget(null)} className="p-1 text-slate-400 hover:text-white">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* MODAL / POPOVER SOẠN THẢO TRỰC TIẾP TRÊN MÀN HÌNH VIDEO */}
-      {editingField && editingField !== 'title' && (
+      {/* Modal Sửa Nội Dung Trực Tiếp Trên Canvas */}
+      {isEditingText && selectedPiece && (
         <div
-          onClick={(e) => e.stopPropagation()}
-          className="absolute inset-x-12 top-20 bg-slate-900/98 border-2 border-blue-500 rounded-2xl p-4 z-50 shadow-2xl space-y-3 backdrop-blur-xl animate-fade-in"
+          onPointerDown={(e) => e.stopPropagation()}
+          className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 z-50"
         >
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>Chỉnh sửa trực tiếp trên màn hình: <b>{editingField}</b></span>
-            </span>
-            <button onClick={() => setEditingField(null)} className="text-slate-400 hover:text-white">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <textarea
-            rows={4}
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            autoFocus
-            className="w-full bg-slate-950 text-white p-3 rounded-xl border border-slate-700 text-xs focus:border-blue-500 outline-hidden font-medium leading-relaxed"
-            placeholder="Nhập nội dung mới..."
-          />
-
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-[10px] text-slate-500">Nhấn "Lưu lại" để cập nhật tức thì vào video</span>
-            <div className="flex gap-2">
+          <div className="w-full max-w-lg bg-slate-900 border-2 border-blue-500 rounded-2xl shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-blue-400" />
+                <span className="font-bold text-sm text-white">
+                  Chỉnh sửa: {selectedPiece.label}
+                </span>
+              </div>
               <button
-                onClick={() => setEditingField(null)}
-                className="px-3 py-1 rounded-lg text-slate-400 hover:text-white bg-slate-800"
+                type="button"
+                onClick={() => setIsEditingText(false)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] font-mono uppercase text-slate-400 block mb-1">
+                  Nội dung chính
+                </label>
+                {editPrimary.includes('\n') || editPrimary.length > 80 ? (
+                  <textarea
+                    rows={4}
+                    value={editPrimary}
+                    onChange={(e) => setEditPrimary(e.target.value)}
+                    autoFocus
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-xl p-2.5 text-sm text-white outline-hidden"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={editPrimary}
+                    onChange={(e) => setEditPrimary(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveTextEdit();
+                      if (e.key === 'Escape') setIsEditingText(false);
+                    }}
+                    autoFocus
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-xl p-2.5 text-sm text-white outline-hidden"
+                  />
+                )}
+              </div>
+
+              {selectedPiece.subTextValue !== undefined && (
+                <div>
+                  <label className="text-[11px] font-mono uppercase text-slate-400 block mb-1">
+                    Nội dung phụ / Công thức / Ghi chú (mỗi dòng 1 ý nếu là danh sách)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editSecondary}
+                    onChange={(e) => setEditSecondary(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-xl p-2.5 text-sm text-white outline-hidden font-mono"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsEditingText(false)}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium cursor-pointer"
               >
                 Hủy
               </button>
               <button
-                onClick={handleSaveField}
-                className="px-4 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center gap-1 shadow-md"
+                type="button"
+                onClick={handleSaveTextEdit}
+                className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg shadow-blue-500/30"
               >
                 <Check className="w-3.5 h-3.5" />
-                <span>Lưu Lại</span>
+                <span>Lưu Thay Đổi</span>
               </button>
             </div>
           </div>

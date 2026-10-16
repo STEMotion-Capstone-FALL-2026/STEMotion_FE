@@ -2,17 +2,22 @@ import React, { useState } from 'react';
 import { Mic, Send, Type, Maximize2, BarChart2, Plus, Trash2, Palette, Code2, HelpCircle, Layers, CheckCircle2, Award, Sparkles, X, Save, Check, Volume2 } from 'lucide-react';
 import { SceneData } from '../../../types/stem';
 import { IllustratedExplainerInspector } from './IllustratedExplainerInspector';
+import { LegoInspectorSection } from './LegoInspectorSection';
 
 interface SceneInspectorProps {
   selectedScene: SceneData;
   updateSceneProperty: (updater: (s: any) => any) => void;
   onStartRender?: () => void;
+  activeLegoPieceId?: string | null;
+  onSelectLegoPiece?: (pieceId: string | null) => void;
 }
 
 export const SceneInspector: React.FC<SceneInspectorProps> = ({
   selectedScene,
   updateSceneProperty,
   onStartRender,
+  activeLegoPieceId,
+  onSelectLegoPiece,
 }) => {
   const [isVoiceSaved, setIsVoiceSaved] = useState(false);
 
@@ -42,6 +47,14 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
             className="w-full p-2 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:border-brand-500"
           />
         </div>
+
+        {/* BẢNG QUẢN LÝ & TÁCH KHỐI LEGO (MODULAR REMOTION COMPONENTS) */}
+        <LegoInspectorSection
+          selectedScene={selectedScene}
+          updateSceneProperty={updateSceneProperty}
+          activeLegoPieceId={activeLegoPieceId}
+          onSelectLegoPiece={onSelectLegoPiece}
+        />
 
         {/* BỘ ĐIỀU KHIỂN CỠ CHỮ TOÀN NĂNG CHO MỌI PHÂN CẢNH (FLUID SCALE SLIDER) */}
         <div className="p-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200 rounded-xl space-y-2">

@@ -4,6 +4,7 @@ import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { DataChartProps } from '@/types/stem';
 import { FlatStage } from '../flat/FlatStage';
+import { LegoBlock } from '../lego/LegoBlock';
 
 export const DataChartVisual: React.FC<DataChartProps> = ({
   title = 'Biểu Đồ Số Liệu Trực Quan',
@@ -68,71 +69,81 @@ export const DataChartVisual: React.FC<DataChartProps> = ({
     <FlatStage ambience="ocean" className="flex flex-col justify-between p-16">
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4 relative z-10">
-        <div className="flex items-center gap-3">
-          <span className="px-3 py-1 rounded bg-emerald-600/20 text-emerald-400 font-mono text-xs font-bold uppercase tracking-wider border border-emerald-500/30">
-            DATA CHART VISUAL
-          </span>
-          <h2 className="text-2xl font-bold text-slate-100" style={{ fontSize: `${Math.round(baseSize * 0.95)}px` }}>{title}</h2>
+      <LegoBlock id="header" label="Tiêu đề Biểu đồ" kind="title" className="relative z-10">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded bg-emerald-600/20 text-emerald-400 font-mono text-xs font-bold uppercase tracking-wider border border-emerald-500/30">
+              DATA CHART VISUAL
+            </span>
+            <h2 className="text-2xl font-bold text-slate-100" style={{ fontSize: `var(--lego-font-size, ${Math.round(baseSize * 0.95)}px)` }}>{title}</h2>
+          </div>
+          <span className="text-sm text-slate-400 font-mono">Dynamic Bar & Trend Simulation</span>
         </div>
-        <span className="text-sm text-slate-400 font-mono">Dynamic Bar & Trend Simulation</span>
-      </div>
+      </LegoBlock>
 
       {/* Main Chart Graphic - Inner Component Card */}
-      <div 
-        style={{
-          transform: `scale(${cardScale || 1.0})`,
-          transformOrigin: 'center center',
-          transition: 'transform 0.2s ease',
-        }}
-        className={`my-auto ${getWidthClass()} w-full mx-auto ${getThemeClass()} rounded-2xl p-8 relative z-10`}
-      >
-        <div className="flex justify-between items-center mb-6 text-xs text-slate-400 font-mono" style={{ fontSize: `${Math.max(12, Math.round(baseSize * 0.45))}px` }}>
-          <span>Y-Axis: {yAxisLabel}</span>
-          <span>X-Axis: {xAxisLabel}</span>
-        </div>
+      <LegoBlock id="chart-canvas" label="Khung Biểu đồ Chính" kind="chart" className={`my-auto ${getWidthClass()} w-full mx-auto relative z-10`}>
+        <div 
+          style={{
+            transform: `scale(${cardScale || 1.0})`,
+            transformOrigin: 'center center',
+            transition: 'transform 0.2s ease',
+          }}
+          className={`w-full ${getThemeClass()} rounded-2xl p-8`}
+        >
+          <div className="flex justify-between items-center mb-6 text-xs text-slate-400 font-mono" style={{ fontSize: `${Math.max(12, Math.round(baseSize * 0.45))}px` }}>
+            <span>Y-Axis: {yAxisLabel}</span>
+            <span>X-Axis: {xAxisLabel}</span>
+          </div>
 
-        {/* Bars Container */}
-        <div className="h-72 flex items-end justify-around gap-6 border-b border-l border-slate-700 p-4">
-          {safeDataPoints.map((point, idx) => {
-            const barDelay = 15 + idx * 8;
-            const barSpring = spring({
-              frame: frame - barDelay,
-              fps,
-              config: { damping: 12, stiffness: 100 },
-            });
+          {/* Bars Container */}
+          <div className="h-72 flex items-end justify-around gap-6 border-b border-l border-slate-700 p-4">
+            {safeDataPoints.map((point, idx) => {
+              const barDelay = 15 + idx * 8;
+              const barSpring = spring({
+                frame: frame - barDelay,
+                fps,
+                config: { damping: 12, stiffness: 100 },
+              });
 
-            const heightPercent = Math.min((point.value / maxValue) * 100, 100);
-            const animatedHeight = Math.max(0, barSpring * heightPercent);
+              const heightPercent = Math.min((point.value / maxValue) * 100, 100);
+              const animatedHeight = Math.max(0, barSpring * heightPercent);
 
-            return (
-              <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                {/* Value tooltip on top */}
-                <div 
-                  style={{ opacity: barSpring, fontSize: `${Math.max(11, Math.round(baseSize * 0.45))}px` }}
-                  className="text-xs font-mono font-bold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/40"
+              return (
+                <LegoBlock
+                  key={idx}
+                  id={`data-point-${idx}`}
+                  label={`Cột dữ liệu #${idx + 1}: ${point.label}`}
+                  kind="step"
+                  className="flex-1 flex flex-col items-center gap-2 h-full justify-end"
                 >
-                  {point.value}
-                </div>
+                  {/* Value tooltip on top */}
+                  <div 
+                    style={{ opacity: barSpring, fontSize: `var(--lego-font-size, ${Math.max(11, Math.round(baseSize * 0.45))}px)` }}
+                    className="text-xs font-mono font-bold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/40"
+                  >
+                    {point.value}
+                  </div>
 
-                {/* Bar */}
-                <div 
-                  style={{
-                    height: `${animatedHeight}%`,
-                    background: point.color || 'linear-gradient(to top, #059669, #34d399)',
-                  }}
-                  className="w-full max-w-[64px] rounded-t-lg shadow-lg relative group transition-all"
-                />
+                  {/* Bar */}
+                  <div 
+                    style={{
+                      height: `${animatedHeight}%`,
+                      background: point.color || 'linear-gradient(to top, #059669, #34d399)',
+                    }}
+                    className="w-full max-w-[64px] rounded-t-lg shadow-lg relative group transition-all"
+                  />
 
-                {/* Label */}
-                <span className="text-xs font-medium text-slate-300 font-mono mt-2 text-center truncate w-full" style={{ fontSize: `${Math.max(12, Math.round(baseSize * 0.45))}px` }}>
-                  {point.label}
-                </span>
-              </div>
-            );
-          })}
+                  {/* Label */}
+                  <span className="text-xs font-medium text-slate-300 font-mono mt-2 text-center truncate w-full" style={{ fontSize: `var(--lego-font-size, ${Math.max(12, Math.round(baseSize * 0.45))}px)` }}>
+                    {point.label}
+                  </span>
+                </LegoBlock>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      </LegoBlock>
 
     </FlatStage>
   );

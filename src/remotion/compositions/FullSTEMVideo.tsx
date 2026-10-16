@@ -18,8 +18,9 @@ import { IllustratedExplainer } from './IllustratedExplainer';
 import { ComposedScene } from '../composed/ComposedScene';
 import { CinematicScene } from '../director/CinematicScene';
 import { SceneSeedContext, VideoSeedContext } from '../flat/variation';
+import { LegoSceneProvider } from '../lego/LegoBlock';
 
-export const renderSceneComponent = (scene: SceneData) => {
+const renderRawSceneComponent = (scene: SceneData) => {
   if (scene.visualPlan) return <CinematicScene plan={scene.visualPlan} />;
   switch (scene.type) {
     case 'TITLE_HERO':
@@ -51,6 +52,12 @@ export const renderSceneComponent = (scene: SceneData) => {
     default:
       return null;
   }
+};
+
+export const renderSceneComponent = (scene: SceneData) => {
+  const content = renderRawSceneComponent(scene);
+  if (!content) return null;
+  return <LegoSceneProvider scene={scene}>{content}</LegoSceneProvider>;
 };
 
 export class SceneErrorBoundary extends React.Component<

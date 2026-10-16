@@ -4,6 +4,7 @@ import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { TitleHeroProps } from '@/types/stem';
 import { FlatStage } from '../flat/FlatStage';
+import { LegoBlock } from '../lego/LegoBlock';
 
 export const TitleHeroReveal: React.FC<TitleHeroProps> = ({
   title,
@@ -104,45 +105,51 @@ export const TitleHeroReveal: React.FC<TitleHeroProps> = ({
         className={`flex flex-col items-center justify-center relative z-10 w-full ${getWidthClass()}`}
       >
         {/* Top Badge: Subject & Grade */}
-        <div 
-          style={{ transform: `scale(${badgeScale})` }}
-          className={`flex items-center gap-3 px-5 py-2 rounded-full ${getThemeClass()} backdrop-blur-md mb-8`}
-        >
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-sm font-semibold tracking-wider uppercase text-slate-300">
-            {subject} • {gradeLevel}
-          </span>
-          <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-mono font-medium">
-            {badgeText || 'STEMotion Studio'}
-          </span>
-        </div>
+        <LegoBlock id="badge" label="Nhãn mở đầu (Badge)" kind="badge">
+          <div 
+            style={{ transform: `scale(${badgeScale})` }}
+            className={`flex items-center gap-3 px-5 py-2 rounded-full ${getThemeClass()} backdrop-blur-md mb-8`}
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-sm font-semibold tracking-wider uppercase text-slate-300">
+              {subject} • {gradeLevel}
+            </span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-mono font-medium">
+              {badgeText || 'STEMotion Studio'}
+            </span>
+          </div>
+        </LegoBlock>
 
         {/* Main Title with Spring Slide */}
-        <h1
-          style={{
-            opacity: titleOpacity,
-            transform: `translateY(${titleY}px)`,
-            fontSize: `${heroTitleFontSize}px`,
-            lineHeight: 1.15,
-          }}
-          className="font-extrabold text-center tracking-tight w-full mb-6 transition-all"
-        >
-          <span className={`bg-clip-text text-transparent bg-gradient-to-r ${currentTheme.gradient}`}>
-            {title}
-          </span>
-        </h1>
+        <LegoBlock id="title" label="Tiêu đề chính (Title)" kind="title" className="w-full">
+          <h1
+            style={{
+              opacity: titleOpacity,
+              transform: `translateY(${titleY}px)`,
+              fontSize: `var(--lego-font-size, ${heroTitleFontSize}px)`,
+              lineHeight: 1.15,
+            }}
+            className="font-extrabold text-center tracking-tight w-full mb-6 transition-all"
+          >
+            <span className={`bg-clip-text text-transparent bg-gradient-to-r ${currentTheme.gradient}`}>
+              {title}
+            </span>
+          </h1>
+        </LegoBlock>
 
         {/* Subtitle / Key Concept Hook */}
-        <p
-          style={{
-            opacity: subtitleOpacity,
-            fontSize: `${subtitleFontSize}px`,
-            lineHeight: 1.5,
-          }}
-          className="text-slate-300 text-center max-w-3xl font-light transition-all"
-        >
-          {subtitle}
-        </p>
+        <LegoBlock id="subtitle" label="Phụ đề (Subtitle)" kind="subtitle">
+          <p
+            style={{
+              opacity: subtitleOpacity,
+              fontSize: `var(--lego-font-size, ${subtitleFontSize}px)`,
+              lineHeight: 1.5,
+            }}
+            className="text-slate-300 text-center max-w-3xl font-light transition-all"
+          >
+            {subtitle}
+          </p>
+        </LegoBlock>
       </div>
 
     </FlatStage>

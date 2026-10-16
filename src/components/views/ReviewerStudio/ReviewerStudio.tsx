@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Columns2,
   FileText,
@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Plus,
   Download,
+  Lock,
 } from 'lucide-react';
 import { STEMScript, SceneData, FeedbackComment } from '../../../types/stem';
 import { UserRole, reviewService } from '../../../services';
@@ -61,6 +62,22 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   const [decisionPending, setDecisionPending] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [reviewNote, setReviewNote] = useState('');
+
+  // Producer đã hoàn thành video và nộp cho Reviewer duyệt khi:
+  // - videoStatus là IN_QA (đang chờ Reviewer duyệt video)
+  // - hoặc video đã được APPROVED/PUBLISHED
+  const isVideoReadyForReview =
+    script.videoStatus === 'IN_QA' ||
+    script.videoStatus === 'APPROVED' ||
+    script.videoStatus === 'PUBLISHED';
+
+  // Nếu đang ở tab duyệt video nhưng Producer chưa nộp, tự động chuyển về duyệt kịch bản
+  useEffect(() => {
+    if (reviewerMode === 'video' && !isVideoReadyForReview) {
+      setReviewerMode('script');
+    }
+  }, [reviewerMode, isVideoReadyForReview, setReviewerMode]);
+
   const decide = async (decision: 'APPROVED' | 'CHANGE_REQUESTED' | 'VIDEO_APPROVED' | 'VIDEO_RETURNED') => {
     if (decisionPending) return;
     setDecisionPending(true);
@@ -95,7 +112,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
         <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
           <button
             onClick={() => setReviewerMode('script')}
-            className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+            className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
               reviewerMode === 'script'
                 ? 'bg-white text-amber-700 shadow-xs ring-1 ring-amber-400/30'
                 : 'text-slate-600 hover:text-slate-900'
@@ -107,43 +124,85 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
               <Check className="w-3 h-3 text-emerald-500 font-bold" />
             )}
           </button>
+
+          {/* Tab Duyệt Video: Chỉ mở khi Producer đã hoàn tất và nộp video */}
           <button
-            onClick={() => setReviewerMode('video')}
+            onClick={() => {
+              if (!isVideoReadyForReview) {
+                showToast('Producer chưa làm xong hoặc chưa nộp video để duyệt.', 'warn');
+                return;
+              }
+              setReviewerMode('video');
+            }}
+            disabled={!isVideoReadyForReview}
             className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
-              reviewerMode === 'video'
-                ? 'bg-white text-purple-700 shadow-xs ring-1 ring-purple-400/30'
-                : 'text-slate-600 hover:text-slate-900'
+              !isVideoReadyForReview
+                ? 'opacity-50 cursor-not-allowed text-slate-400 bg-slate-100'
+                : reviewerMode === 'video'
+                ? 'bg-white text-purple-700 shadow-xs ring-1 ring-purple-400/30 cursor-pointer'
+                : 'text-slate-600 hover:text-slate-900 cursor-pointer'
             }`}
+            title={
+              !isVideoReadyForReview
+                ? 'Producer chưa nộp video. Chỉ mở khi Producer hoàn tất dựng và gửi duyệt.'
+                : 'Thẩm định video thành phẩm'
+            }
           >
-            <Play className="w-3.5 h-3.5" />
-            <span>2. Duyệt Video Thành Phẩm</span>
-            {script.videoStatus === 'APPROVED' && (
-              <Check className="w-3 h-3 text-emerald-500 font-bold" />
+            {!isVideoReadyForReview ? (
+              <Lock className="w-3.5 h-3.5 text-slate-400" />
+            ) : (
+              <Play className="w-3.5 h-3.5" />
             )}
+            <span>2. Duyệt Video Thành Phẩm</span>
+            {!isVideoReadyForReview ? (
+              <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-normal">
+                Chờ Producer nộp
+              </span>
+            ) : script.videoStatus === 'APPROVED' ? (
+              <Check className="w-3 h-3 text-emerald-500 font-bold" />
+            ) : script.videoStatus === 'IN_QA' ? (
+              <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded font-bold animate-pulse">
+                Cần duyệt
+              </span>
+            ) : null}
           </button>
         </div>
 
         {/* Quyết định của Reviewer */}
         <div className="flex items-center space-x-2">
           {reviewerMode === 'script' ? (
-            <>
-              <button
-                onClick={() => void decide('CHANGE_REQUESTED')}
-                disabled={decisionPending}
-                className="px-3 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-lg font-bold flex items-center space-x-1"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Yêu Cầu Writer Sửa Lại</span>
-              </button>
-              <button
-                onClick={() => void decide('APPROVED')}
-                disabled={decisionPending}
-                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs"
-              >
-                <CheckCheck className="w-4 h-4" />
-                <span>Duyệt Kịch Bản ➔ Chuyển Producer</span>
-              </button>
-            </>
+            script.scriptStatus === 'APPROVED' ? (
+              <div className="flex items-center space-x-2">
+                <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-xs flex items-center gap-1">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Kịch bản đã được duyệt</span>
+                </span>
+                {!isVideoReadyForReview && (
+                  <span className="text-[11px] text-slate-500 italic">
+                    • Đang chờ Producer dựng và nộp video
+                  </span>
+                )}
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={() => void decide('CHANGE_REQUESTED')}
+                  disabled={decisionPending}
+                  className="px-3 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Yêu Cầu Writer Sửa Lại</span>
+                </button>
+                <button
+                  onClick={() => void decide('APPROVED')}
+                  disabled={decisionPending}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer"
+                >
+                  <CheckCheck className="w-4 h-4" />
+                  <span>Duyệt Kịch Bản ➔ Chuyển Producer</span>
+                </button>
+              </>
+            )
           ) : (
             <>
               <button
