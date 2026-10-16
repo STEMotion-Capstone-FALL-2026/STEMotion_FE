@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { sceneSaveQueue } from './services/sceneSaveQueue';
 import { renderService } from './services/renderService';
+import { compositionService, createCompositionSaver, type Composition, type CompositionSaver } from './services/compositionService';
 import { STEMScript, FeedbackComment, SceneData, STEMSubject } from './types/stem';
 import { LoginScreen } from './components/LoginScreen';
 import type { WorkspaceSummary } from './services/workspaceService';
@@ -263,21 +264,99 @@ export default function App() {
     };
   }, []);
 
+  // Production Workspace (proposal): an approved script opens for the producer
+  // as a draft of its own. The approved script stays as the reviewer saw it.
+  const inProduction = currentRole === 'producer' && script.scriptStatus === 'APPROVED' && Boolean(script.id);
+  const [composition, setComposition] = useState<Composition | null>(null);
+  const [isSavingComposition, setIsSavingComposition] = useState(false);
+  const compositionSaver = React.useRef<CompositionSaver | null>(null);
+
+  const loadComposition = useCallback(async (projectId: string) => {
+    compositionSaver.current?.dispose();
+    compositionSaver.current = null;
+    try {
+      const draft = await compositionService.get(projectId);
+      compositionSaver.current = createCompositionSaver(projectId, draft.revision, {
+        onSaved: (saved) => {
+          setIsSavingComposition(false);
+          setComposition((prev) => (prev && prev.projectId === saved.projectId
+            ? { ...prev, revision: saved.revision, updatedAt: saved.updatedAt, updatedByName: saved.updatedByName }
+            : prev));
+        },
+        onError: (error: any) => {
+          setIsSavingComposition(false);
+          showToast(error?.status === 409
+            ? 'Bản dựng vừa được lưu ở nơi khác; đã tải lại bản mới nhất.'
+            : error?.message || 'Không lưu được bản dựng.', 'warn');
+          void loadComposition(projectId);
+        },
+      });
+      setComposition(draft);
+    } catch (error: any) {
+      setComposition(null);
+      showToast('Không mở được bản dựng: ' + (error?.message || 'lỗi máy chủ'), 'warn');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!inProduction) {
+      compositionSaver.current?.dispose();
+      compositionSaver.current = null;
+      setComposition(null);
+      return;
+    }
+    // Reloaded when the clip changes state: rendering, in review and approved lock the draft.
+    void loadComposition(script.id);
+  }, [inProduction, script.id, script.videoStatus, loadComposition]);
+  useEffect(() => () => compositionSaver.current?.dispose(), []);
+
+  // What the studio shows: the producer's draft in production, the script otherwise.
+  const viewScript: STEMScript = inProduction && composition ? { ...script, scenes: composition.scenes } : script;
+
   // Active scene pointer
-  const selectedScene = script.scenes.find((s) => s.id === activeSceneId) || script.scenes[0];
+  const selectedScene = viewScript.scenes.find((s) => s.id === activeSceneId) || viewScript.scenes[0];
+
+  /** Producer edits: per-scene properties of the draft; scenes and templates stay as approved. */
+  const editComposition = (change: (scenes: SceneData[]) => SceneData[]) => {
+    if (!composition) {
+      showToast('Bản dựng đang tải, thử lại sau giây lát.', 'info');
+      return;
+    }
+    if (!composition.editable) {
+      showToast(composition.lockedReason || 'Bản dựng đang khóa.', 'warn');
+      return;
+    }
+    setComposition((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, scenes: change(prev.scenes) };
+      compositionSaver.current?.schedule(next.scenes);
+      return next;
+    });
+    setIsSavingComposition(true);
+  };
 
   // Dynamic Scene Updater (Live Props Binding via Service Layer)
   const canEditScript = () => {
+    if (inProduction) {
+      showToast('Bản dựng giữ đúng danh sách, thứ tự và template cảnh đã duyệt; Producer chỉnh thuộc tính từng cảnh.', 'warn');
+      return false;
+    }
+    // Roles are per workspace: the role of the active workspace decides, not the account role.
     if (!['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)
-      || !['writer', 'admin'].includes(currentUser.role)) {
-      showToast('Kịch bản đã gửi duyệt được khóa. Dựng video cần bản composition riêng.', 'warn');
+      || !(currentRole === 'writer' || currentUser.role === 'admin')) {
+      showToast('Kịch bản đã gửi duyệt được khóa; chỉ Writer sửa bản nháp hoặc bản bị trả lại.', 'warn');
       return false;
     }
     return true;
   };
   const updateSceneProperty = (updater: (s: any) => any) => {
-    if (!canEditScript()) return;
     if (!selectedScene) return;
+    if (inProduction) {
+      const id = selectedScene.id;
+      editComposition((scenes) => scenes.map((sc) => (sc.id === id ? updater(sc) : sc)));
+      return;
+    }
+    if (!canEditScript()) return;
     setScript((prev) => {
       const updatedScenes = prev.scenes.map((sc) => {
         if (sc.id === selectedScene.id) {
@@ -378,8 +457,12 @@ export default function App() {
   };
 
   const handleChangeDuration = (sceneId: string, seconds: number) => {
-    if (!canEditScript()) return;
     const frames = Math.max(1, Math.round(seconds * (script.fps || 30)));
+    if (inProduction) {
+      editComposition((scenes) => scenes.map((sc) => (sc.id === sceneId ? { ...sc, durationInFrames: frames } : sc)));
+      return;
+    }
+    if (!canEditScript()) return;
     const scenes = script.scenes.map(scene => scene.id === sceneId ? { ...scene, durationInFrames: frames } : scene);
     void persistSceneList(scenes, `Đã chỉnh thời lượng cảnh thành ${seconds} giây.`);
   };
@@ -396,6 +479,8 @@ export default function App() {
     setRenderPercentageText('0%');
     setRenderStageText('Đang gửi yêu cầu kết xuất…');
     try {
+      // The render takes the saved draft, so the last edit must reach the server first.
+      if (inProduction) await compositionSaver.current?.flush();
       let job = await renderService.requestRender(projectId, { fps: script.fps || 30 });
       showToast('Máy chủ đã nhận yêu cầu kết xuất.', 'info');
       const deadline = Date.now() + 20 * 60 * 1000;
@@ -791,7 +876,14 @@ export default function App() {
 
       {script.scenes.length > 0 && currentRole === 'producer' && (
         <ProducerStudio
-          script={script}
+          script={viewScript}
+          production={inProduction && composition ? {
+            revision: composition.revision,
+            scriptVersionNo: composition.scriptVersionNo,
+            editable: composition.editable,
+            lockedReason: composition.lockedReason,
+            saving: isSavingComposition,
+          } : undefined}
           selectedScene={selectedScene}
           activeSceneId={activeSceneId}
           setActiveSceneId={setActiveSceneId}
@@ -938,7 +1030,7 @@ export default function App() {
       />
 
       <PublishModal
-        canPublish={['producer', 'admin'].includes(currentUser.role)}
+        canPublish={currentRole === 'producer' || currentUser.role === 'admin'}
         onPublished={async () => {
           const published = await projectService.getProjectById(script.id);
           setScript(previous => previous.id === published.id ? published : previous);
@@ -953,9 +1045,9 @@ export default function App() {
       <TemplateCatalogModal
         isOpen={isSwapAssetModalOpen}
         onClose={() => setIsSwapAssetModalOpen(false)}
-        onSelectTemplate={(type, title) => {
-          handleAddNewScene(type);
-          showToast(`Đã thêm phân cảnh mới: "${title}"!`);
+        onSelectTemplate={(type) => {
+          // handleAddNewScene reports the outcome itself, including a refusal.
+          void handleAddNewScene(type);
         }}
       />
 
