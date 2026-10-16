@@ -48,6 +48,7 @@ interface HeaderNavProps {
   onSelectGroup: (workspaceId: string) => void;
   onOpenManageMembersModal?: () => void;
   onOpenCreateProjectModal: () => void;
+  onCreateWorkspace?: () => void;
   onNavigateToDashboard?: () => void;
   isInStudio?: boolean;
 }
@@ -65,6 +66,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   onSelectGroup,
   onOpenManageMembersModal,
   onOpenCreateProjectModal,
+  onCreateWorkspace,
   onNavigateToDashboard,
   isInStudio = false,
 }) => {
@@ -161,6 +163,18 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                 ))}
               </div>
               <div className="pt-1.5 border-t border-slate-100 space-y-1">
+                {accountRole === 'admin' && onCreateWorkspace && (
+                  <button
+                    onClick={() => {
+                      setIsGroupDropdownOpen(false);
+                      onCreateWorkspace();
+                    }}
+                    className="w-full p-2 rounded-lg hover:bg-emerald-50 text-left flex items-center space-x-2 text-emerald-700 font-bold"
+                  >
+                    <PlusCircle className="w-4 h-4 text-emerald-600" />
+                    <span>+ Tạo Tổ Chuyên Môn Mới</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setIsGroupDropdownOpen(false);
@@ -189,77 +203,35 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         </div>
       </div>
 
-      {/* Quick Switch Role Tabs */}
+      {/* Main Navigation: Admin Portal (if admin) & Media Library */}
       <div className="flex items-center space-x-2">
-        <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-medium space-x-1">
-          {studios.includes('writer') && (
-            <button
-              onClick={() => onRoleChange('writer')}
-              className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
-                currentRole === 'writer'
-                  ? 'bg-white text-brand-600 shadow-xs ring-2 ring-blue-500/20'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <PenTool className="w-3.5 h-3.5" />
-              <span>Writer</span>
-            </button>
-          )}
+        {accountRole === 'admin' && (
+          <button
+            onClick={() => onRoleChange('admin')}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer ${
+              currentRole === 'admin'
+                ? 'bg-rose-50 text-rose-600 border-rose-300 ring-2 ring-rose-500/20 shadow-xs'
+                : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+            title="Trang quản trị hệ thống"
+          >
+            <Shield className="w-3.5 h-3.5 text-rose-500" />
+            <span>Admin Portal</span>
+          </button>
+        )}
 
-          {studios.includes('reviewer') && (
-            <button
-              onClick={() => onRoleChange('reviewer')}
-              className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
-                currentRole === 'reviewer'
-                  ? 'bg-white text-amber-600 shadow-xs ring-2 ring-amber-500/20'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <CheckSquare className="w-3.5 h-3.5" />
-              <span>Reviewer</span>
-            </button>
-          )}
-
-          {studios.includes('producer') && (
-            <button
-              onClick={() => onRoleChange('producer')}
-              className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
-                currentRole === 'producer'
-                  ? 'bg-white text-indigo-600 shadow-xs ring-2 ring-indigo-500/20'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Clapperboard className="w-3.5 h-3.5" />
-              <span>Producer (Tạo Video)</span>
-            </button>
-          )}
-
-          {studios.includes('admin') && (
-            <button
-              onClick={() => onRoleChange('admin')}
-              className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 font-semibold ${
-                currentRole === 'admin'
-                  ? 'bg-white text-rose-600 shadow-xs ring-2 ring-rose-500/20'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5 text-rose-500" />
-              <span>Admin Portal</span>
-            </button>
-          )}
-        </div>
-
-        {/* <button
+        <button
           onClick={() => onRoleChange('library')}
-          className={`px-3 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 text-xs font-bold flex items-center space-x-1.5 transition-colors ${
+          className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer ${
             currentRole === 'library'
-              ? 'bg-indigo-50 text-indigo-700 border-indigo-300'
-              : 'bg-white text-slate-700'
+              ? 'bg-indigo-50 text-indigo-700 border-indigo-300 ring-2 ring-indigo-500/20 shadow-xs'
+              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           }`}
+          title="Kho học liệu & tư liệu dùng chung"
         >
           <Library className="w-3.5 h-3.5 text-indigo-600" />
           <span>Thư Viện Media</span>
-        </button> */}
+        </button>
       </div>
 
       {/* User Profile */}
@@ -267,16 +239,16 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         <div className="text-xs px-2.5 py-1 rounded-full font-medium bg-blue-50 text-brand-700 border border-blue-200 flex items-center space-x-1.5">
           <span>
             Vai trò:{' '}
-            {currentRole === 'producer'
+            {accountRole === 'admin'
+              ? 'Admin (Quản trị)'
+              : currentRole === 'producer'
               ? 'Producer (Dựng Video)'
               : currentRole === 'writer'
               ? 'Writer (Biên kịch)'
               : currentRole === 'reviewer'
               ? 'Reviewer (Thẩm định)'
-              : currentRole === 'admin'
-              ? 'Admin (Quản trị)'
               : 'Khách xem'}
-            {isLeader && ' • Tổ trưởng'}
+            {accountRole !== 'admin' && isLeader && ' • Tổ trưởng'}
           </span>
         </div>
 

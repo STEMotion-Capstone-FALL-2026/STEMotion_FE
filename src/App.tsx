@@ -37,6 +37,7 @@ import { DraftReviewModal, PendingDraft } from './components/modals/DraftReviewM
 import { PipelineStatusBar } from './components/layout/PipelineBoard';
 import { WorkspacePickerModal } from './components/modals/WorkspacePickerModal';
 import { VersionDiffModal } from './components/modals/VersionDiffModal';
+import { CreateWorkspaceModal } from './components/modals/CreateWorkspaceModal';
 import { pipelineStage } from './lib/pipeline';
 
 /** Shape the studio renders before the first script arrives. */
@@ -118,6 +119,7 @@ export default function App() {
 
   // Modals state
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  const [isCreateWorkspaceModalOpen, setIsCreateWorkspaceModalOpen] = useState(false);
   const [isManageMembersModalOpen, setIsManageMembersModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isVersionDiffModalOpen, setIsVersionDiffModalOpen] = useState(false);
@@ -862,6 +864,7 @@ export default function App() {
         }}
         onOpenManageMembersModal={() => setIsManageMembersModalOpen(true)}
         onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
+        onCreateWorkspace={() => setIsCreateWorkspaceModalOpen(true)}
         onNavigateToDashboard={() => setIsInStudio(false)}
         isInStudio={isInStudio}
       />
@@ -1066,6 +1069,16 @@ export default function App() {
         workspaceName={activeGroup.name}
         isCurrentUserAdminOrLeader={currentUser.role === 'admin' || isLeader}
         onMembersUpdated={() => {
+          void bootstrapFromApi();
+        }}
+      />
+
+      <CreateWorkspaceModal
+        isOpen={isCreateWorkspaceModalOpen}
+        onClose={() => setIsCreateWorkspaceModalOpen(false)}
+        onWorkspaceCreated={(created) => {
+          workspaceService.setActiveWorkspaceId(created.id);
+          showToast(`Đã tạo tổ chuyên môn "${created.name}" thành công!`, 'success');
           void bootstrapFromApi();
         }}
       />
