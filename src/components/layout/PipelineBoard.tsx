@@ -9,9 +9,14 @@ import { PIPELINE_STAGES, pipelineStage, stageIndex } from '../../lib/pipeline';
  * lifecycle stages, which one the project is in, and whose turn it is. Opens a
  * board of every project of the workspace grouped by stage.
  */
-export const PipelineStatusBar: React.FC<{ script: STEMScript; onOpenProject: (id: string) => void }> = ({
+export const PipelineStatusBar: React.FC<{
+  script: STEMScript;
+  onOpenProject: (id: string) => void;
+  onBackToDashboard?: () => void;
+}> = ({
   script,
   onOpenProject,
+  onBackToDashboard,
 }) => {
   const [boardOpen, setBoardOpen] = useState(false);
   const current = stageIndex(pipelineStage(script));
@@ -21,6 +26,15 @@ export const PipelineStatusBar: React.FC<{ script: STEMScript; onOpenProject: (i
     <>
       <div className="bg-slate-900 text-white px-6 py-1.5 border-b border-slate-800 flex items-center justify-between gap-3 text-[11px] select-none">
         <div className="flex items-center gap-1 overflow-x-auto">
+          {onBackToDashboard && (
+            <button
+              onClick={onBackToDashboard}
+              type="button"
+              className="mr-3 px-2.5 py-0.5 rounded-md bg-slate-800 hover:bg-brand-600 text-slate-200 hover:text-white text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer border border-slate-700 hover:border-brand-500"
+            >
+              <span>← Kho kịch bản</span>
+            </button>
+          )}
           <span className="font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">Quy trình:</span>
           {PIPELINE_STAGES.map((stage, i) => (
             <React.Fragment key={stage.id}>
