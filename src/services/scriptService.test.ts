@@ -52,7 +52,8 @@ describe('AI illustrated scenes', () => {
 describe('AI scientific content integrity', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(['MATH_FORMULA', 'CHEMICAL_REACTION', 'STEM_QUIZ', 'DATA_CHART', 'PROCESS_TIMELINE'])
+  it.each(['MATH_FORMULA', 'CHEMICAL_REACTION', 'STEM_QUIZ', 'DATA_CHART', 'PROCESS_TIMELINE',
+    'DIAGRAM_EXPLAINER', 'ALGORITHM_WALKTHROUGH'])
     ('rejects missing scientific content instead of fabricating %s', async (type) => {
       vi.spyOn(apiClient, 'post').mockResolvedValue({ result: { scenes: [{ type, title: 'Lesson' }] } });
       await expect(scriptService.generateScriptWithAI('Lesson', 'Physics', '10')).rejects.toThrow('phân cảnh 1');
@@ -85,5 +86,39 @@ describe('AI scientific content integrity', () => {
       type: 'STEM_QUIZ', question: 'Question', options: ['A', 'B'], correctIndex: 2,
     }] } });
     await expect(scriptService.generateScriptWithAI('Lesson', 'Physics', '10')).rejects.toThrow('phân cảnh 1');
+  });
+});
+
+describe('AI diagram and algorithm scenes', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('keeps the labels the API requires and only fills in their placement', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue({ result: { scenes: [{
+      type: 'DIAGRAM_EXPLAINER', title: 'Mạch điện', narration: 'Lời thoại', durationInFrames: 90,
+      svgType: 'unknown', labels: [{ name: 'Nguồn', description: 'Pin' }, { name: 'Điện trở', xPercent: 80, yPercent: 120 }],
+    }] } });
+    const draft = await scriptService.generateScriptWithAI('Mạch', 'Physics', '11');
+    expect(draft.scenes[0]).toMatchObject({
+      diagramTitle: 'Mạch điện', svgType: 'circuit',
+      labels: [
+        { name: 'Nguồn', description: 'Pin', xPercent: 33, yPercent: 35 },
+        { name: 'Điện trở', description: '', xPercent: 80, yPercent: 100 },
+      ],
+    });
+  });
+
+  it('maps algorithm steps from the shared AI step shape', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue({ result: { scenes: [{
+      type: 'ALGORITHM_WALKTHROUGH', title: 'Tìm kiếm', narration: 'Lời thoại', durationInFrames: 90,
+      language: 'python', codeSnippet: 'a = 1\nprint(a)',
+      steps: [{ label: 'Gán', latexSnippet: 'a=1', explanation: 'Khởi tạo' }, { label: 'In', latexSnippet: '', explanation: 'In ra' },
+        { label: 'Hết', latexSnippet: '', explanation: 'Kết thúc' }],
+    }] } });
+    const draft = await scriptService.generateScriptWithAI('Thuật toán', 'ComputerScience', '10');
+    expect((draft.scenes[0] as any).steps).toEqual([
+      { lineHighlight: 1, variableState: 'a=1', note: 'Khởi tạo' },
+      { lineHighlight: 2, variableState: '', note: 'In ra' },
+      { lineHighlight: 2, variableState: '', note: 'Kết thúc' },
+    ]);
   });
 });

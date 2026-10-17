@@ -139,6 +139,15 @@ const res = await apiClient.post<any>('/ai/script/action', {
         valid = Array.isArray(stages) && stages.length >= 2
           && stages.every((stage: any) => typeof stage?.title === 'string' && stage.title.trim().length > 0);
       }
+      if (scene?.type === 'DIAGRAM_EXPLAINER') {
+        const labels = value('labels');
+        valid = Array.isArray(labels) && labels.length > 0
+          && labels.every((label: any) => typeof label?.name === 'string' && label.name.trim().length > 0);
+      }
+      if (scene?.type === 'ALGORITHM_WALKTHROUGH') {
+        const steps = value('steps');
+        valid = nonEmpty('language') && nonEmpty('codeSnippet') && Array.isArray(steps) && steps.length > 0;
+      }
       if (scene?.type === 'COMPOSED') {
         try {
           composedPropsFrom(scene);
@@ -268,6 +277,38 @@ const res = await apiClient.post<any>('/ai/script/action', {
           layout: sc.layout || sc.props?.layout || 'focus',
           detail: sc.detail || sc.props?.detail || 'rich',
           icons,
+        } as SceneData;
+      }
+      if (type === 'DIAGRAM_EXPLAINER') {
+        const rawLabels: any[] = sc.labels || sc.props?.labels;
+        const svgType = sc.svgType || sc.props?.svgType;
+        return {
+          ...base,
+          diagramTitle: sc.diagramTitle || sc.props?.diagramTitle || base.title,
+          svgType: ['pendulum', 'atom', 'circuit', 'cell'].includes(svgType) ? svgType : 'circuit',
+          // Only placement is defaulted: labels the model did not position are spread across the diagram.
+          labels: rawLabels.map((label: any, lIdx: number) => ({
+            name: String(label.name).trim(),
+            description: typeof label.description === 'string' ? label.description : '',
+            xPercent: Number.isFinite(label.xPercent) ? Math.min(100, Math.max(0, label.xPercent)) : Math.round(((lIdx + 1) * 100) / (rawLabels.length + 1)),
+            yPercent: Number.isFinite(label.yPercent) ? Math.min(100, Math.max(0, label.yPercent)) : (lIdx % 2 === 0 ? 35 : 65),
+          })),
+        } as SceneData;
+      }
+      if (type === 'ALGORITHM_WALKTHROUGH') {
+        const codeSnippet: string = sc.codeSnippet || sc.props?.codeSnippet;
+        const lineCount = Math.max(1, codeSnippet.split('\n').length);
+        // The AI schema shares MATH_FORMULA's step shape (label, latexSnippet, explanation).
+        const steps = (sc.steps || sc.props?.steps).map((st: any, sIdx: number) => ({
+          lineHighlight: Number.isInteger(st.lineHighlight) ? st.lineHighlight : Math.min(sIdx + 1, lineCount),
+          variableState: st.variableState ?? st.latexSnippet ?? '',
+          note: st.note ?? st.explanation ?? st.label ?? '',
+        }));
+        return {
+          ...base,
+          language: sc.language || sc.props?.language,
+          codeSnippet,
+          steps,
         } as SceneData;
       }
       if (type === 'COMPOSED') {
