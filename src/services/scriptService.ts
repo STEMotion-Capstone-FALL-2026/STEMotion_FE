@@ -562,7 +562,7 @@ const res = await apiClient.post<any>('/ai/script/action', {
           'Luyện tập các câu hỏi kiểm tra trên Canvas LMS',
         ],
         nextLessonSuggestion: 'Bài tiếp theo: Ứng dụng nâng cao trong kỹ thuật',
-        instructorName: 'Tổ Chuyên Môn STEM',
+        instructorName: 'Đội Ngũ STEMotion',
         narration: 'Cảm ơn các em đã theo dõi bài giảng hôm nay. Hãy hoàn thành các bài tập củng cố trên LMS.',
         durationInFrames: 150,
       };

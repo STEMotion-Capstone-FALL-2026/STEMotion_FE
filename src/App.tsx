@@ -34,7 +34,6 @@ import { CreateProjectModal } from './components/modals/CreateProjectModal';
 import { ManageMembersModal } from './components/modals/ManageMembersModal';
 import { ChangePasswordModal } from './components/modals/ChangePasswordModal';
 import { DraftReviewModal, PendingDraft } from './components/modals/DraftReviewModal';
-import { PipelineStatusBar } from './components/layout/PipelineBoard';
 import { WorkspacePickerModal } from './components/modals/WorkspacePickerModal';
 import { VersionDiffModal } from './components/modals/VersionDiffModal';
 import { CreateWorkspaceModal } from './components/modals/CreateWorkspaceModal';
@@ -221,7 +220,7 @@ export default function App() {
       } else {
         setHasNoWorkspace(true);
         setWorkspaces([]);
-        setActiveGroup({ name: 'Chưa có tổ', code: '------' });
+        setActiveGroup({ name: 'Chưa có nhóm', code: '------' });
         setIsLeader(false);
         setWorkspaceRole(null);
         setScript(EMPTY_SCRIPT);
@@ -229,9 +228,9 @@ export default function App() {
         setActiveSceneId('');
         if (profile.role === 'admin') {
           setCurrentRole('admin');
-          showToast('Hệ thống chưa có tổ chuyên môn nào. Vui lòng tạo tổ đầu tiên.', 'info');
+          showToast('Hệ thống chưa có không gian làm việc nào. Vui lòng tạo nhóm đầu tiên.', 'info');
         } else {
-          showToast('Tài khoản của bạn chưa được phân vào tổ chuyên môn nào.', 'warn');
+          showToast('Tài khoản của bạn chưa được phân vào không gian làm việc nào.', 'warn');
         }
       }
     } catch (error: any) {
@@ -879,25 +878,15 @@ export default function App() {
         isInStudio={isInStudio}
       />
 
-      {/* The proposal's state-driven pipeline: where the open project is and whose turn it is. */}
-      {!hasNoWorkspace && currentRole !== 'admin' && isInStudio && script.id && (
-        <PipelineStatusBar
-          script={script}
-          onOpenProject={(id) => void openProject(id)}
-          onBackToDashboard={() => setIsInStudio(false)}
-          currentRole={currentRole}
-        />
-      )}
-
       {hasNoWorkspace && currentUser.role !== 'admin' && (
         <main className="flex-1 bg-slate-50 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-4 shadow-sm">
             <div className="text-4xl">🏢</div>
             <h2 className="text-base font-extrabold text-slate-900">
-              Chưa Được Phân Vào Tổ Chuyên Môn
+              Chưa Được Phân Vào Không Gian Làm Việc
             </h2>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Tài khoản của bạn chưa được phân vào tổ chuyên môn nào. Vui lòng liên hệ Quản trị viên để được gán vào tổ.
+              Tài khoản của bạn chưa được phân vào không gian làm việc nào. Vui lòng liên hệ Quản trị viên để được gán vào nhóm sản xuất.
             </p>
             <button
               type="button"
@@ -1080,7 +1069,7 @@ export default function App() {
         workspaceName={
           workspaces.find(
             (w) => w.id === (workspaceService.getCachedWorkspaceId() || workspaces[0]?.id)
-          )?.name || (activeGroup.name !== 'Chưa có tổ' ? activeGroup.name : (workspaces[0]?.name || 'Tổ chuyên môn'))
+          )?.name || (activeGroup.name !== 'Chưa có nhóm' ? activeGroup.name : (workspaces[0]?.name || 'Không gian làm việc'))
         }
         isCurrentUserAdminOrLeader={currentUser.role === 'admin' || isLeader}
         workspaces={workspaces}
@@ -1102,7 +1091,7 @@ export default function App() {
         onClose={() => setIsCreateWorkspaceModalOpen(false)}
         onWorkspaceCreated={(created) => {
           workspaceService.setActiveWorkspaceId(created.id);
-          showToast(`Đã tạo tổ chuyên môn "${created.name}" thành công!`, 'success');
+          showToast(`Đã tạo không gian làm việc "${created.name}" thành công!`, 'success');
           void bootstrapFromApi();
         }}
       />

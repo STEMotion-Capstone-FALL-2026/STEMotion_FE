@@ -123,11 +123,11 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
 
-          {/* Quản lý Thành Viên (Admin hoặc Tổ trưởng) */}
+          {/* Quản lý Thành Viên (Admin hoặc Trưởng nhóm) */}
           {canManageMembers && onOpenManageMembersModal && (
             <button
               onClick={onOpenManageMembersModal}
-              title="Quản lý thành viên trong tổ này"
+              title="Quản lý thành viên trong nhóm này"
               className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-brand-500 hover:bg-blue-50 text-xs font-bold text-slate-700 flex items-center space-x-1.5 transition-all shadow-xs"
             >
               <Users className="w-3.5 h-3.5 text-brand-600" />
@@ -139,7 +139,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           {isGroupDropdownOpen && (
             <div className="absolute top-full left-0 mt-1.5 w-72 bg-white border border-slate-200 rounded-xl shadow-lg p-2 space-y-1.5 z-50 text-xs animate-fade-in">
               <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
-                <span>Không gian nhóm làm việc:</span>
+                <span>Không gian làm việc:</span>
                 <span className="text-brand-600 font-semibold">Multi-Workspace</span>
               </div>
               <div className="space-y-1">
@@ -172,7 +172,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                     className="w-full p-2 rounded-lg hover:bg-emerald-50 text-left flex items-center space-x-2 text-emerald-700 font-bold"
                   >
                     <PlusCircle className="w-4 h-4 text-emerald-600" />
-                    <span>+ Tạo Tổ Chuyên Môn Mới</span>
+                    <span>+ Tạo Không Gian Làm Việc Mới</span>
                   </button>
                 )}
                 <button
@@ -194,7 +194,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                     className="w-full p-2 rounded-lg hover:bg-slate-50 text-left flex items-center space-x-2 text-slate-700 font-medium"
                   >
                     <Users className="w-4 h-4 text-slate-500" />
-                    <span>Quản lý thành viên tổ...</span>
+                    <span>Quản lý thành viên nhóm...</span>
                   </button>
                 )}
               </div>
@@ -248,7 +248,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
               : currentRole === 'reviewer'
               ? 'Reviewer (Thẩm định)'
               : 'Khách xem'}
-            {accountRole !== 'admin' && isLeader && ' • Tổ trưởng'}
+            {accountRole !== 'admin' && isLeader && ' • Trưởng nhóm'}
           </span>
         </div>
 

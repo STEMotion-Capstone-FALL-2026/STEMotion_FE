@@ -1144,13 +1144,13 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
             </div>
 
             <div>
-              <span className="text-[10px] text-slate-600 font-bold block mb-0.5">Tên Giảng Viên / Tổ Bộ Môn:</span>
+              <span className="text-[10px] text-slate-600 font-bold block mb-0.5">Tác Giả / Nhóm Sản Xuất:</span>
               <input
                 type="text"
                 value={(selectedScene as any).instructorName || ''}
                 onChange={(e) => updateSceneProperty((s) => ({ ...s, instructorName: e.target.value }))}
                 className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white"
-                placeholder="STEMotion Academy"
+                placeholder="STEMotion Studio"
               />
             </div>
 

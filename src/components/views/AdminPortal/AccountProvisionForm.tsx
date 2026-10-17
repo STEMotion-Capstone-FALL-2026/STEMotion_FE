@@ -24,12 +24,12 @@ export const AccountProvisionForm: React.FC<AccountProvisionFormProps> = ({ onUs
   };
   return <form onSubmit={submit} className="bg-white border border-slate-200 rounded-2xl p-6 space-y-3">
     <h2 className="font-bold">Cấp tài khoản hệ thống</h2>
-    <p className="text-xs text-slate-500">Sau khi cấp tài khoản, gán người dùng vào tổ chuyên môn tương ứng. Người dùng sẽ phải đổi mật khẩu ở lần đăng nhập đầu tiên.</p>
+    <p className="text-xs text-slate-500">Sau khi cấp tài khoản, gán người dùng vào không gian làm việc tương ứng. Người dùng sẽ phải đổi mật khẩu ở lần đăng nhập đầu tiên.</p>
     <label className="block">Họ tên<input required value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} className="block w-full border rounded p-2" /></label>
     <label className="block">Email<input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="block w-full border rounded p-2" /></label>
     <label className="block">Mật khẩu ban đầu<input required type="password" minLength={8} autoComplete="new-password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} className="block w-full border rounded p-2" /></label>
     <label className="block">Vai trò toàn hệ thống<select value={form.role} onChange={e => setForm({ ...form, role: e.target.value as ProvisionUserRequest['role'] })} className="block border rounded p-2">
-      <option value="WRITER">Giáo viên / Thành viên tổ (WRITER)</option>
+      <option value="WRITER">Thành viên đội ngũ sản xuất (WRITER / CREATOR)</option>
       <option value="ADMIN">Quản trị viên hệ thống (ADMIN)</option>
     </select></label>
     {error && <p role="alert" className="text-rose-600">{error}</p>}
