@@ -111,6 +111,7 @@ describe('Remotion Lego Modularization System', () => {
       headline: 'Chào mừng đến với thế giới vi mô!',
       caption: 'Khám phá cách các hạt tương tác và tạo nên vạn vật xung quanh chúng ta.',
       layout: 'focus' as const,
+      ambience: 'space' as const,
       icons: [
         { name: 'atom', label: 'Nguyên tử' },
         { name: 'lightning', label: 'Electron' },

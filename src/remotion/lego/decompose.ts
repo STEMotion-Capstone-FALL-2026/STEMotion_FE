@@ -433,7 +433,7 @@ export function decomposeSceneToComposed(scene: SceneData): ComposedProps {
           kind: 'text',
           slot: 'top',
           text: scene.caption,
-          motion: 'fade',
+          motion: 'rise',
           ...applyOffset('caption', { x: 320, y: 176, w: 1280, h: 72 }),
         });
       }
