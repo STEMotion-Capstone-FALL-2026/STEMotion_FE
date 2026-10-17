@@ -8,6 +8,7 @@ import { useDrift } from '../flat/motion';
 import { FLAT_FONT, AmbiencePalette, shade } from '../flat/theme';
 import { Mascot } from '../director/assets/general';
 import { Rect, Timed, fitFont } from './layout';
+import { LegoBlock } from '../lego/LegoBlock';
 
 /**
  * The building blocks of a composed scene. Each block draws itself inside
@@ -182,10 +183,17 @@ const List: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect, 
         const at = t.enter + (span * i) / Math.max(1, items.length);
         const k = interpolate(frame, [at, at + 12], [0, 1], clamp);
         return (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: size * 0.5, opacity: k, transform: `translateX(${(1 - k) * -30}px)` }}>
-            <div style={{ width: size * 0.5, height: size * 0.5, borderRadius: '50%', background: ctx.accent(i), flexShrink: 0 }} />
-            <div style={{ fontSize: size, fontWeight: 700, color: ctx.palette.text, lineHeight: 1.25 }}>{item}</div>
-          </div>
+          <LegoBlock
+            key={i}
+            id={`${t.block.id}__item-${i}`}
+            label={`Mục #${i + 1}: ${item.slice(0, 24)}`}
+            kind="step"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: size * 0.5, opacity: k, transform: `translateX(${(1 - k) * -30}px)` }}>
+              <div style={{ width: size * 0.5, height: size * 0.5, borderRadius: '50%', background: `var(--lego-accent-solid, ${ctx.accent(i)})`, flexShrink: 0 }} />
+              <div style={{ fontSize: `var(--lego-font-size, ${size}px)`, fontWeight: 700, color: `var(--lego-accent-solid, ${ctx.palette.text})`, lineHeight: 1.25 }}>{item}</div>
+            </div>
+          </LegoBlock>
         );
       })}
     </div>
@@ -230,16 +238,22 @@ const Icons: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect,
   return (
     <div style={{ display: 'flex', justifyContent: 'space-evenly', alignItems: 'flex-end', width: '100%' }}>
       {icons.map((ic, i) => (
-        <StemIcon
+        <LegoBlock
           key={`${ic.name}-${i}`}
-          name={ic.name}
-          label={ic.label}
-          color={ctx.accent(i)}
-          size={size}
-          delay={t.enter + i * 7}
-          labelSize={t.block.fontSize || Math.max(18, size * 0.17)}
-          tone={ctx.tone}
-        />
+          id={`${t.block.id}__icon-${i}`}
+          label={`Khối Minh họa #${i + 1}: ${ic.label || ic.name}`}
+          kind="diagram"
+        >
+          <StemIcon
+            name={ic.name}
+            label={ic.label}
+            color={ctx.accent(i)}
+            size={size}
+            delay={t.enter + i * 7}
+            labelSize={t.block.fontSize || Math.max(18, size * 0.17)}
+            tone={ctx.tone}
+          />
+        </LegoBlock>
       ))}
     </div>
   );
@@ -316,7 +330,11 @@ const Choice: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect
   return (
     <div style={{ ...panel(ctx), display: 'flex', flexDirection: 'column', gap: size * 0.4, minWidth: rect.w * 0.6, maxWidth: rect.w }}>
       {t.block.question ? (
-        <div style={{ fontSize: size * 1.08, fontWeight: 800, color: ctx.palette.text, marginBottom: size * 0.2 }}>{t.block.question}</div>
+        <LegoBlock id={`${t.block.id}__question`} label="Câu hỏi trắc nghiệm" kind="quiz">
+          <div style={{ fontSize: `var(--lego-font-size, ${Math.round(size * 1.08)}px)`, fontWeight: 800, color: `var(--lego-accent-solid, ${ctx.palette.text})`, marginBottom: size * 0.2 }}>
+            {t.block.question}
+          </div>
+        </LegoBlock>
       ) : null}
       {options.map((o, i) => {
         const correct = i === t.block.answer;
@@ -324,39 +342,45 @@ const Choice: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect
         const k = interpolate(frame, [at, at + 10], [0, 1], clamp);
         const bg = correct ? `rgba(92,242,168,${0.25 * revealed})` : 'transparent';
         return (
-          <div
+          <LegoBlock
             key={i}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: size * 0.5,
-              padding: `${size * 0.2}px ${size * 0.4}px`,
-              borderRadius: size * 0.5,
-              border: `3px solid ${correct && revealed > 0 ? GOOD : shade(ctx.accent(i), -0.1)}`,
-              background: bg,
-              opacity: k * (correct ? 1 : 1 - 0.55 * revealed),
-              transform: `scale(${correct ? 1 + 0.05 * revealed : 1})`,
-            }}
+            id={`${t.block.id}__opt-${i}`}
+            label={`Phương án ${String.fromCharCode(65 + i)}: ${o.slice(0, 20)}`}
+            kind="card"
           >
             <div
               style={{
-                width: size * 1.1,
-                height: size * 1.1,
-                borderRadius: '50%',
-                background: correct && revealed > 0.5 ? GOOD : ctx.accent(i),
-                color: '#24164f',
-                fontWeight: 800,
-                fontSize: size * 0.7,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
+                gap: size * 0.5,
+                padding: `${size * 0.2}px ${size * 0.4}px`,
+                borderRadius: size * 0.5,
+                border: `3px solid ${correct && revealed > 0 ? GOOD : shade(ctx.accent(i), -0.1)}`,
+                background: bg,
+                opacity: k * (correct ? 1 : 1 - 0.55 * revealed),
+                transform: `scale(${correct ? 1 + 0.05 * revealed : 1})`,
               }}
             >
-              {correct && revealed > 0.5 ? '✓' : String.fromCharCode(65 + i)}
+              <div
+                style={{
+                  width: size * 1.1,
+                  height: size * 1.1,
+                  borderRadius: '50%',
+                  background: correct && revealed > 0.5 ? GOOD : ctx.accent(i),
+                  color: '#24164f',
+                  fontWeight: 800,
+                  fontSize: size * 0.7,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                {correct && revealed > 0.5 ? '✓' : String.fromCharCode(65 + i)}
+              </div>
+              <div style={{ fontSize: `var(--lego-font-size, ${size}px)`, fontWeight: 700, color: `var(--lego-accent-solid, ${ctx.palette.text})` }}>{o}</div>
             </div>
-            <div style={{ fontSize: size, fontWeight: 700, color: ctx.palette.text }}>{o}</div>
-          </div>
+          </LegoBlock>
         );
       })}
     </div>
@@ -371,26 +395,30 @@ const Guide: React.FC<{ t: Timed; rect: Rect; ctx: BlockContext }> = ({ t, rect,
   const bubbleW = rect.w - 400 * scale;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%', justifyContent: 'center' }}>
-      <svg width={380 * scale} height={420 * scale} viewBox="-190 -200 380 420">
-        <Mascot pose={t.block.pose ?? 'idle'} color={ctx.accent(1)} />
-      </svg>
+      <LegoBlock id={`${t.block.id}__mascot`} label="Nhân vật Trợ giảng" kind="diagram">
+        <svg width={380 * scale} height={420 * scale} viewBox="-190 -200 380 420">
+          <Mascot pose={t.block.pose ?? 'idle'} color={ctx.accent(1)} />
+        </svg>
+      </LegoBlock>
       {text ? (
-        <div
-          style={{
-            ...panel(ctx),
-            background: ctx.palette.light ? '#ffffff' : '#fff8e8',
-            color: '#2b0a5e',
-            fontSize: t.block.fontSize || fitFont(text, Math.max(200, bubbleW) * 0.85, rect.h * 0.55, 42, 20, 1.25),
-            fontWeight: 700,
-            lineHeight: 1.25,
-            maxWidth: Math.max(200, bubbleW),
-            opacity: bubble,
-            transform: `scale(${0.7 + 0.3 * bubble})`,
-            transformOrigin: 'left center',
-          }}
-        >
-          {text}
-        </div>
+        <LegoBlock id={`${t.block.id}__speech`} label="Lời thoại Trợ giảng" kind="card">
+          <div
+            style={{
+              ...panel(ctx),
+              background: ctx.palette.light ? '#ffffff' : '#fff8e8',
+              color: '#2b0a5e',
+              fontSize: `var(--lego-font-size, ${t.block.fontSize || fitFont(text, Math.max(200, bubbleW) * 0.85, rect.h * 0.55, 42, 20, 1.25)}px)`,
+              fontWeight: 700,
+              lineHeight: 1.25,
+              maxWidth: Math.max(200, bubbleW),
+              opacity: bubble,
+              transform: `scale(${0.7 + 0.3 * bubble})`,
+              transformOrigin: 'left center',
+            }}
+          >
+            {text}
+          </div>
+        </LegoBlock>
       ) : null}
     </div>
   );

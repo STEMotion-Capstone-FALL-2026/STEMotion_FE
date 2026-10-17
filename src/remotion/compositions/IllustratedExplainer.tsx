@@ -18,6 +18,11 @@ import { LegoBlock } from '../lego/LegoBlock';
  * hovering over isometric tiles with coloured label tags, or a swarm of dots
  * settling into one mass. One headline, an optional caption, constant gentle
  * motion and a slow camera push.
+ *
+ * Every individual icon (`icon-0`, `icon-1`, `icon-2`, ...), `headline`, and
+ * `caption` is wrapped in its own `<LegoBlock>` so users can drag, resize,
+ * recolor, hide, or edit each STEM object (e.g., Electron, Nguyên tử, Năng lượng)
+ * independently.
  */
 
 const MAX_ICONS = 6;
@@ -34,7 +39,7 @@ type Accent = (index: number) => string;
  * clear for the headline and the bottom for the hero's tile, so nothing ever
  * passes over text; each satellite only sways a few degrees.
  */
-const satelliteAngles = (count: number): number[] => {
+export const satelliteAngles = (count: number): number[] => {
   const right = Math.ceil(count / 2);
   const left = count - right;
   const spread = (from: number, to: number, n: number) =>
@@ -67,20 +72,37 @@ const FocusLayout: React.FC<{ icons: Icons; tone: string; accent: Accent; mirror
   return (
     <>
       {satellites.map((ic, i) => {
+        const iconIdx = i + 1;
         const sway = Math.sin(frame * 0.02 + i * 1.7) * 5;
         const angle = ((angles[i] + sway) * Math.PI) / 180;
         return (
-          <div
-            key={`${ic.name}-${i}`}
-            style={at(cx + (mirror ? -1 : 1) * Math.cos(angle) * 590, STAGE_Y + Math.sin(angle) * 265, 2)}
+          <LegoBlock
+            key={`icon-${iconIdx}`}
+            id={`icon-${iconIdx}`}
+            label={`Khối Minh họa #${iconIdx + 1}: ${ic.label || ic.name}`}
+            kind="diagram"
+            style={at(cx + (mirror ? -1 : 1) * Math.cos(angle) * 590, STAGE_Y + Math.sin(angle) * 265, 2 + iconIdx)}
           >
-            <StemIcon tone={tone} name={ic.name} label={ic.label} color={accent(i + 1)} size={110} delay={18 + i * 6} labelSize={24} />
-          </div>
+            <StemIcon
+              tone={tone}
+              name={ic.name}
+              label={ic.label}
+              color={accent(iconIdx)}
+              size={110}
+              delay={18 + i * 6}
+              labelSize={24}
+            />
+          </LegoBlock>
         );
       })}
-      <div style={at(cx, STAGE_Y, 3)}>
+      <LegoBlock
+        id="icon-0"
+        label={`Khối Trung tâm #1: ${hero.label || hero.name}`}
+        kind="diagram"
+        style={at(cx, STAGE_Y, 10)}
+      >
         <StemIcon tone={tone} name={hero.name} label={hero.label} color={accent(0)} size={220} delay={6} labelSize={34} hero />
-      </div>
+      </LegoBlock>
     </>
   );
 };
@@ -100,7 +122,7 @@ const Connector: React.FC<{ x1: number; x2: number; y: number; delay: number; co
   const path = `M ${x1} ${y} Q ${(x1 + x2) / 2} ${y - 90} ${x2} ${y}`;
   const { strokeDasharray, strokeDashoffset } = evolvePath(progress, path);
   return (
-    <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}>
+    <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
       <path
         d={path}
         fill="none"
@@ -139,9 +161,15 @@ const RowLayout: React.FC<{ icons: Icons; lineColor: string; tone: string; accen
         />
       ))}
       {icons.map((ic, i) => (
-        <div key={`${ic.name}-${i}`} style={at(startX + gap * i, STAGE_Y, 2)}>
+        <LegoBlock
+          key={`icon-${i}`}
+          id={`icon-${i}`}
+          label={`Khối Minh họa #${i + 1}: ${ic.label || ic.name}`}
+          kind="diagram"
+          style={at(startX + gap * i, STAGE_Y, 2 + i)}
+        >
           <StemIcon tone={tone} name={ic.name} label={ic.label} color={accent(i)} size={size} delay={6 + i * 14} labelSize={26} />
-        </div>
+        </LegoBlock>
       ))}
     </>
   );
@@ -160,12 +188,15 @@ const ClusterLayout: React.FC<{ icons: Icons; tone: string; accent: Accent }> = 
         const row = Math.floor(i / cols);
         const inRow = Math.min(cols, icons.length - row * cols);
         return (
-          <div
-            key={`${ic.name}-${i}`}
-            style={at(960 + (col - (inRow - 1) / 2) * cellW, STAGE_Y + 20 + (row - (rows - 1) / 2) * cellH, 2)}
+          <LegoBlock
+            key={`icon-${i}`}
+            id={`icon-${i}`}
+            label={`Khối Minh họa #${i + 1}: ${ic.label || ic.name}`}
+            kind="diagram"
+            style={at(960 + (col - (inRow - 1) / 2) * cellW, STAGE_Y + 20 + (row - (rows - 1) / 2) * cellH, 2 + i)}
           >
             <StemIcon tone={tone} name={ic.name} label={ic.label} color={accent(i)} size={size} delay={6 + i * 7} labelSize={24} />
-          </div>
+          </LegoBlock>
         );
       })}
     </>
@@ -190,39 +221,53 @@ const SwarmLayout: React.FC<{ icons: Icons; tone: string; accent: Accent; mirror
   return (
     <>
       <Swarm cx={cx} cy={cy} radius={radius} colors={colors} delay={4} seed={`swarm-${core.name}`} />
-      <div style={at(cx, cy, 3)}>
-        <PopIn delay={46}>
-          <Float seed={`core-${core.name}`} amplitude={6}>
-            <div
-              style={{
-                width: 150,
-                height: 150,
-                borderRadius: '50%',
-                background: color,
-                boxShadow: glow(color, 60),
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Icon size={92} weight="fill" color="#ffffff" />
-            </div>
-          </Float>
-        </PopIn>
-      </div>
-      {core.label ? (
-        <div style={at(cx, cy - radius - 70, 4)}>
-          <PopIn delay={54} from={0.6}>
-            <LabelTag text={core.label} color={color} size={30} />
+      <LegoBlock
+        id="icon-0"
+        label={`Khối Hạt nhân #1: ${core.label || core.name}`}
+        kind="diagram"
+        style={at(cx, cy, 4)}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+          {core.label ? (
+            <PopIn delay={54} from={0.6}>
+              <LabelTag text={core.label} color={color} size={30} />
+            </PopIn>
+          ) : null}
+          <PopIn delay={46}>
+            <Float seed={`core-${core.name}`} amplitude={6}>
+              <div
+                style={{
+                  width: 150,
+                  height: 150,
+                  borderRadius: '50%',
+                  background: color,
+                  boxShadow: glow(color, 60),
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon size={92} weight="fill" color="#ffffff" />
+              </div>
+            </Float>
           </PopIn>
         </div>
-      ) : null}
+      </LegoBlock>
 
-      {others.slice(0, 3).map((ic, i, list) => (
-        <div key={`${ic.name}-${i}`} style={at(mirror ? 480 : 1440, cy + (i - (list.length - 1) / 2) * 240, 2)}>
-          <StemIcon tone={tone} name={ic.name} label={ic.label} color={accent(i + 3)} size={90} delay={60 + i * 10} labelSize={22} />
-        </div>
-      ))}
+      {others.slice(0, 3).map((ic, i, list) => {
+        const iconIdx = i + 1;
+        return (
+          <LegoBlock
+            key={`icon-${iconIdx}`}
+            id={`icon-${iconIdx}`}
+            label={`Khối Minh họa #${iconIdx + 1}: ${ic.label || ic.name}`}
+            kind="diagram"
+            style={at(mirror ? 480 : 1440, cy + (i - (list.length - 1) / 2) * 240, 2 + iconIdx)}
+          >
+            <StemIcon tone={tone} name={ic.name} label={ic.label} color={accent(i + 3)} size={90} delay={60 + i * 10} labelSize={22} />
+          </LegoBlock>
+        );
+      })}
     </>
   );
 };
@@ -260,12 +305,6 @@ const TOKEN_FIRST = 36;
 const TOKEN_EVERY = 54;
 const TOKEN_TRAVEL = 40;
 
-/**
- * Interaction: the first object hands the third (a spark when absent) over to
- * the second, again and again, along an arc. The giver recoils on each
- * launch, the receiver bumps on each catch, and both keep a running count, so
- * "what one side gives, the other side receives" can be seen, not just said.
- */
 const ExchangeLayout: React.FC<{ icons: Icons; tone: string; accent: Accent; durationInFrames: number }> = ({
   icons,
   tone,
@@ -298,7 +337,7 @@ const ExchangeLayout: React.FC<{ icons: Icons; tone: string; accent: Accent; dur
 
   return (
     <>
-      <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
+      <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }}>
         <path
           d={arcPath}
           fill="none"
@@ -311,16 +350,27 @@ const ExchangeLayout: React.FC<{ icons: Icons; tone: string; accent: Accent; dur
         />
       </svg>
 
-      <div style={at(from[0] - 60, STAGE_Y, 3)}>
+      <LegoBlock
+        id="icon-0"
+        label={`Khối Bên cho #1: ${giver.label || giver.name}`}
+        kind="diagram"
+        style={at(from[0] - 60, STAGE_Y, 3)}
+      >
         <div style={{ transform: `translateX(${-18 * recoil}px) scale(${1 - 0.05 * recoil})` }}>
           <StemIcon tone={tone} name={giver.name} label={giver.label} color={accent(0)} size={190} delay={4} labelSize={32} />
         </div>
-      </div>
-      <div style={at(to[0] + 60, STAGE_Y, 3)}>
+      </LegoBlock>
+
+      <LegoBlock
+        id="icon-1"
+        label={`Khối Bên nhận #2: ${receiver.label || receiver.name}`}
+        kind="diagram"
+        style={at(to[0] + 60, STAGE_Y, 3)}
+      >
         <div style={{ transform: `scale(${1 + 0.08 * catchBump})` }}>
           <StemIcon tone={tone} name={receiver.name} label={receiver.label} color={accent(1)} size={190} delay={12} labelSize={32} />
         </div>
-      </div>
+      </LegoBlock>
 
       {launched.length > 0 ? (
         <>
@@ -333,13 +383,16 @@ const ExchangeLayout: React.FC<{ icons: Icons; tone: string; accent: Accent; dur
         </>
       ) : null}
 
-      {token.label ? (
-        <div style={at(control[0], control[1] + 70, 4)}>
-          <PopIn delay={30} from={0.6}>
-            <LabelTag text={token.label} color={tokenColor} size={28} pointer={false} />
-          </PopIn>
-        </div>
-      ) : null}
+      <LegoBlock
+        id="icon-2"
+        label={`Khối Trao đổi #3: ${token.label || token.name}`}
+        kind="badge"
+        style={at(control[0], control[1] + 70, 5)}
+      >
+        <PopIn delay={30} from={0.6}>
+          <LabelTag text={token.label || token.name} color={tokenColor} size={28} pointer={false} />
+        </PopIn>
+      </LegoBlock>
 
       {launches.map((l) => {
         const t = (frame - l) / TOKEN_TRAVEL;
@@ -376,12 +429,6 @@ const ExchangeLayout: React.FC<{ icons: Icons; tone: string; accent: Accent; dur
 /** How many times larger each level is than the next one down. */
 const ZOOM_FACTOR = 7;
 
-/**
- * Zoom through scales: each object is one level inside the last (leaf, cell,
- * chloroplast). Each level holds for a moment, then the camera dives into it
- * while the next level grows out of its centre. A trail at the bottom shows
- * where on the scale the viewer is.
- */
 const ZoomLayout: React.FC<{ icons: Icons; tone: string; accent: Accent; durationInFrames: number }> = ({
   icons,
   tone,
@@ -410,7 +457,7 @@ const ZoomLayout: React.FC<{ icons: Icons; tone: string; accent: Accent; duratio
             : interpolate(r, [0.3, 0.7], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
         return (
           <div
-            key={`${ic.name}-${j}`}
+            key={`zoom-wrap-${j}`}
             style={{
               position: 'absolute',
               inset: 0,
@@ -420,7 +467,12 @@ const ZoomLayout: React.FC<{ icons: Icons; tone: string; accent: Accent; duratio
               zIndex: 10 - j,
             }}
           >
-            <div style={at(960, STAGE_Y, 2)}>
+            <LegoBlock
+              id={`icon-${j}`}
+              label={`Khối Phóng đại #${j + 1}: ${ic.label || ic.name}`}
+              kind="diagram"
+              style={at(960, STAGE_Y, 2 + j)}
+            >
               <StemIcon
                 tone={tone}
                 name={ic.name}
@@ -431,7 +483,7 @@ const ZoomLayout: React.FC<{ icons: Icons; tone: string; accent: Accent; duratio
                 labelSize={34}
                 hero
               />
-            </div>
+            </LegoBlock>
           </div>
         );
       })}
@@ -485,7 +537,7 @@ export const IllustratedExplainer: React.FC<IllustratedExplainerProps> = ({
   // Each scene arrives by pulling back out of a slight zoom instead of a hard cut.
   const arrive = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 22 });
   const safeIcons: Icons =
-    Array.isArray(icons) && icons.length > 0 ? icons.slice(0, MAX_ICONS) : [{ name: 'sparkle' }];
+    Array.isArray(icons) && icons.length > 0 ? icons.slice(0, MAX_ICONS) : [{ name: 'sparkle', label: 'Khái niệm' }];
   const base = customFontSize || 30;
   const headlineSize = Math.round(base * 2.2);
   // Only the focus layout is composed off centre; the headline sits over the open side.
@@ -518,68 +570,80 @@ export const IllustratedExplainer: React.FC<IllustratedExplainerProps> = ({
           transformOrigin: `50% ${(STAGE_Y / 1080) * 100}%`,
         }}
       >
-      {/* The zoom layout moves its own camera, so the drift stays small there. */}
-      <CameraDrift
-        durationInFrames={durationInFrames}
-        zoom={layout === 'zoom' ? 0.02 : 0.06}
-        pan={layout === 'zoom' ? 0 : 24}
-        move={variation.camera}
-      >
-        <LegoBlock
-          id="hero-illustration"
-          label={`Sân khấu Minh họa (${layout})`}
-          kind="diagram"
-          style={{
-            position: 'absolute',
-            inset: 0,
-            transform: `scale(${cardScale || 1})`,
-            transformOrigin: `50% ${(STAGE_Y / 1080) * 100}%`,
-          }}
+        <CameraDrift
+          durationInFrames={durationInFrames}
+          zoom={layout === 'zoom' ? 0.02 : 0.06}
+          pan={layout === 'zoom' ? 0 : 24}
+          move={variation.camera}
         >
-          {layout === 'row' ? (
-            <RowLayout icons={safeIcons} lineColor={palette.text} tone={tone} accent={accent} />
-          ) : layout === 'cluster' ? (
-            <ClusterLayout icons={safeIcons} tone={tone} accent={accent} />
-          ) : layout === 'swarm' ? (
-            <SwarmLayout icons={safeIcons} tone={tone} accent={accent} mirror={variation.mirror} />
-          ) : layout === 'exchange' ? (
-            <ExchangeLayout icons={safeIcons} tone={tone} accent={accent} durationInFrames={durationInFrames} />
-          ) : layout === 'zoom' ? (
-            <ZoomLayout icons={safeIcons} tone={tone} accent={accent} durationInFrames={durationInFrames} />
-          ) : (
-            <FocusLayout icons={safeIcons} tone={tone} accent={accent} mirror={variation.mirror} stage={stage} />
-          )}
-        </LegoBlock>
-      </CameraDrift>
-      </AbsoluteFill>
-
-      <LegoBlock
-        id="header"
-        label="Tiêu đề & Phụ đề Minh họa (Headline)"
-        kind="title"
-        style={{ position: 'absolute', top: 64, zIndex: 20, ...headlineBox }}
-      >
-        <PopIn delay={2} from={0.7}>
           <div
             style={{
-              fontWeight: 800,
-              fontSize: `var(--lego-font-size, ${headlineSize}px)`,
-              lineHeight: 1.1,
-              color: palette.text,
-              textShadow: palette.light ? '0 4px 0 rgba(42,27,94,0.12)' : '0 6px 0 rgba(0,0,0,0.25)',
+              position: 'absolute',
+              inset: 0,
+              transform: `scale(${cardScale || 1})`,
+              transformOrigin: `50% ${(STAGE_Y / 1080) * 100}%`,
             }}
           >
-            {headline}
+            {layout === 'row' ? (
+              <RowLayout icons={safeIcons} lineColor={palette.text} tone={tone} accent={accent} />
+            ) : layout === 'cluster' ? (
+              <ClusterLayout icons={safeIcons} tone={tone} accent={accent} />
+            ) : layout === 'swarm' ? (
+              <SwarmLayout icons={safeIcons} tone={tone} accent={accent} mirror={variation.mirror} />
+            ) : layout === 'exchange' ? (
+              <ExchangeLayout icons={safeIcons} tone={tone} accent={accent} durationInFrames={durationInFrames} />
+            ) : layout === 'zoom' ? (
+              <ZoomLayout icons={safeIcons} tone={tone} accent={accent} durationInFrames={durationInFrames} />
+            ) : (
+              <FocusLayout icons={safeIcons} tone={tone} accent={accent} mirror={variation.mirror} stage={stage} />
+            )}
           </div>
-        </PopIn>
-        {caption ? (
-          <PopIn delay={10} from={0.85}>
-            <div style={{ marginTop: 12, fontWeight: 600, fontSize: captionSize, lineHeight: 1.3, color: palette.textSoft }}>
-              {caption}
+        </CameraDrift>
+      </AbsoluteFill>
+
+      <div style={{ position: 'absolute', top: 64, zIndex: 20, ...headlineBox }}>
+        <LegoBlock
+          id="headline"
+          label="Tiêu đề Minh họa (Headline)"
+          kind="title"
+        >
+          <PopIn delay={2} from={0.7}>
+            <div
+              style={{
+                fontWeight: 800,
+                fontSize: `var(--lego-font-size, ${headlineSize}px)`,
+                lineHeight: 1.1,
+                color: `var(--lego-accent-solid, ${palette.text})`,
+                textShadow: palette.light ? '0 4px 0 rgba(42,27,94,0.12)' : '0 6px 0 rgba(0,0,0,0.25)',
+              }}
+            >
+              {headline}
             </div>
           </PopIn>
+        </LegoBlock>
+
+        {caption ? (
+          <LegoBlock
+            id="caption"
+            label="Phụ đề Minh họa (Caption)"
+            kind="subtitle"
+            style={{ marginTop: 12 }}
+          >
+            <PopIn delay={10} from={0.85}>
+              <div
+                style={{
+                  fontWeight: 600,
+                  fontSize: `var(--lego-font-size, ${captionSize}px)`,
+                  lineHeight: 1.3,
+                  color: `var(--lego-accent-solid, ${palette.textSoft})`,
+                }}
+              >
+                {caption}
+              </div>
+            </PopIn>
+          </LegoBlock>
         ) : null}
-      </LegoBlock>
+      </div>
     </AbsoluteFill>
   );
 };

@@ -3,6 +3,7 @@ import { useCurrentFrame } from 'remotion';
 import { FLAT_FONT, mix, shade } from './theme';
 import { Float, PopIn } from './motion';
 import { resolveStemIcon } from './stemIcons';
+import { useCurrentLegoPiece } from '../lego/LegoBlock';
 
 /**
  * One STEM object in flat-explainer dress: a solid two-tone shape hovering
@@ -28,10 +29,10 @@ export const LabelTag: React.FC<{ text: string; color: string; size?: number; po
       style={{
         fontFamily: FLAT_FONT,
         fontWeight: 800,
-        fontSize: size,
+        fontSize: `var(--lego-font-size, ${size}px)`,
         lineHeight: 1.15,
         color: readableOn(color),
-        background: color,
+        background: `var(--lego-accent-solid, ${color})`,
         padding: `${size * 0.22}px ${size * 0.6}px`,
         borderRadius: size * 0.32,
         boxShadow: `0 ${size * 0.14}px 0 ${shade(color, -0.35)}`,
@@ -102,8 +103,11 @@ export const StemIcon: React.FC<{
   hero?: boolean;
   /** The scene's mid background tone, used for the tile. */
   tone?: string;
-}> = ({ name, color, size = 160, label, delay = 0, seed = name, labelSize = 26, hero = false, tone = '#2e0a6e' }) => {
+}> = ({ name, color: baseColor, size = 160, label, delay = 0, seed = name, labelSize: baseLabelSize = 26, hero = false, tone = '#2e0a6e' }) => {
   const frame = useCurrentFrame();
+  const pieceCtx = useCurrentLegoPiece();
+  const color = pieceCtx.solidColor || baseColor;
+  const labelSize = pieceCtx.layout?.fontSize || baseLabelSize;
   const { Icon } = resolveStemIcon(name);
   const tileWidth = size * (hero ? 1.15 : 1.3);
   const rim = shade(color, 0.65);

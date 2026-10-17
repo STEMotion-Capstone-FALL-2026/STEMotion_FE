@@ -182,18 +182,24 @@ export const GeometrySpace: React.FC<GeometrySpaceProps> = ({
 
           <LegoBlock id="dimensions-row" label="Hàng Thông số Kích thước (a, b, c)" kind="card">
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-slate-900/80 border border-blue-500/30 rounded-xl p-3 text-center">
-                <span className="text-[10px] font-mono text-blue-400 block">Cạnh góc vuông a</span>
-                <div className="text-xl font-bold text-blue-200 mt-1" style={{ fontSize: `${Math.round(baseSize * 0.8)}px` }}>{safeDims.a}</div>
-              </div>
-              <div className="bg-slate-900/80 border border-emerald-500/30 rounded-xl p-3 text-center">
-                <span className="text-[10px] font-mono text-emerald-400 block">Cạnh góc vuông b</span>
-                <div className="text-xl font-bold text-emerald-200 mt-1" style={{ fontSize: `${Math.round(baseSize * 0.8)}px` }}>{safeDims.b}</div>
-              </div>
-              <div className="bg-slate-900/80 border border-amber-500/30 rounded-xl p-3 text-center">
-                <span className="text-[10px] font-mono text-amber-400 block">Cạnh huyền c</span>
-                <div className="text-xl font-bold text-amber-200 mt-1" style={{ fontSize: `${Math.round(baseSize * 0.8)}px` }}>{safeDims.c}</div>
-              </div>
+              <LegoBlock id="dim-a" label={`Cạnh a = ${safeDims.a}`} kind="badge">
+                <div className="bg-slate-900/80 border border-blue-500/30 rounded-xl p-3 text-center">
+                  <span className="text-[10px] font-mono text-blue-400 block">Cạnh góc vuông a</span>
+                  <div className="text-xl font-bold text-blue-200 mt-1" style={{ fontSize: `var(--lego-font-size, ${Math.round(baseSize * 0.8)}px)` }}>{safeDims.a}</div>
+                </div>
+              </LegoBlock>
+              <LegoBlock id="dim-b" label={`Cạnh b = ${safeDims.b}`} kind="badge">
+                <div className="bg-slate-900/80 border border-emerald-500/30 rounded-xl p-3 text-center">
+                  <span className="text-[10px] font-mono text-emerald-400 block">Cạnh góc vuông b</span>
+                  <div className="text-xl font-bold text-emerald-200 mt-1" style={{ fontSize: `var(--lego-font-size, ${Math.round(baseSize * 0.8)}px)` }}>{safeDims.b}</div>
+                </div>
+              </LegoBlock>
+              <LegoBlock id="dim-c" label={`Cạnh c = ${safeDims.c}`} kind="badge">
+                <div className="bg-slate-900/80 border border-amber-500/30 rounded-xl p-3 text-center">
+                  <span className="text-[10px] font-mono text-amber-400 block">Cạnh huyền c</span>
+                  <div className="text-xl font-bold text-amber-200 mt-1" style={{ fontSize: `var(--lego-font-size, ${Math.round(baseSize * 0.8)}px)` }}>{safeDims.c}</div>
+                </div>
+              </LegoBlock>
             </div>
           </LegoBlock>
 

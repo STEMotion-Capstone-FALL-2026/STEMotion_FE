@@ -1,4 +1,5 @@
 import type { ComposedBlock, ComposedProps, SceneData } from '../../types/stem';
+import { computeIllustratedIconDefaultRect } from './catalog';
 
 /**
  * Decomposes any fixed Remotion template scene into a freeform `COMPOSED` Lego scene
@@ -7,7 +8,41 @@ import type { ComposedBlock, ComposedProps, SceneData } from '../../types/stem';
  */
 export function decomposeSceneToComposed(scene: SceneData): ComposedProps {
   if (scene.type === 'COMPOSED') {
-    return scene;
+    const nextBlocks: ComposedBlock[] = [];
+    for (const b of scene.blocks || []) {
+      if (b.kind === 'icons' && Array.isArray(b.icons) && b.icons.length > 1) {
+        const cols = Math.min(b.icons.length, 3);
+        const rows = Math.ceil(b.icons.length / cols);
+        const bx = b.x ?? 200;
+        const by = b.y ?? 240;
+        const bw = b.w ?? 1200;
+        const bh = b.h ?? 520;
+        const cellW = Math.round(bw / Math.max(1, cols));
+        const cellH = Math.round(bh / Math.max(1, rows));
+        b.icons.forEach((ic, idx) => {
+          const col = idx % cols;
+          const row = Math.floor(idx / cols);
+          nextBlocks.push({
+            id: `${b.id}_icon_${idx}`,
+            kind: 'icon',
+            slot: b.slot || 'main',
+            icon: { name: ic.name || 'atom', label: ic.label || ic.name },
+            text: ic.label || ic.name,
+            motion: b.motion || 'pop',
+            x: bx + col * cellW + 12,
+            y: by + row * cellH + 12,
+            w: Math.max(160, cellW - 24),
+            h: Math.max(160, cellH - 24),
+          });
+        });
+      } else {
+        nextBlocks.push(b);
+      }
+    }
+    return {
+      ...scene,
+      blocks: nextBlocks,
+    };
   }
 
   const layouts = scene.componentLayouts || {};
@@ -377,26 +412,44 @@ export function decomposeSceneToComposed(scene: SceneData): ComposedProps {
     }
 
     case 'ILLUSTRATED_EXPLAINER': {
-      const heroIcon = scene.icons?.[0];
-      blocks.push(
-        {
-          id: 'illus_header',
-          kind: 'title',
+      const safeIcons =
+        Array.isArray(scene.icons) && scene.icons.length > 0
+          ? scene.icons
+          : [{ name: 'atom', label: scene.headline }];
+      const layoutMode = scene.layout || 'focus';
+
+      blocks.push({
+        id: 'illus_header',
+        kind: 'title',
+        slot: 'top',
+        text: scene.headline,
+        motion: 'rise',
+        ...applyOffset('headline', { x: 180, y: 56, w: 1560, h: 120 }),
+      });
+
+      if (scene.caption) {
+        blocks.push({
+          id: 'illus_caption',
+          kind: 'text',
           slot: 'top',
-          text: scene.headline,
-          motion: 'rise',
-          ...applyOffset('header', { x: 88, y: 64, w: 1744, h: 165 }),
-        },
-        {
-          id: 'illus_hero',
+          text: scene.caption,
+          motion: 'fade',
+          ...applyOffset('caption', { x: 320, y: 176, w: 1280, h: 72 }),
+        });
+      }
+
+      safeIcons.forEach((ic, idx) => {
+        const defaultRect = computeIllustratedIconDefaultRect(layoutMode, idx, safeIcons.length);
+        blocks.push({
+          id: idx === 0 ? 'illus_hero' : `illus_icon_${idx}`,
           kind: 'icon',
           slot: 'main',
-          icon: { name: heroIcon?.name || 'atom', label: heroIcon?.label || scene.headline },
-          text: scene.caption || scene.headline,
+          icon: { name: ic.name || 'atom', label: ic.label || ic.name || scene.headline },
+          text: ic.label || ic.name || scene.headline,
           motion: 'pop',
-          ...applyOffset('hero-illustration', { x: 240, y: 260, w: 1440, h: 660 }),
-        },
-      );
+          ...applyOffset(`icon-${idx}`, defaultRect),
+        });
+      });
       break;
     }
   }

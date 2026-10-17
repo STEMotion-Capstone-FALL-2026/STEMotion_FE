@@ -102,4 +102,93 @@ describe('Remotion Lego Modularization System', () => {
 
     expect(rects.get('b1')).toEqual({ x: 300, y: 150, w: 900, h: 220 });
   });
+
+  it('separates ILLUSTRATED_EXPLAINER into independent Lego pieces for headline, caption, and each individual icon (e.g. Electron, Nguyên tử, Năng lượng)', () => {
+    const scene = {
+      id: 's_illus',
+      type: 'ILLUSTRATED_EXPLAINER' as const,
+      title: 'Khám phá thế giới vi mô',
+      headline: 'Chào mừng đến với thế giới vi mô!',
+      caption: 'Khám phá cách các hạt tương tác và tạo nên vạn vật xung quanh chúng ta.',
+      layout: 'focus' as const,
+      icons: [
+        { name: 'atom', label: 'Nguyên tử' },
+        { name: 'lightning', label: 'Electron' },
+        { name: 'sun', label: 'Năng lượng' },
+      ],
+      durationInFrames: 180,
+      narration: 'Khám phá nguyên tử, electron và năng lượng.',
+    };
+
+    const pieces = getSceneLegoPieces(scene);
+    expect(pieces.map((p) => p.id)).toEqual([
+      'headline',
+      'caption',
+      'icon-0',
+      'icon-1',
+      'icon-2',
+    ]);
+
+    // Verify individual icon editing updates only that icon in scene.icons
+    const electronPiece = pieces.find((p) => p.id === 'icon-1')!;
+    expect(electronPiece.textValue).toBe('Electron');
+    expect(electronPiece.subTextValue).toBe('lightning');
+    const iconPatch = electronPiece.buildTextPatch!('Hạt Electron (-)', 'battery');
+    expect(iconPatch).toEqual({
+      icons: [
+        { name: 'atom', label: 'Nguyên tử' },
+        { name: 'battery', label: 'Hạt Electron (-)' },
+        { name: 'sun', label: 'Năng lượng' },
+      ],
+    });
+
+    // Verify decomposeSceneToComposed creates separate ComposedBlocks for each icon
+    const composed = decomposeSceneToComposed(scene);
+    expect(composed.type).toBe('COMPOSED');
+    expect(composed.blocks.map((b) => b.id)).toEqual([
+      'illus_header',
+      'illus_caption',
+      'illus_hero',
+      'illus_icon_1',
+      'illus_icon_2',
+    ]);
+  });
+
+  it('separates multi-item COMPOSED blocks (icons, list, choice) into individual sub-Lego pieces', () => {
+    const scene: ComposedProps = {
+      id: 's_comp',
+      type: 'COMPOSED',
+      title: 'Cảnh AI tự động sinh',
+      durationInFrames: 180,
+      narration: 'Các hạt cơ bản và danh sách tính chất.',
+      frame: 'split',
+      blocks: [
+        {
+          id: 'b_icons',
+          kind: 'icons',
+          slot: 'left',
+          icons: [
+            { name: 'atom', label: 'Nguyên tử' },
+            { name: 'lightning', label: 'Electron' },
+          ],
+        },
+        {
+          id: 'b_list',
+          kind: 'list',
+          slot: 'right',
+          items: ['Khối lượng cực nhỏ', 'Mang điện tích âm'],
+        },
+      ],
+    };
+
+    const pieces = getSceneLegoPieces(scene);
+    expect(pieces.map((p) => p.id)).toEqual([
+      'b_icons',
+      'b_icons__icon-0',
+      'b_icons__icon-1',
+      'b_list',
+      'b_list__item-0',
+      'b_list__item-1',
+    ]);
+  });
 });

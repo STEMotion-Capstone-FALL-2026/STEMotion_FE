@@ -22,50 +22,58 @@ export const useLegoLayout = (id: string): LegoComponentLayout | undefined => {
   return componentLayouts[id];
 };
 
-const THEME_ACCENTS: Partial<Record<LegoTheme, { border: string; bg: string; text: string; glow: string }>> = {
+const THEME_ACCENTS: Partial<Record<LegoTheme, { solid: string; border: string; bg: string; text: string; glow: string }>> = {
   cyan: {
+    solid: '#06B6D4',
     border: 'rgba(13, 148, 136, 0.55)',
     bg: 'rgba(240, 253, 250, 0.92)',
     text: '#0F766E',
     glow: '0 8px 24px rgba(13, 148, 136, 0.18)',
   },
   purple: {
+    solid: '#A855F7',
     border: 'rgba(124, 58, 237, 0.55)',
     bg: 'rgba(245, 243, 255, 0.92)',
     text: '#6D28D9',
     glow: '0 8px 24px rgba(124, 58, 237, 0.18)',
   },
   emerald: {
+    solid: '#10B981',
     border: 'rgba(5, 150, 105, 0.55)',
     bg: 'rgba(236, 253, 245, 0.92)',
     text: '#047857',
     glow: '0 8px 24px rgba(5, 150, 105, 0.18)',
   },
   amber: {
+    solid: '#F59E0B',
     border: 'rgba(217, 119, 6, 0.55)',
     bg: 'rgba(255, 251, 235, 0.92)',
     text: '#B45309',
     glow: '0 8px 24px rgba(217, 119, 6, 0.18)',
   },
   rose: {
+    solid: '#F43F5E',
     border: 'rgba(225, 29, 72, 0.55)',
     bg: 'rgba(255, 241, 242, 0.92)',
     text: '#BE123C',
     glow: '0 8px 24px rgba(225, 29, 72, 0.18)',
   },
   slate: {
+    solid: '#64748B',
     border: 'rgba(71, 85, 105, 0.55)',
     bg: 'rgba(248, 250, 252, 0.92)',
     text: '#334155',
     glow: '0 8px 24px rgba(71, 85, 105, 0.18)',
   },
   blue: {
+    solid: '#3B82F6',
     border: 'rgba(37, 99, 235, 0.55)',
     bg: 'rgba(239, 246, 255, 0.92)',
     text: '#1D4ED8',
     glow: '0 8px 24px rgba(37, 99, 235, 0.18)',
   },
   dark: {
+    solid: '#38BDF8',
     border: 'rgba(56, 189, 248, 0.55)',
     bg: 'rgba(15, 23, 42, 0.92)',
     text: '#F8FAFC',
@@ -85,6 +93,16 @@ export interface LegoBlockProps {
   /** Apply theme box styling directly onto the wrapper when user picks a theme */
   applyThemeBox?: boolean;
 }
+
+interface LegoPieceContextValue {
+  id?: string;
+  layout?: LegoComponentLayout;
+  solidColor?: string;
+}
+
+const LegoPieceContext = createContext<LegoPieceContextValue>({});
+
+export const useCurrentLegoPiece = () => useContext(LegoPieceContext);
 
 /**
  * Wraps any sub-component in a Remotion scene so it becomes an addressable,
@@ -128,6 +146,7 @@ export const LegoBlock: React.FC<LegoBlockProps> = ({
     transformOrigin: style?.transformOrigin ?? 'center center',
     zIndex: layout?.zIndex ?? style?.zIndex,
     '--lego-font-size': layout?.fontSize ? `${layout.fontSize}px` : undefined,
+    '--lego-accent-solid': themePalette?.solid,
     '--lego-accent-border': themePalette?.border,
     '--lego-accent-bg': themePalette?.bg,
     '--lego-accent-text': themePalette?.text,
@@ -147,16 +166,18 @@ export const LegoBlock: React.FC<LegoBlockProps> = ({
   }
 
   return (
-    <div
-      data-lego-id={id}
-      data-lego-label={label || id}
-      data-lego-kind={kind}
-      data-lego-theme={layout?.theme}
-      className={className}
-      style={mergedStyle}
-    >
-      {children}
-    </div>
+    <LegoPieceContext.Provider value={{ id, layout, solidColor: themePalette?.solid }}>
+      <div
+        data-lego-id={id}
+        data-lego-label={label || id}
+        data-lego-kind={kind}
+        data-lego-theme={layout?.theme}
+        className={className}
+        style={mergedStyle}
+      >
+        {children}
+      </div>
+    </LegoPieceContext.Provider>
   );
 };
 

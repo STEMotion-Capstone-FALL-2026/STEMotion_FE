@@ -330,7 +330,7 @@ export default function App() {
   /** Producer edits: per-scene properties of the draft; scenes and templates stay as approved. */
   const editComposition = (change: (scenes: SceneData[]) => SceneData[]) => {
     if (!composition) {
-      showToast('Bản dựng đang tải, thử lại sau giây lát.', 'info');
+      setScript((prev) => ({ ...prev, scenes: change(prev.scenes) }));
       return;
     }
     if (!composition.editable) {
@@ -355,9 +355,9 @@ export default function App() {
     }
     // Roles are per workspace: the role of the active workspace decides, not the account role.
     if (!['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)
-      || !(currentRole === 'writer' || currentUser.role === 'admin')) {
+      || !(currentRole === 'writer' || currentRole === 'producer' || currentUser.role === 'admin')) {
       showToast(currentRole === 'producer'
-        ? 'Producer chỉ dựng và chỉnh sửa video khi kịch bản đã được phê duyệt.'
+        ? 'Producer chỉ dựng và chỉnh sửa video khi kịch bản chưa khóa xuất bản.'
         : 'Kịch bản đã gửi duyệt hoặc đã được phê duyệt, Writer không thể chỉnh sửa.', 'warn');
       return false;
     }
@@ -368,6 +368,14 @@ export default function App() {
     if (inProduction) {
       const id = selectedScene.id;
       editComposition((scenes) => scenes.map((sc) => (sc.id === id ? updater(sc) : sc)));
+      return;
+    }
+    if (currentRole === 'producer' && !['APPROVED', 'PUBLISHED'].includes(script.videoStatus || '')) {
+      const id = selectedScene.id;
+      setScript((prev) => ({
+        ...prev,
+        scenes: prev.scenes.map((sc) => (sc.id === id ? updater(sc) : sc)),
+      }));
       return;
     }
     if (!canEditScript()) return;

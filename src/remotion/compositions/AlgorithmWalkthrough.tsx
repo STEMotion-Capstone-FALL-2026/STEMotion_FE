@@ -140,17 +140,21 @@ export const AlgorithmWalkthrough: React.FC<AlgorithmWalkthroughProps> = ({
                 <span className="text-xs text-slate-400 font-mono">Step {Math.max(1, currentStepIndex + 1)} / {safeSteps.length}</span>
               </div>
 
-              <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 font-mono text-xs text-emerald-400 mb-4" style={{ fontSize: `var(--lego-font-size, ${Math.max(12, Math.round(baseSize * 0.48))}px)` }}>
-                <div className="text-slate-500 mb-1">// Variables Snapshot:</div>
-                <div>{activeStep?.variableState || '{ i: 0, arr: [2, 5, 8] }'}</div>
-              </div>
+              <LegoBlock id="variables-box" label="Khối Trạng thái Biến số (Variables)" kind="step">
+                <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 font-mono text-xs text-emerald-400 mb-4" style={{ fontSize: `var(--lego-font-size, ${Math.max(12, Math.round(baseSize * 0.48))}px)` }}>
+                  <div className="text-slate-500 mb-1">// Variables Snapshot:</div>
+                  <div>{activeStep?.variableState || '{ i: 0, arr: [2, 5, 8] }'}</div>
+                </div>
+              </LegoBlock>
 
-              <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <h4 className="text-xs font-bold text-amber-300 uppercase mb-1">Giải thích thao tác</h4>
-                <p className="text-sm text-slate-200 leading-relaxed" style={{ fontSize: `var(--lego-font-size, ${Math.max(13, Math.round(baseSize * 0.52))}px)` }}>
-                  {activeStep?.note || 'Đang thực thi lệnh tiếp theo trong thuật toán.'}
-                </p>
-              </div>
+              <LegoBlock id="explanation-note" label="Khối Giải thích Thao tác" kind="subtitle">
+                <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <h4 className="text-xs font-bold text-amber-300 uppercase mb-1">Giải thích thao tác</h4>
+                  <p className="text-sm text-slate-200 leading-relaxed" style={{ fontSize: `var(--lego-font-size, ${Math.max(13, Math.round(baseSize * 0.52))}px)` }}>
+                    {activeStep?.note || 'Đang thực thi lệnh tiếp theo trong thuật toán.'}
+                  </p>
+                </div>
+              </LegoBlock>
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-800/80 text-xs text-slate-500 font-mono">

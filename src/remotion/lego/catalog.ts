@@ -173,13 +173,36 @@ export function getSceneLegoPieces(scene: SceneData): LegoPieceDescriptor[] {
       const topA = scene.topicA || {
         title: 'Khái Niệm A',
         badge: 'Đặc tính A',
-        points: ['Đặc trưng cốt lõi của hiện tượng A'],
+        points: [
+          'Đặc trưng cốt lõi của hiện tượng A',
+          'Mô hình định lượng và điều kiện áp dụng',
+          'Ý nghĩa ứng dụng trong thực tế',
+        ],
       };
       const topB = scene.topicB || {
         title: 'Khái Niệm B',
         badge: 'Đặc tính B',
-        points: ['Đặc trưng tương phản của hiện tượng B'],
+        points: [
+          'Đặc trưng tương phản của hiện tượng B',
+          'Mô hình biến thiên theo chu kỳ',
+          'Ứng dụng tối ưu trong kỹ thuật',
+        ],
       };
+      const safePointsA = Array.isArray(topA.points) && topA.points.length > 0
+        ? topA.points
+        : [
+            'Đặc trưng cốt lõi của hiện tượng A',
+            'Mô hình định lượng và điều kiện áp dụng',
+            'Ý nghĩa ứng dụng trong thực tế',
+          ];
+      const safePointsB = Array.isArray(topB.points) && topB.points.length > 0
+        ? topB.points
+        : [
+            'Đặc trưng tương phản của hiện tượng B',
+            'Mô hình biến thiên theo chu kỳ',
+            'Ứng dụng tối ưu trong kỹ thuật',
+          ];
+
       pieces.push(
         {
           id: 'header',
@@ -195,7 +218,7 @@ export function getSceneLegoPieces(scene: SceneData): LegoPieceDescriptor[] {
           kind: 'card',
           defaultRect: { x: 120, y: 165, w: 760, h: 720 },
           textValue: topA.title,
-          subTextValue: (topA.points || []).join('\n'),
+          subTextValue: safePointsA.join('\n'),
           buildTextPatch: (title, pointsText) => ({
             topicA: {
               ...topA,
@@ -203,10 +226,33 @@ export function getSceneLegoPieces(scene: SceneData): LegoPieceDescriptor[] {
               points:
                 pointsText !== undefined
                   ? pointsText.split('\n').map((s) => s.trim()).filter(Boolean)
-                  : topA.points,
+                  : safePointsA,
             },
           }),
         },
+      );
+
+      safePointsA.forEach((pt, idx) => {
+        pieces.push({
+          id: `left-point-${idx}`,
+          label: `Ý A.${idx + 1}: ${String(pt).slice(0, 24)}`,
+          kind: 'step',
+          defaultRect: { x: 148, y: 320 + idx * 110, w: 700, h: 90 },
+          textValue: pt,
+          buildTextPatch: (newPt) => {
+            const nextPts = [...safePointsA];
+            nextPts[idx] = newPt;
+            return {
+              topicA: {
+                ...topA,
+                points: nextPts,
+              },
+            };
+          },
+        });
+      });
+
+      pieces.push(
         {
           id: 'vs-badge',
           label: 'Huy hiệu VS trung tâm',
@@ -219,7 +265,7 @@ export function getSceneLegoPieces(scene: SceneData): LegoPieceDescriptor[] {
           kind: 'card',
           defaultRect: { x: 1040, y: 165, w: 760, h: 720 },
           textValue: topB.title,
-          subTextValue: (topB.points || []).join('\n'),
+          subTextValue: safePointsB.join('\n'),
           buildTextPatch: (title, pointsText) => ({
             topicB: {
               ...topB,
@@ -227,19 +273,40 @@ export function getSceneLegoPieces(scene: SceneData): LegoPieceDescriptor[] {
               points:
                 pointsText !== undefined
                   ? pointsText.split('\n').map((s) => s.trim()).filter(Boolean)
-                  : topB.points,
+                  : safePointsB,
             },
           }),
         },
-        {
-          id: 'conclusion-banner',
-          label: 'Thanh Kết luận Sư phạm',
-          kind: 'subtitle',
-          defaultRect: { x: 48, y: 920, w: 1824, h: 100 },
-          textValue: scene.conclusion || '',
-          buildTextPatch: (conclusion) => ({ conclusion }),
-        },
       );
+
+      safePointsB.forEach((pt, idx) => {
+        pieces.push({
+          id: `right-point-${idx}`,
+          label: `Ý B.${idx + 1}: ${String(pt).slice(0, 24)}`,
+          kind: 'step',
+          defaultRect: { x: 1068, y: 320 + idx * 110, w: 700, h: 90 },
+          textValue: pt,
+          buildTextPatch: (newPt) => {
+            const nextPts = [...safePointsB];
+            nextPts[idx] = newPt;
+            return {
+              topicB: {
+                ...topB,
+                points: nextPts,
+              },
+            };
+          },
+        });
+      });
+
+      pieces.push({
+        id: 'conclusion-banner',
+        label: 'Thanh Kết luận Sư phạm',
+        kind: 'subtitle',
+        defaultRect: { x: 48, y: 920, w: 1824, h: 100 },
+        textValue: scene.conclusion || '',
+        buildTextPatch: (conclusion) => ({ conclusion }),
+      });
       break;
     }
 
@@ -356,6 +423,9 @@ export function getSceneLegoPieces(scene: SceneData): LegoPieceDescriptor[] {
     }
 
     case 'GEOMETRY_SPACE': {
+      const dimA = scene.dimensions?.a ?? 3;
+      const dimB = scene.dimensions?.b ?? 4;
+      const dimC = scene.dimensions?.c ?? 5;
       pieces.push(
         {
           id: 'header',
@@ -388,14 +458,65 @@ export function getSceneLegoPieces(scene: SceneData): LegoPieceDescriptor[] {
           label: 'Hàng Thông số Kích thước (a, b, c)',
           kind: 'card',
           defaultRect: { x: 840, y: 460, w: 940, h: 190 },
-          textValue: `${scene.dimensions?.a ?? 3}, ${scene.dimensions?.b ?? 4}, ${scene.dimensions?.c ?? 5}`,
+          textValue: `${dimA}, ${dimB}, ${dimC}`,
           buildTextPatch: (val) => {
             const parts = val.split(',').map((s) => Number(s.trim()));
             return {
               dimensions: {
-                a: Number.isFinite(parts[0]) ? parts[0] : (scene.dimensions?.a ?? 3),
-                b: Number.isFinite(parts[1]) ? parts[1] : (scene.dimensions?.b ?? 4),
-                c: Number.isFinite(parts[2]) ? parts[2] : (scene.dimensions?.c ?? 5),
+                a: Number.isFinite(parts[0]) ? parts[0] : dimA,
+                b: Number.isFinite(parts[1]) ? parts[1] : dimB,
+                c: Number.isFinite(parts[2]) ? parts[2] : dimC,
+              },
+            };
+          },
+        },
+        {
+          id: 'dim-a',
+          label: `Cạnh a = ${dimA}`,
+          kind: 'badge',
+          defaultRect: { x: 840, y: 475, w: 300, h: 150 },
+          textValue: String(dimA),
+          buildTextPatch: (val) => {
+            const parsed = Number(val.trim());
+            return {
+              dimensions: {
+                a: Number.isFinite(parsed) ? parsed : dimA,
+                b: dimB,
+                c: dimC,
+              },
+            };
+          },
+        },
+        {
+          id: 'dim-b',
+          label: `Cạnh b = ${dimB}`,
+          kind: 'badge',
+          defaultRect: { x: 1160, y: 475, w: 300, h: 150 },
+          textValue: String(dimB),
+          buildTextPatch: (val) => {
+            const parsed = Number(val.trim());
+            return {
+              dimensions: {
+                a: dimA,
+                b: Number.isFinite(parsed) ? parsed : dimB,
+                c: dimC,
+              },
+            };
+          },
+        },
+        {
+          id: 'dim-c',
+          label: `Cạnh c = ${dimC}`,
+          kind: 'badge',
+          defaultRect: { x: 1480, y: 475, w: 300, h: 150 },
+          textValue: String(dimC),
+          buildTextPatch: (val) => {
+            const parsed = Number(val.trim());
+            return {
+              dimensions: {
+                a: dimA,
+                b: dimB,
+                c: Number.isFinite(parsed) ? parsed : dimC,
               },
             };
           },
@@ -569,6 +690,36 @@ export function getSceneLegoPieces(scene: SceneData): LegoPieceDescriptor[] {
             return { steps: nextSteps };
           },
         },
+        {
+          id: 'variables-box',
+          label: 'Khối Trạng thái Biến số (Variables)',
+          kind: 'step',
+          defaultRect: { x: 1004, y: 320, w: 652, h: 120 },
+          textValue: safeSteps[0]?.variableState || '',
+          buildTextPatch: (variableState) => {
+            const nextSteps = [...safeSteps];
+            nextSteps[0] = {
+              ...nextSteps[0],
+              variableState,
+            };
+            return { steps: nextSteps };
+          },
+        },
+        {
+          id: 'explanation-note',
+          label: 'Khối Giải thích Thao tác',
+          kind: 'subtitle',
+          defaultRect: { x: 1004, y: 460, w: 652, h: 180 },
+          textValue: safeSteps[0]?.note || '',
+          buildTextPatch: (note) => {
+            const nextSteps = [...safeSteps];
+            nextSteps[0] = {
+              ...nextSteps[0],
+              note,
+            };
+            return { steps: nextSteps };
+          },
+        },
       );
       break;
     }
@@ -602,52 +753,84 @@ export function getSceneLegoPieces(scene: SceneData): LegoPieceDescriptor[] {
             ...(instructorName !== undefined ? { instructorName } : {}),
           }),
         },
-        {
-          id: 'cta-banner',
-          label: 'Khung Bài học Tiếp theo (Next Lesson)',
-          kind: 'card',
-          defaultRect: { x: 980, y: 250, w: 700, h: 620 },
-          textValue: scene.nextLessonSuggestion || 'Bài học chuyên đề tiếp theo',
-          buildTextPatch: (nextLessonSuggestion) => ({ nextLessonSuggestion }),
-        },
       );
+
+      safePoints.forEach((pt, idx) => {
+        pieces.push({
+          id: `summary-point-${idx}`,
+          label: `Điểm nhớ #${idx + 1}: ${String(pt).slice(0, 24)}`,
+          kind: 'step',
+          defaultRect: { x: 268, y: 340 + idx * 96, w: 644, h: 80 },
+          textValue: pt,
+          buildTextPatch: (newPt) => {
+            const nextPts = [...safePoints];
+            nextPts[idx] = newPt;
+            return { summaryPoints: nextPts };
+          },
+        });
+      });
+
+      pieces.push({
+        id: 'cta-banner',
+        label: 'Khung Bài học Tiếp theo (Next Lesson)',
+        kind: 'card',
+        defaultRect: { x: 980, y: 250, w: 700, h: 620 },
+        textValue: scene.nextLessonSuggestion || 'Bài học chuyên đề tiếp theo',
+        buildTextPatch: (nextLessonSuggestion) => ({ nextLessonSuggestion }),
+      });
       break;
     }
 
     case 'ILLUSTRATED_EXPLAINER': {
-      pieces.push(
-        {
-          id: 'header',
-          label: 'Tiêu đề & Phụ đề Minh họa (Headline)',
-          kind: 'title',
-          defaultRect: { x: 120, y: 60, w: 1680, h: 170 },
-          textValue: scene.headline,
-          subTextValue: scene.caption || '',
-          buildTextPatch: (headline, caption) => ({
-            headline,
-            ...(caption !== undefined ? { caption } : {}),
-          }),
-        },
-        {
-          id: 'hero-illustration',
-          label: `Sân khấu Minh họa (${scene.layout || 'focus'})`,
+      const safeIcons = Array.isArray(scene.icons) && scene.icons.length > 0
+        ? scene.icons
+        : [{ name: 'atom', label: scene.headline }];
+
+      pieces.push({
+        id: 'headline',
+        label: 'Tiêu đề Minh họa (Headline)',
+        kind: 'title',
+        defaultRect: { x: 180, y: 56, w: 1560, h: 92 },
+        textValue: scene.headline,
+        subTextValue: scene.caption || '',
+        buildTextPatch: (headline, caption) => ({
+          headline,
+          ...(caption !== undefined ? { caption } : {}),
+        }),
+      });
+
+      if (scene.caption) {
+        pieces.push({
+          id: 'caption',
+          label: 'Phụ đề Minh họa (Caption)',
+          kind: 'subtitle',
+          defaultRect: { x: 320, y: 152, w: 1280, h: 64 },
+          textValue: scene.caption,
+          buildTextPatch: (caption) => ({ caption }),
+        });
+      }
+
+      const layoutMode = scene.layout || 'focus';
+      safeIcons.forEach((ic, idx) => {
+        const iconRect = computeIllustratedIconDefaultRect(layoutMode, idx, safeIcons.length);
+        pieces.push({
+          id: `icon-${idx}`,
+          label: `Khối Lego Icon #${idx + 1}: ${ic.label || ic.name}`,
           kind: 'diagram',
-          defaultRect: { x: 220, y: 310, w: 1480, h: 680 },
-          textValue: (scene.icons || []).map((ic) => `${ic.name}:${ic.label || ''}`).join(', '),
-          buildTextPatch: (val) => {
-            const parsed = val
-              .split(',')
-              .map((item) => item.trim())
-              .filter(Boolean)
-              .map((pair) => {
-                const [name, ...rest] = pair.split(':');
-                const label = rest.join(':').trim();
-                return { name: name.trim() || 'sparkle', ...(label ? { label } : {}) };
-              });
-            return parsed.length > 0 ? { icons: parsed } : {};
+          defaultRect: iconRect,
+          textValue: ic.label || ic.name,
+          subTextValue: ic.name,
+          buildTextPatch: (newLabel, newIconName) => {
+            const nextIcons = [...safeIcons];
+            nextIcons[idx] = {
+              ...nextIcons[idx],
+              label: newLabel,
+              ...(newIconName && newIconName.trim() ? { name: newIconName.trim() } : {}),
+            };
+            return { icons: nextIcons };
           },
-        },
-      );
+        });
+      });
       break;
     }
 
@@ -678,6 +861,12 @@ export function getSceneLegoPieces(scene: SceneData): LegoPieceDescriptor[] {
             nextBlocks[idx] = applyBlockEditableText(nextBlocks[idx], newText, newSub);
             return { blocks: nextBlocks };
           },
+        });
+
+        appendComposedSubPieces(pieces, block, rect, (patcher) => {
+          const nextBlocks = [...scene.blocks];
+          nextBlocks[idx] = patcher(nextBlocks[idx]);
+          return { blocks: nextBlocks };
         });
       });
       break;
@@ -711,10 +900,238 @@ export function getSceneLegoPieces(scene: SceneData): LegoPieceDescriptor[] {
           return { extraBlocks: nextExtra };
         },
       });
+
+      appendComposedSubPieces(pieces, block, rect, (patcher) => {
+        const nextExtra = [...(scene.extraBlocks || [])];
+        nextExtra[idx] = patcher(nextExtra[idx]);
+        return { extraBlocks: nextExtra };
+      });
     });
   }
 
   return pieces;
+}
+
+/**
+ * Computes default 1920x1080 bounding box for each individual icon in `ILLUSTRATED_EXPLAINER`.
+ */
+export function computeIllustratedIconDefaultRect(
+  layout: string,
+  idx: number,
+  count: number,
+): { x: number; y: number; w: number; h: number } {
+  const cx = 960;
+  const cy = 620;
+
+  switch (layout) {
+    case 'row': {
+      const shownCount = Math.min(4, Math.max(1, count));
+      const spacing = shownCount === 1 ? 0 : Math.min(380, 1280 / shownCount);
+      const startX = cx - ((shownCount - 1) * spacing) / 2;
+      const xCenter = startX + idx * spacing;
+      return { x: Math.round(xCenter - 130), y: Math.round(cy - 140), w: 260, h: 290 };
+    }
+    case 'cluster': {
+      const shownCount = Math.min(5, Math.max(1, count));
+      const radius = 320;
+      const angle = -Math.PI / 2 + (idx / shownCount) * Math.PI * 2;
+      const xCenter = cx + Math.cos(angle) * radius;
+      const yCenter = cy + Math.sin(angle) * radius * 0.72;
+      return { x: Math.round(xCenter - 120), y: Math.round(yCenter - 130), w: 240, h: 270 };
+    }
+    case 'swarm': {
+      const ringRadius = 180 + (idx % 3) * 110;
+      const angle = (idx * 2.399963) % (Math.PI * 2);
+      const xCenter = cx + Math.cos(angle) * ringRadius;
+      const yCenter = cy + Math.sin(angle) * ringRadius * 0.75;
+      return { x: Math.round(xCenter - 115), y: Math.round(yCenter - 125), w: 230, h: 260 };
+    }
+    case 'exchange': {
+      if (idx === 0) {
+        return { x: cx - 440 - 150, y: cy - 160, w: 300, h: 330 };
+      }
+      if (idx === 1) {
+        return { x: cx + 440 - 150, y: cy - 160, w: 300, h: 330 };
+      }
+      return { x: cx - 105, y: cy - 230 - 115, w: 210, h: 240 };
+    }
+    case 'zoom': {
+      if (idx === 0) {
+        return { x: cx - 210, y: cy - 220, w: 420, h: 460 };
+      }
+      const satCount = Math.max(1, Math.min(3, count - 1));
+      const satIdx = idx - 1;
+      const a = -Math.PI / 3 + (satIdx / Math.max(1, satCount - 1 || 1)) * (Math.PI * 2 / 3);
+      const xCenter = cx + Math.cos(a) * 440;
+      const yCenter = cy + Math.sin(a) * 290;
+      return { x: Math.round(xCenter - 105), y: Math.round(yCenter - 115), w: 210, h: 240 };
+    }
+    case 'focus':
+    default: {
+      if (idx === 0) {
+        return { x: cx - 200, y: cy - 210, w: 400, h: 440 };
+      }
+      const satCount = Math.max(1, Math.min(4, count - 1));
+      const satIdx = idx - 1;
+      const angles =
+        satCount === 1
+          ? [0]
+          : satCount === 2
+          ? [-Math.PI * 0.25, Math.PI * 1.25]
+          : satCount === 3
+          ? [-Math.PI / 2, Math.PI * 0.18, Math.PI * 0.82]
+          : [-Math.PI * 0.75, -Math.PI * 0.25, Math.PI * 0.25, Math.PI * 0.75];
+      const angle = angles[satIdx % angles.length] ?? 0;
+      const radius = 380;
+      const xCenter = cx + Math.cos(angle) * radius;
+      const yCenter = cy + Math.sin(angle) * radius * 0.68;
+      return { x: Math.round(xCenter - 120), y: Math.round(yCenter - 130), w: 240, h: 275 };
+    }
+  }
+}
+
+/**
+ * Emits granular child `LegoPieceDescriptor`s for multi-item `COMPOSED` blocks
+ * (`icons`, `list`, `choice`, `guide`) so every inner element is independently addressable.
+ */
+function appendComposedSubPieces(
+  pieces: LegoPieceDescriptor[],
+  block: ComposedBlock,
+  parentRect: { x: number; y: number; w: number; h: number },
+  buildBlockPatch: (patcher: (b: ComposedBlock) => ComposedBlock) => Partial<SceneData>,
+) {
+  if (block.kind === 'icons' && Array.isArray(block.icons) && block.icons.length > 0) {
+    const icons = block.icons.slice(0, 6);
+    const cols = Math.min(icons.length, 3);
+    const rows = Math.ceil(icons.length / cols);
+    const cellW = Math.round(parentRect.w / Math.max(1, cols));
+    const cellH = Math.round(parentRect.h / Math.max(1, rows));
+    icons.forEach((ic, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      pieces.push({
+        id: `${block.id}__icon-${i}`,
+        label: `Icon #${i + 1}: ${ic.label || ic.name}`,
+        kind: 'diagram',
+        defaultRect: {
+          x: parentRect.x + col * cellW + 12,
+          y: parentRect.y + row * cellH + 12,
+          w: Math.max(120, cellW - 24),
+          h: Math.max(120, cellH - 24),
+        },
+        textValue: ic.label || ic.name,
+        subTextValue: ic.name,
+        buildTextPatch: (newLabel, newIconName) =>
+          buildBlockPatch((b) => {
+            const nextIcons = [...(b.icons || [])];
+            nextIcons[i] = {
+              ...nextIcons[i],
+              label: newLabel,
+              ...(newIconName && newIconName.trim() ? { name: newIconName.trim() } : {}),
+            };
+            return { ...b, icons: nextIcons };
+          }),
+      });
+    });
+  } else if (block.kind === 'list' && Array.isArray(block.items) && block.items.length > 0) {
+    const items = block.items.slice(0, 5);
+    const itemH = Math.round((parentRect.h - 48) / Math.max(1, items.length));
+    items.forEach((it, i) => {
+      pieces.push({
+        id: `${block.id}__item-${i}`,
+        label: `Mục #${i + 1}: ${String(it).slice(0, 24)}`,
+        kind: 'step',
+        defaultRect: {
+          x: parentRect.x + 24,
+          y: parentRect.y + 24 + i * itemH,
+          w: Math.max(160, parentRect.w - 48),
+          h: Math.max(52, itemH - 8),
+        },
+        textValue: it,
+        buildTextPatch: (newItemText) =>
+          buildBlockPatch((b) => {
+            const nextItems = [...(b.items || [])];
+            nextItems[i] = newItemText;
+            return { ...b, items: nextItems };
+          }),
+      });
+    });
+  } else if (block.kind === 'choice') {
+    const opts = (block.options || []).slice(0, 4);
+    pieces.push({
+      id: `${block.id}__question`,
+      label: `Câu hỏi (${block.id})`,
+      kind: 'quiz',
+      defaultRect: {
+        x: parentRect.x + 24,
+        y: parentRect.y + 20,
+        w: Math.max(200, parentRect.w - 48),
+        h: Math.round(parentRect.h * 0.25),
+      },
+      textValue: block.question || block.text || '',
+      buildTextPatch: (newQ) =>
+        buildBlockPatch((b) => ({
+          ...b,
+          question: newQ,
+        })),
+    });
+    const cellW = Math.round((parentRect.w - 64) / 2);
+    const cellH = Math.round((parentRect.h * 0.65) / 2);
+    opts.forEach((opt, i) => {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const letter = String.fromCharCode(65 + i);
+      pieces.push({
+        id: `${block.id}__opt-${i}`,
+        label: `Đáp án ${letter}: ${String(opt).slice(0, 20)}`,
+        kind: 'card',
+        defaultRect: {
+          x: parentRect.x + 24 + col * (cellW + 16),
+          y: parentRect.y + Math.round(parentRect.h * 0.3) + row * (cellH + 12),
+          w: Math.max(160, cellW),
+          h: Math.max(64, cellH),
+        },
+        textValue: opt,
+        buildTextPatch: (newOpt) =>
+          buildBlockPatch((b) => {
+            const nextOpts = [...(b.options || [])];
+            nextOpts[i] = newOpt;
+            return { ...b, options: nextOpts };
+          }),
+      });
+    });
+  } else if (block.kind === 'guide') {
+    pieces.push(
+      {
+        id: `${block.id}__mascot`,
+        label: `Nhân vật dẫn dắt (${block.id})`,
+        kind: 'diagram',
+        defaultRect: {
+          x: parentRect.x + 16,
+          y: parentRect.y + 16,
+          w: Math.min(220, Math.round(parentRect.w * 0.3)),
+          h: Math.max(120, parentRect.h - 32),
+        },
+      },
+      {
+        id: `${block.id}__speech`,
+        label: `Lời thoại dẫn dắt (${block.id})`,
+        kind: 'subtitle',
+        defaultRect: {
+          x: parentRect.x + Math.min(236, Math.round(parentRect.w * 0.32)),
+          y: parentRect.y + 16,
+          w: Math.max(200, parentRect.w - Math.min(252, Math.round(parentRect.w * 0.34))),
+          h: Math.max(120, parentRect.h - 32),
+        },
+        textValue: block.text || '',
+        buildTextPatch: (newSpeech) =>
+          buildBlockPatch((b) => ({
+            ...b,
+            text: newSpeech,
+          })),
+      },
+    );
+  }
 }
 
 export function extractBlockEditableText(block: ComposedBlock): {
@@ -736,6 +1153,11 @@ export function extractBlockEditableText(block: ComposedBlock): {
       return {
         textValue: block.icon?.label || block.text || block.icon?.name || '',
         subTextValue: block.icon?.name || '',
+      };
+    case 'icons':
+      return {
+        textValue: (block.icons || []).map((ic) => `${ic.name}:${ic.label || ''}`).join(', '),
+        subTextValue: block.text || '',
       };
     case 'number':
       return {
@@ -788,6 +1210,22 @@ export function applyBlockEditableText(
           label: newText,
         },
       };
+    case 'icons': {
+      const parsed = newText
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((pair) => {
+          const [name, ...rest] = pair.split(':');
+          const label = rest.join(':').trim();
+          return { name: name.trim() || 'atom', ...(label ? { label } : {}) };
+        });
+      return {
+        ...block,
+        ...(parsed.length > 0 ? { icons: parsed } : {}),
+        ...(newSubText !== undefined ? { text: newSubText } : {}),
+      };
+    }
     case 'number': {
       const numVal = Number(newText);
       return {

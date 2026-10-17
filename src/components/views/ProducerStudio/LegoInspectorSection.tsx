@@ -162,7 +162,40 @@ export const LegoInspectorSection: React.FC<LegoInspectorSectionProps> = ({
     });
   };
 
+  const canDeletePiece = (piece: LegoPieceDescriptor) => {
+    if (piece.isExtraBlock) return true;
+    if (piece.isComposedBlock && selectedScene.type === 'COMPOSED' && selectedScene.blocks.length > 1) {
+      return true;
+    }
+    if (
+      selectedScene.type === 'ILLUSTRATED_EXPLAINER' &&
+      piece.id.startsWith('icon-') &&
+      (selectedScene.icons?.length || 0) > 1
+    ) {
+      return true;
+    }
+    return false;
+  };
+
   const deletePiece = (piece: LegoPieceDescriptor) => {
+    if (
+      selectedScene.type === 'ILLUSTRATED_EXPLAINER' &&
+      piece.id.startsWith('icon-') &&
+      (selectedScene.icons?.length || 0) > 1
+    ) {
+      const iconIdx = Number(piece.id.replace('icon-', ''));
+      if (Number.isFinite(iconIdx)) {
+        updateSceneProperty((s: SceneData) => {
+          if (s.type !== 'ILLUSTRATED_EXPLAINER') return s;
+          return {
+            ...s,
+            icons: (s.icons || []).filter((_, i) => i !== iconIdx),
+          };
+        });
+        if (activeLegoPieceId === piece.id) onSelectLegoPiece?.(null);
+        return;
+      }
+    }
     if (piece.isExtraBlock) {
       const idx = piece.blockIndex!;
       updateSceneProperty((s: SceneData) => ({
@@ -205,7 +238,6 @@ export const LegoInspectorSection: React.FC<LegoInspectorSectionProps> = ({
   };
 
   const handleDecompose = () => {
-    if (selectedScene.type === 'COMPOSED') return;
     const composed = decomposeSceneToComposed(selectedScene);
     updateSceneProperty(() => composed);
     onSelectLegoPiece?.(composed.blocks[0]?.id || null);
@@ -238,6 +270,33 @@ export const LegoInspectorSection: React.FC<LegoInspectorSectionProps> = ({
           <div className="text-[10px] font-bold text-slate-600">
             Chọn khối Lego muốn gắn thêm vào video:
           </div>
+          {selectedScene.type === 'ILLUSTRATED_EXPLAINER' && (
+            <button
+              type="button"
+              onClick={() => {
+                const nextIdx = selectedScene.icons?.length || 0;
+                const defaultIcons = ['atom', 'lightning', 'dna', 'flask', 'rocket', 'magnet'];
+                updateSceneProperty((s: SceneData) => {
+                  if (s.type !== 'ILLUSTRATED_EXPLAINER') return s;
+                  return {
+                    ...s,
+                    icons: [
+                      ...(s.icons || []),
+                      {
+                        name: defaultIcons[nextIdx % defaultIcons.length],
+                        label: `Khái niệm #${nextIdx + 1}`,
+                      },
+                    ],
+                  };
+                });
+                setIsAddingBlock(false);
+                onSelectLegoPiece?.(`icon-${nextIdx}`);
+              }}
+              className="w-full px-2 py-1.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-left text-[10px] font-bold cursor-pointer transition-colors"
+            >
+              ✨ Thêm Icon Vệ tinh vào Sân khấu
+            </button>
+          )}
           <div className="grid grid-cols-2 gap-1">
             {[
               { id: 'text', label: '📝 Thẻ Ghi chú' },
@@ -261,7 +320,8 @@ export const LegoInspectorSection: React.FC<LegoInspectorSectionProps> = ({
       )}
 
       {/* Decompose to COMPOSED Action */}
-      {selectedScene.type !== 'COMPOSED' && (
+      {(selectedScene.type !== 'COMPOSED' ||
+        selectedScene.blocks.some((b) => b.kind === 'icons' && (b.icons?.length || 0) > 1)) && (
         <button
           type="button"
           onClick={handleDecompose}
@@ -330,10 +390,7 @@ export const LegoInspectorSection: React.FC<LegoInspectorSectionProps> = ({
                     <RotateCcw className="w-3 h-3" />
                   </button>
 
-                  {(piece.isExtraBlock ||
-                    (piece.isComposedBlock &&
-                      selectedScene.type === 'COMPOSED' &&
-                      selectedScene.blocks.length > 1)) && (
+                  {canDeletePiece(piece) && (
                     <button
                       type="button"
                       onClick={() => deletePiece(piece)}
@@ -451,22 +508,48 @@ export const LegoInspectorSection: React.FC<LegoInspectorSectionProps> = ({
 
                   {/* Quick Inline Text Edit */}
                   {piece.buildTextPatch && piece.textValue !== undefined && (
-                    <div className="pt-1 border-t border-slate-200/70 space-y-1">
-                      <label className="text-[10px] font-semibold text-slate-600 block">
-                        Nội dung khối:
-                      </label>
-                      <input
-                        type="text"
-                        value={piece.textValue}
-                        onChange={(e) => {
-                          const patch = piece.buildTextPatch!(
-                            e.target.value,
-                            piece.subTextValue
-                          );
-                          updateSceneProperty((s: SceneData) => ({ ...s, ...patch }));
-                        }}
-                        className="w-full px-2 py-1 bg-white border border-slate-200 focus:border-blue-500 rounded text-[11px] outline-hidden"
-                      />
+                    <div className="pt-1 border-t border-slate-200/70 space-y-1.5">
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">
+                          {piece.id.startsWith('icon-') || piece.id.includes('__icon-')
+                            ? 'Nhãn hiển thị (VD: Electron, Nguyên tử):'
+                            : 'Nội dung khối:'}
+                        </label>
+                        <input
+                          type="text"
+                          value={piece.textValue}
+                          onChange={(e) => {
+                            const patch = piece.buildTextPatch!(
+                              e.target.value,
+                              piece.subTextValue
+                            );
+                            updateSceneProperty((s: SceneData) => ({ ...s, ...patch }));
+                          }}
+                          className="w-full px-2 py-1 bg-white border border-slate-200 focus:border-blue-500 rounded text-[11px] outline-hidden"
+                        />
+                      </div>
+
+                      {piece.subTextValue !== undefined && (
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">
+                            {piece.id.startsWith('icon-') || piece.id.includes('__icon-')
+                              ? 'Biểu tượng 3D (atom, lightning, dna, flask...):'
+                              : 'Nội dung phụ / Công thức:'}
+                          </label>
+                          <input
+                            type="text"
+                            value={piece.subTextValue}
+                            onChange={(e) => {
+                              const patch = piece.buildTextPatch!(
+                                piece.textValue || '',
+                                e.target.value
+                              );
+                              updateSceneProperty((s: SceneData) => ({ ...s, ...patch }));
+                            }}
+                            className="w-full px-2 py-1 bg-white border border-slate-200 focus:border-blue-500 rounded text-[11px] font-mono outline-hidden"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

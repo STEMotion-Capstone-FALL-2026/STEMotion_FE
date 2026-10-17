@@ -89,9 +89,30 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
   const [measuredRects, setMeasuredRects] = useState<
     Record<string, { x: number; y: number; w: number; h: number }>
   >({});
+  const [discoveredDomPieces, setDiscoveredDomPieces] = useState<
+    Record<string, { label: string; kind: LegoPieceDescriptor['kind'] }>
+  >({});
   const [dragState, setDragState] = useState<DragInteractionState | null>(null);
 
-  const pieces = useMemo(() => getSceneLegoPieces(scene), [scene]);
+  const catalogPieces = useMemo(() => getSceneLegoPieces(scene), [scene]);
+
+  // Merge catalog pieces with any dynamically rendered [data-lego-id] DOM nodes
+  const pieces = useMemo(() => {
+    const knownIds = new Set(catalogPieces.map((p) => p.id));
+    const extras: LegoPieceDescriptor[] = [];
+    for (const [id, meta] of Object.entries(discoveredDomPieces)) {
+      if (!knownIds.has(id) && measuredRects[id]) {
+        extras.push({
+          id,
+          label: meta.label || `Khối Lego (${id})`,
+          kind: meta.kind || 'card',
+          defaultRect: measuredRects[id],
+        });
+      }
+    }
+    return [...catalogPieces, ...extras];
+  }, [catalogPieces, discoveredDomPieces, measuredRects]);
+
   const visiblePieces = useMemo(
     () =>
       pieces.filter((p) => {
@@ -125,6 +146,7 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
 
     const nodes = rootEl.querySelectorAll<HTMLElement>('[data-lego-id]');
     const nextRects: Record<string, { x: number; y: number; w: number; h: number }> = {};
+    const nextDiscovered: Record<string, { label: string; kind: LegoPieceDescriptor['kind'] }> = {};
 
     nodes.forEach((node) => {
       const id = node.getAttribute('data-lego-id');
@@ -141,9 +163,14 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
         w: Math.round(w),
         h: Math.round(h),
       };
+      nextDiscovered[id] = {
+        label: node.getAttribute('data-lego-label') || id,
+        kind: (node.getAttribute('data-lego-kind') as LegoPieceDescriptor['kind']) || 'card',
+      };
     });
 
     setMeasuredRects(nextRects);
+    setDiscoveredDomPieces(nextDiscovered);
   }, [stageContainerRef]);
 
   useEffect(() => {
@@ -213,6 +240,18 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
     },
     [measuredRects, scene]
   );
+
+  // Sort pieces by area descending so smaller inner pieces (icons, bullet points, options)
+  // render on top of larger outer container cards and are always clickable first.
+  const layeredVisiblePieces = useMemo(() => {
+    return [...visiblePieces].sort((a, b) => {
+      const ra = getEffectiveRect(a);
+      const rb = getEffectiveRect(b);
+      const areaA = ra.w * ra.h;
+      const areaB = rb.w * rb.h;
+      return areaB - areaA;
+    });
+  }, [visiblePieces, getEffectiveRect]);
 
   // Pointer drag / resize lifecycle
   useEffect(() => {
@@ -494,8 +533,40 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
     });
   };
 
+  const canDeleteSelectedPiece = useMemo(() => {
+    if (!selectedPiece) return false;
+    if (selectedPiece.isExtraBlock) return true;
+    if (selectedPiece.isComposedBlock && scene.type === 'COMPOSED' && scene.blocks.length > 1) {
+      return true;
+    }
+    if (
+      scene.type === 'ILLUSTRATED_EXPLAINER' &&
+      selectedPiece.id.startsWith('icon-') &&
+      (scene.icons?.length || 0) > 1
+    ) {
+      return true;
+    }
+    return false;
+  }, [selectedPiece, scene]);
+
   const deleteExtraOrComposedPiece = () => {
     if (!selectedPiece) return;
+    if (
+      scene.type === 'ILLUSTRATED_EXPLAINER' &&
+      selectedPiece.id.startsWith('icon-') &&
+      (scene.icons?.length || 0) > 1
+    ) {
+      const iconIdx = Number(selectedPiece.id.replace('icon-', ''));
+      if (Number.isFinite(iconIdx)) {
+        updateSceneProperty((s: SceneData) => {
+          if (s.type !== 'ILLUSTRATED_EXPLAINER') return s;
+          const nextIcons = (s.icons || []).filter((_, i) => i !== iconIdx);
+          return { ...s, icons: nextIcons };
+        });
+        setSelectedId(null);
+        return;
+      }
+    }
     if (selectedPiece.isExtraBlock) {
       const idx = selectedPiece.blockIndex!;
       updateSceneProperty((s: SceneData) => ({
@@ -517,6 +588,25 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
       });
       setSelectedId(null);
     }
+  };
+
+  const handleAddStageIcon = () => {
+    if (scene.type !== 'ILLUSTRATED_EXPLAINER') return;
+    const nextIdx = scene.icons?.length || 0;
+    const defaultIcons = ['atom', 'lightning', 'dna', 'flask', 'rocket', 'magnet'];
+    const newIcon = {
+      name: defaultIcons[nextIdx % defaultIcons.length],
+      label: `Khái niệm #${nextIdx + 1}`,
+    };
+    updateSceneProperty((s: SceneData) => {
+      if (s.type !== 'ILLUSTRATED_EXPLAINER') return s;
+      return {
+        ...s,
+        icons: [...(s.icons || []), newIcon],
+      };
+    });
+    setShowAddMenu(false);
+    setSelectedId(`icon-${nextIdx}`);
   };
 
   const handleAddLegoBlock = (
@@ -543,7 +633,6 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
   };
 
   const handleDecomposeScene = () => {
-    if (scene.type === 'COMPOSED') return;
     const composed = decomposeSceneToComposed(scene);
     updateSceneProperty(() => composed);
     setSelectedId(composed.blocks[0]?.id || null);
@@ -575,6 +664,13 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
   const curScale = selectedLayout.scale ?? 1;
   const curFontSize = selectedLayout.fontSize ?? ((scene as any).customFontSize || 30);
 
+  const isIconPiece = Boolean(
+    selectedPiece &&
+      (selectedPiece.id.startsWith('icon-') ||
+        selectedPiece.id.includes('__icon-') ||
+        (selectedPiece.kind === 'diagram' && selectedPiece.subTextValue !== undefined))
+  );
+
   return (
     <div
       ref={overlayRef}
@@ -595,10 +691,10 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
         <div className="flex items-center gap-1.5 pointer-events-auto bg-slate-950/90 border border-blue-500/40 px-2.5 py-1 rounded-xl backdrop-blur-md shadow-xl">
           <Puzzle className="w-3.5 h-3.5 text-blue-400" />
           <span className="text-[11px] font-bold text-slate-200">
-            Lego Mode ({visiblePieces.length} khối)
+            Lego Mode ({visiblePieces.length} khối độc lập)
           </span>
           <span className="text-[10px] text-slate-400 hidden md:inline">
-            • Kéo để di chuyển, kéo góc để co giãn, đúp chuột để sửa chữ
+            • Kéo từng khối để di chuyển, kéo góc co giãn, đúp chuột sửa nội dung
           </span>
         </div>
 
@@ -615,15 +711,24 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
             </button>
 
             {showAddMenu && (
-              <div className="absolute right-0 mt-1.5 w-52 bg-slate-950/95 border border-slate-700 rounded-xl shadow-2xl p-1.5 z-50 backdrop-blur-md space-y-1">
+              <div className="absolute right-0 mt-1.5 w-60 bg-slate-950/95 border border-slate-700 rounded-xl shadow-2xl p-1.5 z-50 backdrop-blur-md space-y-1">
                 <div className="px-2 py-1 text-[10px] font-mono uppercase text-slate-400 border-b border-slate-800">
                   Chọn loại khối Lego mới
                 </div>
+                {scene.type === 'ILLUSTRATED_EXPLAINER' && (
+                  <button
+                    type="button"
+                    onClick={handleAddStageIcon}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-300 bg-emerald-950/50 hover:bg-emerald-600/40 hover:text-white border border-emerald-500/30 transition-colors cursor-pointer"
+                  >
+                    ✨ Thêm Icon Vệ tinh vào Sân khấu
+                  </button>
+                )}
                 {[
                   { id: 'text', label: '📝 Thẻ Ghi chú / Giải thích' },
                   { id: 'formula', label: '∑ Công thức Toán / KaTeX' },
                   { id: 'number', label: '🔢 Chỉ số Khoa học Nổi bật' },
-                  { id: 'icon', label: '⚛️ Biểu tượng STEM Minh họa' },
+                  { id: 'icon', label: '⚛️ Biểu tượng STEM Tự do' },
                   { id: 'list', label: '📋 Danh sách Ý chính' },
                   { id: 'guide', label: '🦉 Trợ giảng Cú Mèo (Guide)' },
                 ].map((item) => (
@@ -641,7 +746,8 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
           </div>
 
           {/* Decompose Template into Freeform COMPOSED Scene */}
-          {scene.type !== 'COMPOSED' && (
+          {(scene.type !== 'COMPOSED' ||
+            scene.blocks.some((b) => b.kind === 'icons' && (b.icons?.length || 0) > 1)) && (
             <button
               type="button"
               onClick={handleDecomposeScene}
@@ -669,8 +775,8 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
         </div>
       </div>
 
-      {/* Interactive Bounding Boxes for Every Lego Piece */}
-      {visiblePieces.map((piece) => {
+      {/* Interactive Bounding Boxes for Every Lego Piece (Sorted Largest -> Smallest so inner pieces sit on top) */}
+      {layeredVisiblePieces.map((piece, orderIdx) => {
         const rect = getEffectiveRect(piece);
         const isSelected = selectedId === piece.id;
         const leftPct = (rect.x / 1920) * 100;
@@ -684,6 +790,9 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
           ? 'border-indigo-400 ring-indigo-500'
           : 'border-blue-400 ring-blue-500';
 
+        // Smaller pieces get higher zIndex than larger container pieces
+        const dynamicZIndex = isSelected ? 35 : 20 + Math.min(14, orderIdx);
+
         return (
           <div
             key={piece.id}
@@ -692,6 +801,7 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
               top: `${topPct}%`,
               width: `${widthPct}%`,
               height: `${heightPct}%`,
+              zIndex: dynamicZIndex,
             }}
             onPointerDown={(e) => startDrag(e, piece, 'move')}
             onDoubleClick={(e) => {
@@ -703,8 +813,8 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
             }}
             className={`absolute rounded-xl transition-shadow cursor-move group ${
               isSelected
-                ? `ring-2 ${borderAccent} bg-blue-500/10 shadow-[0_0_25px_rgba(59,130,246,0.25)] z-30`
-                : 'hover:ring-1 hover:ring-blue-400/70 hover:bg-blue-500/5 z-20'
+                ? `ring-2 ${borderAccent} bg-blue-500/10 shadow-[0_0_25px_rgba(59,130,246,0.25)]`
+                : 'border border-dashed border-blue-400/35 hover:border-solid hover:ring-2 hover:ring-blue-400/90 hover:bg-blue-500/10'
             }`}
           >
             {/* Hover / Active Piece Badge */}
@@ -712,7 +822,7 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
               className={`absolute -top-6 left-0 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold whitespace-nowrap flex items-center gap-1 pointer-events-none transition-opacity ${
                 isSelected
                   ? 'opacity-100 bg-blue-600 text-white shadow-md'
-                  : 'opacity-0 group-hover:opacity-100 bg-slate-900/90 text-blue-300 border border-blue-500/40'
+                  : 'opacity-0 group-hover:opacity-100 bg-slate-900/95 text-blue-300 border border-blue-500/50 shadow-md'
               }`}
             >
               <Move className="w-2.5 h-2.5" />
@@ -913,10 +1023,7 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
               <EyeOff className="w-3.5 h-3.5" />
             </button>
 
-            {(selectedPiece.isExtraBlock ||
-              (selectedPiece.isComposedBlock &&
-                scene.type === 'COMPOSED' &&
-                scene.blocks.length > 1)) && (
+            {canDeleteSelectedPiece && (
               <button
                 type="button"
                 onClick={deleteExtraOrComposedPiece}
@@ -965,7 +1072,7 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
             <div className="space-y-3">
               <div>
                 <label className="text-[11px] font-mono uppercase text-slate-400 block mb-1">
-                  Nội dung chính
+                  {isIconPiece ? 'Tên Nhãn Hiển Thị (VD: Electron, Nguyên tử, Năng lượng)' : 'Nội dung chính'}
                 </label>
                 {editPrimary.includes('\n') || editPrimary.length > 80 ? (
                   <textarea
@@ -993,14 +1100,65 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
               {selectedPiece.subTextValue !== undefined && (
                 <div>
                   <label className="text-[11px] font-mono uppercase text-slate-400 block mb-1">
-                    Nội dung phụ / Công thức / Ghi chú (mỗi dòng 1 ý nếu là danh sách)
+                    {isIconPiece
+                      ? 'Mã Biểu Tượng 3D (Icon Name)'
+                      : 'Nội dung phụ / Công thức / Ghi chú (mỗi dòng 1 ý nếu là danh sách)'}
                   </label>
-                  <textarea
-                    rows={3}
-                    value={editSecondary}
-                    onChange={(e) => setEditSecondary(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-xl p-2.5 text-sm text-white outline-hidden font-mono"
-                  />
+                  {isIconPiece ? (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={editSecondary}
+                        onChange={(e) => setEditSecondary(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-xl p-2 text-xs text-white outline-hidden font-mono"
+                      />
+                      <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto p-1.5 bg-slate-950/80 rounded-xl border border-slate-800">
+                        {[
+                          { id: 'atom', label: '⚛️ Nguyên tử (atom)' },
+                          { id: 'lightning', label: '⚡ Điện / Năng lượng (lightning)' },
+                          { id: 'dna', label: '🧬 ADN (dna)' },
+                          { id: 'cell', label: '🦠 Tế bào (cell)' },
+                          { id: 'flask', label: '🧪 Bình thí nghiệm (flask)' },
+                          { id: 'microscope', label: '🔬 Kính hiển vi (microscope)' },
+                          { id: 'telescope', label: '🔭 Kính thiên văn (telescope)' },
+                          { id: 'rocket', label: '🚀 Tên lửa (rocket)' },
+                          { id: 'planet', label: '🪐 Hành tinh (planet)' },
+                          { id: 'sun', label: '☀️ Mặt trời (sun)' },
+                          { id: 'magnet', label: '🧲 Nam châm (magnet)' },
+                          { id: 'battery', label: '🔋 Pin (battery)' },
+                          { id: 'wave', label: '🌊 Sóng (wave)' },
+                          { id: 'lightbulb', label: '💡 Ý tưởng (lightbulb)' },
+                          { id: 'gear', label: '⚙️ Cơ khí (gear)' },
+                          { id: 'cpu', label: '💻 Vi xử lý (cpu)' },
+                          { id: 'function', label: 'ƒ Hàm số (function)' },
+                          { id: 'graph', label: '📈 Đồ thị (graph)' },
+                          { id: 'prism', label: '🔺 Lăng kính (prism)' },
+                          { id: 'fire', label: '🔥 Nhiệt / Lửa (fire)' },
+                          { id: 'water', label: '💧 Nước (water)' },
+                        ].map((ic) => (
+                          <button
+                            key={ic.id}
+                            type="button"
+                            onClick={() => setEditSecondary(ic.id)}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-medium cursor-pointer transition-colors ${
+                              editSecondary === ic.id
+                                ? 'bg-blue-600 text-white font-bold'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            }`}
+                          >
+                            {ic.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <textarea
+                      rows={3}
+                      value={editSecondary}
+                      onChange={(e) => setEditSecondary(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-xl p-2.5 text-sm text-white outline-hidden font-mono"
+                    />
+                  )}
                 </div>
               )}
             </div>

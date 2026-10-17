@@ -108,14 +108,20 @@ export const OutroCard: React.FC<OutroProps> = ({
                     extrapolateRight: 'clamp',
                   });
                   return (
-                    <div
+                    <LegoBlock
                       key={idx}
-                      style={{ opacity: pointOpacity, fontSize: `var(--lego-font-size, ${Math.max(13, Math.round(baseSize * 0.5))}px)` }}
-                      className="flex items-start gap-3 text-slate-200 text-sm leading-relaxed p-2.5 rounded-lg bg-slate-800/40 border border-slate-800"
+                      id={`summary-point-${idx}`}
+                      label={`Điểm nhớ #${idx + 1}: ${String(point).slice(0, 24)}`}
+                      kind="step"
                     >
-                      <span className="text-indigo-400 font-bold font-mono">✓</span>
-                      <span>{point}</span>
-                    </div>
+                      <div
+                        style={{ opacity: pointOpacity, fontSize: `var(--lego-font-size, ${Math.max(13, Math.round(baseSize * 0.5))}px)` }}
+                        className="flex items-start gap-3 text-slate-200 text-sm leading-relaxed p-2.5 rounded-lg bg-slate-800/40 border border-slate-800"
+                      >
+                        <span className="text-indigo-400 font-bold font-mono">✓</span>
+                        <span>{point}</span>
+                      </div>
+                    </LegoBlock>
                   );
                 })}
               </div>

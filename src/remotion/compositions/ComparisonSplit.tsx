@@ -176,23 +176,29 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = (props) => {
               style={{ gap: `${gapSize}px` }}
             >
               {safeTopicA.points.map((pt, idx) => (
-                <div
+                <LegoBlock
                   key={idx}
-                  className="flex items-start gap-3.5 text-slate-100"
-                  style={{ fontSize: `var(--lego-font-size, ${baseFontSize}px)`, lineHeight: 1.45 }}
+                  id={`left-point-${idx}`}
+                  label={`Ý A.${idx + 1}: ${String(pt).slice(0, 24)}`}
+                  kind="step"
                 >
-                  <span
-                    style={{
-                      width: `${checkSize}px`,
-                      height: `${checkSize}px`,
-                      fontSize: `${Math.round(baseFontSize * 0.55)}px`,
-                    }}
-                    className="rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/40 flex items-center justify-center shrink-0 mt-1 font-bold"
+                  <div
+                    className="flex items-start gap-3.5 text-slate-100"
+                    style={{ fontSize: `var(--lego-font-size, ${baseFontSize}px)`, lineHeight: 1.45 }}
                   >
-                    ✓
-                  </span>
-                  <span className="leading-snug font-medium">{pt}</span>
-                </div>
+                    <span
+                      style={{
+                        width: `${checkSize}px`,
+                        height: `${checkSize}px`,
+                        fontSize: `${Math.round(baseFontSize * 0.55)}px`,
+                      }}
+                      className="rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/40 flex items-center justify-center shrink-0 mt-1 font-bold"
+                    >
+                      ✓
+                    </span>
+                    <span className="leading-snug font-medium">{pt}</span>
+                  </div>
+                </LegoBlock>
               ))}
             </div>
 
@@ -248,24 +254,30 @@ export const ComparisonSplit: React.FC<ComparisonSplitProps> = (props) => {
               style={{ gap: `${gapSize}px` }}
             >
               {safeTopicB.points.map((pt, idx) => (
-                <div
+                <LegoBlock
                   key={idx}
-                  className="flex items-start gap-3.5 text-slate-100"
-                  style={{ fontSize: `var(--lego-font-size, ${baseFontSize}px)`, lineHeight: 1.45 }}
+                  id={`right-point-${idx}`}
+                  label={`Ý B.${idx + 1}: ${String(pt).slice(0, 24)}`}
+                  kind="step"
                 >
-                  <span
-                    style={{
-                      width: `${checkSize}px`,
-                      height: `${checkSize}px`,
-                      fontSize: `${Math.round(baseFontSize * 0.55)}px`,
-                      marginTop: `${Math.max(2, Math.round(baseFontSize * 0.08))}px`,
-                    }}
-                    className="rounded-full bg-amber-500/25 text-amber-400 font-mono flex items-center justify-center shrink-0 font-bold border border-amber-500/40"
+                  <div
+                    className="flex items-start gap-3.5 text-slate-100"
+                    style={{ fontSize: `var(--lego-font-size, ${baseFontSize}px)`, lineHeight: 1.45 }}
                   >
-                    ✓
-                  </span>
-                  <span className="leading-snug font-medium">{pt}</span>
-                </div>
+                    <span
+                      style={{
+                        width: `${checkSize}px`,
+                        height: `${checkSize}px`,
+                        fontSize: `${Math.round(baseFontSize * 0.55)}px`,
+                        marginTop: `${Math.max(2, Math.round(baseFontSize * 0.08))}px`,
+                      }}
+                      className="rounded-full bg-amber-500/25 text-amber-400 font-mono flex items-center justify-center shrink-0 font-bold border border-amber-500/40"
+                    >
+                      ✓
+                    </span>
+                    <span className="leading-snug font-medium">{pt}</span>
+                  </div>
+                </LegoBlock>
               ))}
             </div>
 
