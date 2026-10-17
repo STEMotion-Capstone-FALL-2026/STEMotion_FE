@@ -34,7 +34,6 @@ import { CreateProjectModal } from './components/modals/CreateProjectModal';
 import { ManageMembersModal } from './components/modals/ManageMembersModal';
 import { ChangePasswordModal } from './components/modals/ChangePasswordModal';
 import { DraftReviewModal, PendingDraft } from './components/modals/DraftReviewModal';
-import { PipelineStatusBar } from './components/layout/PipelineBoard';
 import { WorkspacePickerModal } from './components/modals/WorkspacePickerModal';
 import { VersionDiffModal } from './components/modals/VersionDiffModal';
 import { CreateWorkspaceModal } from './components/modals/CreateWorkspaceModal';
@@ -878,16 +877,6 @@ export default function App() {
         onNavigateToDashboard={() => setIsInStudio(false)}
         isInStudio={isInStudio}
       />
-
-      {/* The proposal's state-driven pipeline: where the open project is and whose turn it is. */}
-      {!hasNoWorkspace && currentRole !== 'admin' && isInStudio && script.id && (
-        <PipelineStatusBar
-          script={script}
-          onOpenProject={(id) => void openProject(id)}
-          onBackToDashboard={() => setIsInStudio(false)}
-          currentRole={currentRole}
-        />
-      )}
 
       {hasNoWorkspace && currentUser.role !== 'admin' && (
         <main className="flex-1 bg-slate-50 flex items-center justify-center p-6">
