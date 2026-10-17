@@ -15,6 +15,11 @@ import {
   ShieldAlert,
   GripVertical,
   Volume2,
+  Wand2,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Lightbulb,
 } from 'lucide-react';
 import { STEMScript, SceneData } from '../../../types/stem';
 import { UserRole, projectService } from '../../../services';
@@ -94,6 +99,179 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
     showToast('Nghe thử bằng giọng của trình duyệt; giọng video được tạo khi kết xuất.', 'info');
     window.speechSynthesis.speak(utterance);
   };
+
+  // Google Vids: Smart Contextual Template Suggestion
+  const getContextualTemplateSuggestion = (narration: string, currentType: SceneData['type']) => {
+    if (!narration || narration.trim().length < 8) return null;
+    const lower = narration.toLowerCase();
+
+    if (
+      currentType !== 'MATH_FORMULA' &&
+      /(công thức|đạo hàm|tích phân|hàm số|phương trình|toán học|vi phân|số mũ|logarit|biểu thức)/i.test(lower)
+    ) {
+      return {
+        type: 'MATH_FORMULA' as const,
+        title: 'Công Thức Toán Học (KaTeX)',
+        keyword: 'công thức / phương trình',
+        defaultProps: {
+          latex: 'f(x) = \\int x \\, dx',
+          steps: [{ label: 'Bước 1', latexSnippet: 'f(x)', explanation: 'Khai triển biểu thức' }],
+        },
+      };
+    }
+
+    if (
+      currentType !== 'CHEMICAL_REACTION' &&
+      /(phản ứng|hóa học|nguyên tử|phân tử|dung dịch|oxi hóa|axit|bazơ|kết tủa|chất tan|phương trình hóa)/i.test(lower)
+    ) {
+      return {
+        type: 'CHEMICAL_REACTION' as const,
+        title: 'Phản Ứng Hóa Học Thực Nghiệm',
+        keyword: 'phản ứng / hóa học',
+        defaultProps: {
+          equation: '2H_2 + O_2 -> 2H_2O',
+          reactants: ['H_2', 'O_2'],
+          products: ['H_2O'],
+          condition: 't°',
+          observation: 'Phản ứng tỏa nhiều nhiệt',
+        },
+      };
+    }
+
+    if (
+      currentType !== 'ALGORITHM_WALKTHROUGH' &&
+      /(thuật toán|mã nguồn|lập trình|code|vòng lặp|mảng|tìm kiếm|nhị phân|sắp xếp|python|binary search)/i.test(lower)
+    ) {
+      return {
+        type: 'ALGORITHM_WALKTHROUGH' as const,
+        title: 'Mô Phỏng Thuật Toán Lập Trình',
+        keyword: 'thuật toán / lập trình',
+        defaultProps: {
+          language: 'python',
+          codeSnippet: 'def binary_search(arr, target):\n    low, high = 0, len(arr) - 1',
+          steps: [{ line: 1, explanation: 'Khởi tạo con trỏ tìm kiếm' }],
+        },
+      };
+    }
+
+    if (
+      currentType !== 'DATA_CHART' &&
+      /(biểu đồ|thống kê|số liệu|tỷ lệ phần trăm|doanh thu|đo lường|tăng trưởng|cột mốc)/i.test(lower)
+    ) {
+      return {
+        type: 'DATA_CHART' as const,
+        title: 'Biểu Đồ Thống Kê Dữ Liệu',
+        keyword: 'biểu đồ / thống kê',
+        defaultProps: {
+          chartType: 'bar',
+          xAxisLabel: 'Trục hoành',
+          yAxisLabel: 'Trục tung',
+          dataPoints: [{ label: 'Nhóm A', value: 80 }, { label: 'Nhóm B', value: 45 }],
+        },
+      };
+    }
+
+    if (
+      currentType !== 'STEM_QUIZ' &&
+      /(câu hỏi|trắc nghiệm|đố vui|hãy chọn|đáp án|kiểm tra nhanh|thử tài)/i.test(lower)
+    ) {
+      return {
+        type: 'STEM_QUIZ' as const,
+        title: 'Trắc Nghiệm Tương Tác STEM',
+        keyword: 'câu hỏi / trắc nghiệm',
+        defaultProps: {
+          question: 'Theo bạn nhận định nào sau đây là chính xác?',
+          options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
+          correctIndex: 0,
+          hint: 'Gợi ý từ định luật khoa học',
+          explanation: 'Giải thích chi tiết đáp án',
+        },
+      };
+    }
+
+    if (
+      currentType !== 'COMPARISON_SPLIT' &&
+      /(so sánh|đối chiếu|khác nhau|phân biệt|ưu điểm|nhược điểm|hai mặt)/i.test(lower)
+    ) {
+      return {
+        type: 'COMPARISON_SPLIT' as const,
+        title: 'So Sánh Đối Chiếu Hai Khái Niệm',
+        keyword: 'so sánh / đối chiếu',
+        defaultProps: {
+          topicA: 'Khái niệm A',
+          topicB: 'Khái niệm B',
+          conclusion: 'Kết luận so sánh',
+        },
+      };
+    }
+
+    if (
+      currentType !== 'PROCESS_TIMELINE' &&
+      /(quy trình|tiến trình|chu trình|giai đoạn|bước 1|các bước|vòng đời)/i.test(lower)
+    ) {
+      return {
+        type: 'PROCESS_TIMELINE' as const,
+        title: 'Tiến Trình Chu Trình Khoa Học',
+        keyword: 'quy trình / chu trình',
+        defaultProps: {
+          processTitle: 'Chu trình khoa học',
+          stages: [{ name: 'Giai đoạn 1', desc: 'Bắt đầu' }, { name: 'Giai đoạn 2', desc: 'Phát triển' }],
+        },
+      };
+    }
+
+    return null;
+  };
+
+  const handleApplySuggestedTemplate = (suggestion: any) => {
+    updateSceneProperty((s) => ({
+      ...s,
+      type: suggestion.type,
+      ...suggestion.defaultProps,
+    }));
+    showToast(`✨ Đã đổi phân cảnh sang mẫu [${suggestion.title}] theo phong cách Google Vids!`, 'success');
+  };
+
+  // Google Vids: Auto-fit duration for current scene
+  const handleAutoFitDuration = (narrationText: string) => {
+    const words = (narrationText || '').trim().split(/\s+/).filter(Boolean).length;
+    const estSeconds = words > 0 ? Math.max(4, Math.ceil(words / 2.3) + 1) : 5;
+    updateSceneProperty((s) => ({
+      ...s,
+      durationInFrames: estSeconds * 30,
+    }));
+    showToast(`⚡ Google Vids: Đã tự động khớp thời lượng: ${estSeconds}s (${estSeconds * 30} frames) theo giọng đọc!`, 'success');
+  };
+
+  // Google Vids: Batch Auto-Fit All Scenes
+  const handleBatchAutoFitAllScenes = () => {
+    setScript((prev) => {
+      const updatedScenes = prev.scenes.map((sc) => {
+        const words = (sc.narration || '').trim().split(/\s+/).filter(Boolean).length;
+        const estSeconds = words > 0 ? Math.max(4, Math.ceil(words / 2.3) + 1) : 5;
+        return {
+          ...sc,
+          durationInFrames: estSeconds * 30,
+        };
+      });
+      const totalSec = Math.round(updatedScenes.reduce((acc, sc) => acc + (sc.durationInFrames || 150), 0) / 30);
+      return {
+        ...prev,
+        scenes: updatedScenes,
+        totalDurationSeconds: totalSec,
+      };
+    });
+    showToast(`🚀 Google Vids: Đã tự động căn chỉnh thời lượng cho toàn bộ ${script.scenes.length} phân cảnh!`, 'success');
+  };
+
+  // Real-time pacing calculation
+  const wordsCount = (selectedScene.narration || '').trim().split(/\s+/).filter(Boolean).length;
+  const estimatedReadSec = wordsCount > 0 ? (wordsCount / 2.5).toFixed(1) : '0';
+  const currentSceneSec = ((selectedScene.durationInFrames || 150) / 30).toFixed(1);
+  const recommendedSec = wordsCount > 0 ? Math.max(4, Math.ceil(wordsCount / 2.3) + 1) : 5;
+  const isPacingTight = wordsCount > 0 && Number(currentSceneSec) < Number(estimatedReadSec) + 0.5;
+
+  const suggestedTemplate = getContextualTemplateSuggestion(selectedScene.narration || '', selectedScene.type);
   return (
     <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Top Bar Writer */}
@@ -157,7 +335,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Cột 1: Cấu trúc phân cảnh (Cho phép Thêm / Xóa / Đổi thứ tự) */}
         <aside className="w-72 bg-white border-r border-slate-200 p-4 flex flex-col h-full min-h-0 overflow-hidden shrink-0">
-          <div className="flex items-center justify-between mb-3 text-xs">
+          <div className="flex items-center justify-between mb-2 text-xs">
             <span className="font-bold uppercase tracking-wider text-slate-500">
               Phân Cảnh ({script.scenes.length})
             </span>
@@ -165,6 +343,16 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               {script.totalDurationSeconds}s
             </span>
           </div>
+
+          {/* Google Vids: Batch Auto-Fit All Scenes */}
+          <button
+            onClick={handleBatchAutoFitAllScenes}
+            className="w-full mb-3 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold border border-indigo-200 flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+            title="Tự động căn chỉnh thời lượng tất cả phân cảnh theo tốc độ đọc lời thoại chuẩn Google Vids"
+          >
+            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+            <span>⚡ Tự Khớp Giọng Đọc Mọi Cảnh</span>
+          </button>
 
           {/* Danh sách cảnh */}
           <div className="space-y-2 flex-1 overflow-y-auto pr-1">
@@ -434,6 +622,75 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                 >
                   <span>⚡ Khớp Thời Lượng</span>
                 </button>
+              </div>
+
+              {/* Google Vids: Real-time Pacing Status & Contextual Template Suggestion */}
+              <div className="space-y-2 mt-3 pt-3 border-t border-slate-100">
+                {/* Pacing Status Bar */}
+                <div
+                  className={`p-2.5 rounded-xl border text-xs flex items-center justify-between transition-all ${
+                    isPacingTight
+                      ? 'bg-amber-50/90 border-amber-300 text-amber-900'
+                      : 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {isPacingTight ? (
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    )}
+                    <div className="text-[11px] leading-tight">
+                      <span className="font-bold">
+                        {isPacingTight ? 'Cảnh quá ngắn so với lời thoại!' : 'Thời lượng vừa vặn chuẩn giọng đọc AI'}
+                      </span>
+                      <span className="block text-slate-500 text-[10px] mt-0.5">
+                        Ước tính đọc: ~{estimatedReadSec}s | Thời lượng cảnh: {currentSceneSec}s ({selectedScene.durationInFrames || 150} frames)
+                      </span>
+                    </div>
+                  </div>
+
+                  {isPacingTight && (
+                    <button
+                      type="button"
+                      onClick={() => handleAutoFitDuration(selectedScene.narration || '')}
+                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[11px] shrink-0 cursor-pointer shadow-2xs flex items-center gap-1"
+                    >
+                      <Clock className="w-3 h-3" />
+                      <span>Khớp Ngay ({recommendedSec}s)</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Contextual Template Suggestion */}
+                {suggestedTemplate && (
+                  <div className="bg-gradient-to-r from-indigo-50/90 via-purple-50/80 to-blue-50/90 border border-indigo-200 rounded-xl p-3 flex items-center justify-between shadow-2xs animate-fade-in">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                        <Sparkles className="w-4 h-4 animate-pulse" />
+                      </div>
+                      <div className="text-[11px] text-indigo-950">
+                        <div className="font-bold flex items-center gap-1">
+                          <span>Gợi ý bố cục thông minh (Google Vids):</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-200/60 text-indigo-800">
+                            {suggestedTemplate.keyword}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-indigo-800/80 mt-0.5">
+                          Lời thoại có từ khóa STEM chuyên ngành, chuyển sang mẫu <b>{suggestedTemplate.title}</b>?
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleApplySuggestedTemplate(suggestedTemplate)}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-[11px] shrink-0 cursor-pointer shadow-xs flex items-center gap-1 transition-all"
+                    >
+                      <Wand2 className="w-3 h-3" />
+                      <span>Áp Dụng Mẫu Này</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -14,6 +14,8 @@
 5. [Đặc Tả Chi Tiết Những Gì Chưa Làm Được / Còn Thiếu (Missing & Incomplete Features)](#5-đặc-tả-chi-tiết-những-gì-chưa-làm-được--còn-thiếu-missing--incomplete-features)
 6. [Ma Trận Đánh Giá Mức Độ Hoàn Thiện Của Từng Module](#6-ma-trận-đánh-giá-mức-độ-hoàn-thiện-của-từng-module)
 7. [Danh Sách TODO & Kế Hoạch Nâng Cấp Ưu Tiên](#7-danh-sách-todo--kế-hoạch-nâng-cấp-ưu-tiên)
+8. [Tính Năng Mới Theo Triết Lý Google Vids & Backend TODO](#8-tính-năng-mới-theo-triết-lý-google-vids-google-vids-paradigm--backend-todo)
+9. [Đặc Tả Chi Tiết Danh Mục TODO Dành Cho Backend](#9-đặc-tả-chi-tiết-danh-mục-todo-dành-cho-backend-backend-comprehensive-roadmap--checklist)
 
 ---
 
@@ -439,4 +441,261 @@ Dưới đây là bảng tổng hợp và đánh giá chuyên sâu về các tí
 - [ ] **Đóng gói xuất file SCORM / LTI**: Cung cấp tùy chọn tải về gói `.zip` chuẩn SCORM phục vụ các trường học sử dụng Canvas LMS / Moodle.
 - [ ] **Realtime Collaboration (WebSocket)**: Hiển thị trạng thái con trỏ và khóa phân cảnh khi có nhiều thành viên cùng mở một kịch bản.
 - [ ] **Hỗ trợ Dark Mode & Hoàn tác (Undo/Redo)**: Bổ sung theme tối và phím tắt `Ctrl + Z` trong xưởng soạn thảo.
+
+---
+
+## 8. TÍNH NĂNG MỚI THEO TRIẾT LÝ GOOGLE VIDS (GOOGLE VIDS PARADIGM & BACKEND TODO)
+
+### 8.1. Triết Lý Thiết Kế: Học Tập Google Vids Cho Nền Tảng Video Giáo Dục STEM
+Thay vì yêu cầu người quản trị (Admin) phải viết code định nghĩa template phức tạp hoặc bắt người dùng tự thiết kế từ con số không, STEMotion học tập triết lý **Google Vids**:
+1. **Design System & Lego Building Blocks chuẩn hóa**: Cung cấp sẵn một hệ thống khối phân cảnh Remotion theo chuẩn sư phạm (Toán, Lý, Hóa, Sinh, Tin).
+2. **AI & Heuristics hỗ trợ tự động (Assistive Automation)**:
+   - **Tự động căn khớp thời lượng (Auto-Fit Duration to Voice)**: Đo đếm tốc độ đọc để phân cảnh không bị dồn nén hoặc quá dài.
+   - **Gợi ý phân cảnh thông minh theo ngữ cảnh (Contextual Template Suggestion)**: Nhận diện nội dung lời thoại để tự động đề xuất phân cảnh STEM phù hợp nhất.
+   - **Đồng bộ phong cách hình ảnh (Consistent Visual Theme Presets)**: Cung cấp các bộ Theme màu chuẩn theo bộ môn, áp dụng đồng nhất xuyên suốt video.
+3. **Producer Studio linh hoạt**: Người dùng có thể tinh chỉnh các thuộc tính (Props) qua giao diện trực quan mà không sợ làm hỏng cấu trúc chuẩn của video.
+
+---
+
+### 8.2. Danh Mục Tính Năng Frontend Đã Hoàn Thành (FE Accomplishments)
+
+#### 1. Căn Chỉnh Thời Lượng Tự Động Theo Lời Thoại (Auto-Fit Duration to Voice)
+* **File chỉnh sửa:** `src/components/views/WriterStudio/WriterStudio.tsx` & `src/components/views/ProducerStudio/ProducerStudio.tsx`
+* **Cơ chế hoạt động:**
+  - Thuật toán đo lường tốc độ phát âm chuẩn của TTS tiếng Việt: ~2.3 từ/giây + 0.5s đệm (cushion buffer) để chuyển cảnh tự nhiên.
+  - Công thức: `durationInFrames = Math.max(4, Math.ceil(words / 2.3) + 1) * 30`.
+* **Giao diện người dùng:**
+  - **Thanh trạng thái Pacing thời gian thực (Real-time Pacing Guard)**: Đặt ngay dưới ô nhập lời thoại ở `WriterStudio`. Hiển thị số từ, thời gian đọc ước tính, thời lượng phân cảnh hiện tại và cảnh báo màu hổ phách/đỏ khi thời lượng quá ngắn (`isPacingTight`), đi kèm nút 1-chạm **"Khớp Ngay"**.
+  - **Nút "⚡ Tự Khớp Giọng Đọc" hàng loạt (Batch Auto-Fit)**:
+    - Tại `WriterStudio`: Tích hợp trên thanh tiêu đề danh sách phân cảnh. Tự động duyệt qua toàn bộ kịch bản và căn lại frames cho tất cả các cảnh chỉ với 1 cú click.
+    - Tại `ProducerStudio`: Tích hợp trên Top Action Bar, cho phép Producer đồng bộ lại toàn bộ timeline trước khi gửi render.
+  - **Lợi ích:** Đảm bảo 100% kịch bản không bị vi phạm cảnh báo `NARRATION_PACING` trong bộ kiểm định Pre-publish QA của Backend.
+
+#### 2. Gợi Ý Phân Cảnh Thông Minh Theo Từ Khóa Lời Thoại (Contextual STEM Template Suggestion)
+* **File chỉnh sửa:** `src/components/views/WriterStudio/WriterStudio.tsx`
+* **Cơ chế hoạt động:**
+  - Tích hợp bộ máy Heuristic Lexicon Scanner quét từ khóa ngữ nghĩa trong lời thoại thuyết minh thời gian thực:
+    - **Toán học** (`tính`, `phương trình`, `hàm số`, `đạo hàm`, `tích phân`, `nghiệm`, `ma trận`...) -> Gợi ý mẫu `MATH_FORMULA` (Công thức Toán học LaTeX).
+    - **Hóa học** (`phản ứng`, `dung dịch`, `chất`, `kết tủa`, `axit`, `phân tử`, `nguyên tử`...) -> Gợi ý mẫu `CHEMICAL_REACTION` (Mô phỏng Phản ứng Hóa học).
+    - **Tin học / Thuật toán** (`thuật toán`, `vòng lặp`, `mảng`, `sắp xếp`, `độ phức tạp`, `đệ quy`...) -> Gợi ý mẫu `ALGORITHM_WALKTHROUGH` (Diễn giải Giải thuật).
+    - **Kiểm tra / Tương tác** (`hỏi`, `chọn đáp án`, `câu nào sau đây`, `trắc nghiệm`, `đố bạn`...) -> Gợi ý mẫu `STEM_QUIZ` (Trắc nghiệm Tương tác).
+    - **Quy trình / Lịch sử** (`bước`, `quy trình`, `giai đoạn`, `lịch sử`, `tiến trình`...) -> Gợi ý mẫu `PROCESS_TIMELINE` (Dòng thời gian / Quy trình).
+    - **So sánh / Phân tích** (`so sánh`, `khác biệt`, `ưu điểm`, `nhược điểm`, `đối chiếu`...) -> Gợi ý mẫu `COMPARISON_SPLIT` (Bảng so sánh đối chiếu).
+    - **Số liệu / Thống kê** (`tỷ lệ`, `biểu đồ`, `thống kê`, `phần trăm`, `tăng trưởng`, `sản lượng`...) -> Gợi ý mẫu `DATA_CHART` (Biểu đồ dữ liệu trực quan).
+* **Giao diện & An toàn Schema:**
+  - Banner gợi ý thông minh màu tím (`indigo-50/bg`) hiển thị trực tiếp phía trên ô nhập mô tả hình ảnh, giải thích lý do gợi ý kèm nút 1-chạm **"Áp Dụng Mẫu Này"**.
+  - **Khởi tạo Default Props hợp lệ theo Backend Schema**: Khi người dùng chấp nhận đổi template, hàm `handleApplySuggestedTemplate` tự động nạp các trường dữ liệu bắt buộc (e.g. `latex, steps` cho `MATH_FORMULA`; `leftTitle, rightTitle` cho `COMPARISON_SPLIT`; `steps` cho `PROCESS_TIMELINE`), ngăn ngừa hoàn toàn lỗi `400 BAD_REQUEST` từ Backend Validator.
+
+#### 3. Hệ Thống Preset Theme & Phong Cách Hình Ảnh Đồng Nhất (Visual Theme Presets)
+* **File chỉnh sửa:** `src/components/views/ProducerStudio/ProducerStudio.tsx` & `src/remotion/flat/variation.ts`
+* **Cơ chế hoạt động:**
+  - Cung cấp 5 preset phong cách màu sắc & chuyển động chuẩn mực:
+    1. **`default` (Hiện đại - Indigo)**: Gradient tím xanh hiện đại, phù hợp cho bài giảng chung.
+    2. **`cyber` (Dark Cyber - Tin / Lý)**: Tông màu tối neon công nghệ cao, phù hợp môn Tin học và Vật lý bán dẫn/mạch điện.
+    3. **`emerald` (Nature Lab - Sinh / Hóa)**: Xanh ngọc bích thiên nhiên và phòng thí nghiệm vi sinh.
+    4. **`sunset` (Sáng tạo - Đại chúng)**: Tông màu ấm áp vàng cam - hồng đào khơi gợi sự sáng tạo.
+    5. **`academic` (Học thuật - Toán học)**: Tông xanh lam trầm ổn định viện hàn lâm, tập trung cho diễn giải ký hiệu toán học.
+  - Dropdown chọn Style tích hợp ngay trên thanh công cụ của `ProducerStudio`.
+  - Tự động gắn seed phong cách vào chuỗi nhận diện để `variationFor` trong Remotion tính toán `hueShift`, `accentShift` và kiểu chuyển cảnh `arrival` đồng nhất trên toàn bộ các cảnh trong video.
+
+---
+
+### 8.3. Danh Sách Hạng Mục Backend Cần Triển Khai (Backend TODO Checklist)
+
+Để hoàn tất trọn vẹn trải nghiệm Google Vids trên toàn hệ thống, nhóm Backend cần bổ sung các hạng mục sau:
+
+- [ ] **1. Lưu trữ và đồng bộ trường `visualTheme` (DB Schema & API Persistence)**:
+  - **Mô tả:** Thêm trường `visual_theme` (VARCHAR hoặc ENUM: `'default'`, `'cyber'`, `'emerald'`, `'sunset'`, `'academic'`) vào bảng `clip_projects` và `compositions`.
+  - **API cần nhận:** `POST /api/v1/scripts/{id}/production-draft` và `PUT /api/v1/scripts/{id}` nhận thêm thuộc tính `visualTheme` trong body.
+  - **API cần trả về:** `GET /api/v1/scripts/{id}` và `GET /api/v1/scripts/{id}/composition` trả về trường `visualTheme`.
+
+- [ ] **2. Worker Căn Chỉnh Thời Lượng Audio & Phụ Đề Bằng Whisper (Whisper Audio Alignment Worker)**:
+  - **Mô tả:** Hiện tại FE đang ước lượng thời lượng theo số từ (~2.3 từ/giây). BE cần hoàn thiện worker sinh giọng đọc TTS thực tế (Google Cloud TTS / FPT.AI) và chạy Whisper forced-alignment để:
+    - Trả về danh sách từ kèm mốc thời gian chính xác (`captionWords: [{ word: string, startSec: number, endSec: number }]`).
+    - Tự động cập nhật `durationInFrames` của phân cảnh chuẩn xác theo độ dài file âm thanh thực tế + 10-15 frames đệm.
+
+- [ ] **3. API Gợi Ý Tài Nguyên Hình Ảnh STEM Theo Ngữ Cảnh (`POST /api/v1/ai/assets/recommend`)**:
+  - **Mô tả:** Cung cấp endpoint nhận vào `{ narration: string, sceneType: string, subject: string }` và trả về danh sách các asset đồ họa SVG/vector phù hợp từ kho thư viện Asset Library của hệ thống để gợi ý trực tiếp cho người dùng.
+
+- [ ] **4. Mở Rộng Quản Lý Thuộc Tính Template Trên Admin Portal (`/admin/templates`)**:
+  - **Mô tả:** Bổ sung cột cấu hình trong DB để Admin có thể gán danh mục môn học STEM khuyến nghị (Math, Physics, Chemistry, Biology, CS) và bộ Theme màu sắc mặc định cho từng Template Remotion.
+
+---
+
+## 9. ĐẶC TẢ CHI TIẾT DANH MỤC TODO DÀNH CHO BACKEND (BACKEND COMPREHENSIVE ROADMAP & CHECKLIST)
+
+Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Backend (Spring Boot, FastAPI, Render Worker, PostgreSQL) để đồng bộ hóa hoàn toàn với các tính năng đã hoàn thiện ở Frontend, đặc biệt là quy trình sản xuất video thông minh chuẩn **Google Vids** và các kết luận từ đợt **API Audit**.
+
+---
+
+### 9.1. Nhóm Ưu Tiên Cao (P0 - Cốt Lõi Studio & Đồng Bộ Google Vids)
+
+#### 📌 BE-P0-1: Lưu Trữ & Đồng Bộ Thuộc Tính Visual Theme (`visualTheme`)
+* **Mục tiêu:** Lưu trữ lựa chọn 5 theme phong cách hình ảnh (`default`, `cyber`, `emerald`, `sunset`, `academic`) của Producer vào CSDL.
+* **Database Migration (Flyway `V20__add_visual_theme.sql`):**
+  ```sql
+  ALTER TABLE clip_projects ADD COLUMN visual_theme VARCHAR(32) DEFAULT 'default' NOT NULL;
+  ALTER TABLE compositions ADD COLUMN visual_theme VARCHAR(32) DEFAULT 'default' NOT NULL;
+  ```
+* **Endpoints cập nhật:**
+  - `POST /api/v1/scripts/{id}/production-draft` & `PUT /api/v1/scripts/{id}/composition`:
+    - Body nhận thêm: `{"visualTheme": "cyber"}`
+  - `GET /api/v1/scripts/{id}` & `GET /api/v1/scripts/{id}/composition`:
+    - Response trả về: `{"visualTheme": "cyber", ...}`
+* **Tiêu chuẩn nghiệm thu:** Khi Producer đổi theme trong Studio và bấm lưu hoặc render, lần mở lại hoặc export sau đó vẫn giữ nguyên đúng theme đã chọn.
+
+---
+
+#### 📌 BE-P0-2: Worker Căn Chỉnh Audio Thực Tế & Phụ Đề Whisper (`POST /scripts/{id}/sync-durations`)
+* **Mục tiêu:** Thay thế tính năng ước lượng số từ bằng việc sinh âm thanh TTS thực tế và đo mốc thời gian chính xác từng từ qua Whisper Forced-Alignment.
+* **Luồng xử lý (Architecture Flow):**
+  1. FE gọi: `POST /api/v1/scripts/{id}/sync-durations`
+  2. Spring Boot BE chuyển tiếp tới Render Worker: `POST /sync-durations`
+  3. Worker gọi dịch vụ TTS -> sinh file âm thanh cho từng Scene -> gửi multipart audio sang FastAPI `POST /transcribe/align`.
+  4. FastAPI trả về mảng alignment: `words: [{ "text": "toán", "start": 0.12, "end": 0.45 }]`.
+  5. BE cập nhật vào bảng `scenes`:
+     - Cập nhật `duration_in_frames = Math.ceil(durationSec * fps)`
+     - Cập nhật cột `caption_words` (JSONB) cho từng Scene.
+* **Tiêu chuẩn nghiệm thu:** Remotion Player hiển thị phụ đề chạy từng từ khớp 100% với giọng đọc, và QA Engine trả về `CAPTION_SYNC: PASS`.
+
+---
+
+#### 📌 BE-P0-3: BE Proxy Cho Giọng Đọc Neural TTS Preview (`GET /scripts/{id}/tts-preview`)
+* **Mục tiêu:** Cung cấp API nghe thử giọng đọc chất lượng cao trực tiếp trên Studio mà không để lộ TTS API Key ở client (thay thế Web Speech API trình duyệt).
+* **Đặc tả API:**
+  - `GET /api/v1/scripts/{id}/tts-preview?sceneId={sceneId}&text={encodedText}&voice={voiceId}`
+  - **Headers:** `Authorization: Bearer <JWT>`
+  - **Response:** `200 OK`, `Content-Type: audio/mpeg` (Stream audio trực tiếp).
+* **Bảo mật:** Secret key (Google Cloud / FPT.AI / OpenAI) được quản lý tập trung trong file cấu hình BE.
+
+---
+
+#### 📌 BE-P0-4: API Lịch Sử Thẩm Định & Nhật Ký Phản Hồi (`GET /scripts/{id}/review-history`)
+* **Mục tiêu:** Cho phép Writer và Producer xem lại toàn bộ lý do từ chối kịch bản hoặc yêu cầu sửa bản dựng của Reviewer (được lưu tại `status_histories`).
+* **Đặc tả API:**
+  - `GET /api/v1/scripts/{id}/review-history`
+  - **Response Body:**
+    ```json
+    [
+      {
+        "id": "uuid-1",
+        "actorName": "Nguyễn Văn Reviewer",
+        "actorRole": "REVIEWER",
+        "action": "REJECT",
+        "targetType": "SCRIPT",
+        "scriptVersionNo": 1,
+        "clipId": null,
+        "note": "Cần bổ sung thêm ví dụ thực tế ở phân cảnh 2.",
+        "createdAt": "2026-10-17T14:30:00Z"
+      }
+    ]
+    ```
+
+---
+
+### 9.2. Nhóm Ưu Tiên Trung Bình (P1 - Tương Tác Sư Phạm & Quản Trị Asset)
+
+#### 📌 BE-P1-1: Phân Định Feedback Comments Theo Clip ID (`clip_id` Scoping)
+* **Vấn đề hiện tại:** Cột `clip_id` đã có trong database migration `V7` nhưng Entity `FeedbackComment` chưa map trường này. Dẫn đến các ghi chú nhận xét của lần render cũ vẫn chặn cổng duyệt (`OPEN` comment gate) của bản render mới.
+* **Yêu cầu BE:**
+  - Map `clipId` vào Entity `FeedbackComment` và DTO request/response.
+  - Sửa `ReviewGate`: Khi kiểm tra điều kiện duyệt Clip mới (bản render B), chỉ đếm các comment có trạng thái `OPEN` thuộc về chính `clipId` đó (bỏ qua comment của clip A cũ).
+
+---
+
+#### 📌 BE-P1-2: Bình Luận Phân Nhánh & Nhật Ký Giải Quyết (Threaded Comments & Resolve Audit)
+* **Mục tiêu:** Cho phép Writer/Producer trả lời góp ý của Reviewer và ghi nhận ai là người giải quyết comment.
+* **Database Migration (Flyway `V21__feedback_comment_replies.sql`):**
+  ```sql
+  ALTER TABLE feedback_comments 
+    ADD COLUMN parent_id VARCHAR(36) REFERENCES feedback_comments(id) ON DELETE CASCADE,
+    ADD COLUMN resolved_by VARCHAR(36) REFERENCES users(id),
+    ADD COLUMN resolved_at TIMESTAMP WITH TIME ZONE;
+  ```
+* **Endpoints cần mở rộng:**
+  - `POST /api/v1/qa-comments/{commentId}/replies`: Gửi phản hồi thảo luận.
+  - `PUT /api/v1/qa-comments/{commentId}/resolve`: Ghi nhận `resolvedBy = currentUser`, `resolvedAt = NOW()`.
+
+---
+
+#### 📌 BE-P1-3: API Gợi Ý Đồ Họa STEM Thông Minh (`POST /api/v1/ai/assets/recommend`)
+* **Mục tiêu:** Bổ sung tính năng gợi ý tài nguyên hình ảnh theo ngữ cảnh lời thoại tương tự Google Vids.
+* **Đặc tả API:**
+  - `POST /api/v1/ai/assets/recommend`
+  - **Request Body:**
+    ```json
+    {
+      "narration": "Mô phỏng phản ứng giữa Axit Clohidric và Natri Hydroxit tạo thành muối và nước.",
+      "sceneType": "CHEMICAL_REACTION",
+      "subject": "Chemistry"
+    }
+    ```
+  - **Response Body:**
+    ```json
+    {
+      "recommendedAssets": [
+        {
+          "id": "asset-beaker-01",
+          "name": "Cốc Thí Nghiệm Đong Hóa Chất",
+          "svgUrl": "/assets/stem/chemistry/beaker.svg",
+          "previewUrl": "/assets/stem/chemistry/beaker.png",
+          "tags": ["axit", "dung dịch", "thí nghiệm"]
+        }
+      ]
+    }
+    ```
+
+---
+
+#### 📌 BE-P1-4: Mở Rộng Quản Lý Thuộc Tính Template Trên Admin Portal
+* **Yêu cầu:** Mở rộng API `PUT /api/v1/admin/templates/{id}` cho phép Admin:
+  - Bật/Tắt template (`isActive: boolean`).
+  - Cấu hình môn học khuyến nghị (`recommendedSubjects: string[]`).
+  - Gán bộ Visual Theme mặc định phù hợp với từng template.
+
+---
+
+#### 📌 BE-P1-5: Dịch Vụ Tải Lên Asset Đồ Họa Của Người Dùng (MinIO / S3 Storage)
+* **Đặc tả API:**
+  - `POST /api/v1/assets/upload` (Content-Type: `multipart/form-data`)
+  - **Hỗ trợ định dạng:** `.svg`, `.png`, `.jpg`, dung lượng tối đa 5MB.
+  - **Xử lý:** Lưu trữ vào bucket MinIO/S3, quét mã độc, và trả về CDN public URL để nhúng trực tiếp vào các Scene Remotion.
+
+---
+
+### 9.3. Nhóm Ưu Tiên Nâng Cao (P2 - Xuất Bản Ngoại Vi & LMS Giáo Dục)
+
+#### 📌 BE-P2-1: Tích Hợp OAuth 2.0 Cho YouTube Data API v3
+* **Vấn đề hiện tại:** Endpoint `/api/v1/scripts/{id}/publish` với target `YOUTUBE` hiện đang trả về `503 PUBLISH_TARGET_UNAVAILABLE`.
+* **Yêu cầu BE:**
+  - Tích hợp Google OAuth2 flow lấy `access_token` và `refresh_token` với scope `https://www.googleapis.com/auth/youtube.upload`.
+  - Background Job upload video thành phẩm lên kênh YouTube của giáo viên kèm tiêu đề, mô tả và tags STEM.
+
+---
+
+#### 📌 BE-P2-2: Đóng Gói Khóa Học Xuất Chuẩn SCORM 1.2 / 2004 Cho Hệ Thống LMS
+* **Mục tiêu:** Cho phép xuất toàn bộ video bài giảng và câu hỏi tương tác `STEM_QUIZ` thành gói bài giảng chuẩn quốc tế để nạp vào Moodle, Canvas LMS, hoặc Blackboard.
+* **Đặc tả API:**
+  - `GET /api/v1/scripts/{id}/export/scorm?version=1.2`
+  - **Response:** File nén `.zip` chứa file cấu trúc `imsmanifest.xml`, video MP4 và gói trắc nghiệm SCORM API Wrapper ghi nhận điểm số học sinh về Sổ điểm LMS.
+
+---
+
+### 9.4. Ma Trận Theo Dõi Phối Hợp Giữa Frontend & Backend
+
+| Mã Công Việc | Tên Hạng Mục | Trạng Thái FE | Trạng Thái BE | API / Contract Phối Hợp |
+| :--- | :--- | :---: | :---: | :--- |
+| **BE-P0-1** | Lưu & Đồng Bộ Visual Theme | ✅ Sẵn sàng | ⏳ Chờ làm | `POST/PUT /scripts/{id}/composition` (`visualTheme`) |
+| **BE-P0-2** | Sync Audio & Phụ Đề Whisper | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /scripts/{id}/sync-durations` |
+| **BE-P0-3** | Neural TTS Preview Proxy | ✅ Sẵn sàng | ⏳ Chờ làm | `GET /scripts/{id}/tts-preview` |
+| **BE-P0-4** | Lịch Sử Thẩm Định Review History | ✅ Sẵn sàng | ⏳ Chờ làm | `GET /scripts/{id}/review-history` |
+| **BE-P1-1** | Comment Scoping theo Clip ID | ✅ Sẵn sàng | ⏳ Chờ làm | `FeedbackComment.clipId` |
+| **BE-P1-2** | Threaded Comments & Resolve | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /qa-comments/{id}/replies` |
+| **BE-P1-3** | AI Asset Recommendation | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /api/v1/ai/assets/recommend` |
+| **BE-P1-4** | Template Catalog Cấu Hình Theme | ✅ Sẵn sàng | ⏳ Chờ làm | `PUT /admin/templates/{id}` |
+| **BE-P1-5** | Tải lên Media (MinIO Upload) | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /api/v1/assets/upload` |
+| **BE-P2-1** | Xuất bản YouTube OAuth API v3 | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /scripts/{id}/publish` (`YOUTUBE`) |
+| **BE-P2-2** | Đóng gói bài giảng SCORM / LTI | ⏳ Chờ BE | ⏳ Chờ làm | `GET /scripts/{id}/export/scorm` |
+
+
 

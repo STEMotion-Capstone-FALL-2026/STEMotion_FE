@@ -15,12 +15,23 @@ import {
   X,
   RefreshCw,
   Download,
+  Palette,
 } from 'lucide-react';
 import { STEMScript, SceneData } from '../../../types/stem';
 import { renderService, RenderHistoryEntry } from '../../../services';
 import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
 import { SceneListColumn } from './SceneListColumn';
 import { SceneInspector } from './SceneInspector';
+
+export type VisualTheme = 'default' | 'cyber' | 'emerald' | 'sunset' | 'academic';
+
+export const THEME_OPTIONS: { id: VisualTheme; name: string; icon: string; previewClass: string }[] = [
+  { id: 'default', name: 'Hiện đại (Indigo)', icon: '✨', previewClass: 'from-indigo-600 to-purple-700' },
+  { id: 'cyber', name: 'Dark Cyber (Tin / Lý)', icon: '⚡', previewClass: 'from-slate-900 via-cyan-950 to-slate-900' },
+  { id: 'emerald', name: 'Nature Lab (Sinh / Hóa)', icon: '🌿', previewClass: 'from-emerald-700 to-teal-800' },
+  { id: 'sunset', name: 'Sáng tạo (Đại chúng)', icon: '🌅', previewClass: 'from-amber-600 to-rose-600' },
+  { id: 'academic', name: 'Học thuật (Toán học)', icon: '📘', previewClass: 'from-slate-800 to-slate-900' },
+];
 
 /** The producer's draft of the approved script (Production Workspace). */
 export interface ProductionDraftInfo {
@@ -98,6 +109,20 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   const [historyJobs, setHistoryJobs] = useState<RenderHistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+  const [selectedTheme, setSelectedTheme] = useState<VisualTheme>(
+    () => ((script as any).visualTheme as VisualTheme) || 'default'
+  );
+
+  const handleSelectTheme = (themeId: VisualTheme) => {
+    setSelectedTheme(themeId);
+    (script as any).visualTheme = themeId;
+    // Embed theme seed suffix into workspaceId so RemotionPlayer picks up variation if workspace is present
+    if (script.workspaceId) {
+      const baseWorkspace = script.workspaceId.split('::')[0];
+      script.workspaceId = themeId === 'default' ? baseWorkspace : `${baseWorkspace}::${themeId}`;
+    }
+    showToast?.(`Đã áp dụng phong cách hình ảnh: ${THEME_OPTIONS.find(t => t.id === themeId)?.name}`, 'info');
+  };
 
   useEffect(() => {
     setActiveLegoPieceId(null);
@@ -160,13 +185,24 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          {/* <button
-            onClick={onOpenCreateProjectModal}
-            className="px-3 py-1.5 bg-blue-50 text-brand-700 hover:bg-blue-100 font-bold rounded-lg border border-blue-200 flex items-center space-x-1 shadow-xs"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>+ Đề Tài Mới</span>
-          </button> */}
+          {/* Google Vids Theme Selector */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+            <Palette className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="text-[11px] text-slate-500 font-medium">Style:</span>
+            <select
+              value={selectedTheme}
+              onChange={(e) => handleSelectTheme(e.target.value as VisualTheme)}
+              className="bg-transparent text-xs font-semibold text-slate-800 border-none outline-none cursor-pointer pr-1"
+              title="Chọn bộ Theme màu & phong cách hình ảnh đồng nhất (Google Vids style)"
+            >
+              {THEME_OPTIONS.map((theme) => (
+                <option key={theme.id} value={theme.id}>
+                  {theme.icon} {theme.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {!production && (
           <button
             onClick={onOpenTemplateCatalog}
@@ -176,21 +212,26 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
             <span>Đổi Tài Nguyên STEM</span>
           </button>
           )}
+
           <button
             onClick={() => {
+              let adjustedCount = 0;
               script.scenes.forEach((sc) => {
                 if (sc.narration && sc.narration.trim()) {
                   const words = sc.narration.trim().split(/\s+/).filter(Boolean).length;
-                  const estSeconds = Math.max(3, Math.ceil(words / 2.3) + 1);
+                  // Google Vids auto-fit pacing: Vietnamese TTS ~2.3 words/sec + 0.5s cushion buffer
+                  const estSeconds = Math.max(4, Math.ceil(words / 2.3) + 1);
                   handleChangeDuration(sc.id, estSeconds);
+                  adjustedCount++;
                 }
               });
+              showToast?.(`⚡ Đã tự động khớp thời lượng cho ${adjustedCount} phân cảnh theo lời thoại`, 'success');
             }}
-            className="px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 font-semibold rounded-lg border border-amber-200 flex items-center space-x-1 shadow-xs cursor-pointer"
-            title="Ước lượng thời lượng từ số từ trong lời thoại; chưa đo audio TTS thực tế"
+            className="px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 font-semibold rounded-lg border border-amber-200 flex items-center space-x-1.5 shadow-xs cursor-pointer transition-colors"
+            title="Tự động căn chỉnh độ dài (frames) của toàn bộ phân cảnh cho khớp với lời thoại đọc mẫu (~2.3 từ/giây)"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-            <span>Ước lượng thời lượng</span>
+            <span>⚡ Tự Khớp Giọng Đọc</span>
           </button>
           {onSubmitForReview && (
             <button
