@@ -63,6 +63,8 @@ export interface SceneBase {
    * TTS; absent in the browser Player, where the preview stays silent.
    */
   narrationAudioUrl?: string;
+  /** Whisper-aligned words of the narration, seconds from the scene start (set by the render worker). */
+  captionWords?: { text: string; start: number; end: number }[];
   type: SceneType;
   title: string;
   narration: string;

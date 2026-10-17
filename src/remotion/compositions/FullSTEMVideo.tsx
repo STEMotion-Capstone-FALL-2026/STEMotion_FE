@@ -19,6 +19,7 @@ import { ComposedScene } from '../composed/ComposedScene';
 import { CinematicScene } from '../director/CinematicScene';
 import { SceneSeedContext, VideoSeedContext } from '../flat/variation';
 import { LegoSceneProvider } from '../lego/LegoBlock';
+import { CaptionTrack } from '../captions/CaptionTrack';
 
 const renderRawSceneComponent = (scene: SceneData) => {
   if (scene.visualPlan) return <CinematicScene plan={scene.visualPlan} />;
@@ -115,6 +116,8 @@ export const FullSTEMVideo: React.FC<{ script: STEMScript }> = ({ script }) => {
               <SceneSeedContext.Provider value={scene.id}>{renderSceneComponent(scene)}</SceneSeedContext.Provider>
             </SceneErrorBoundary>
             {narrationUrl && <Audio src={narrationUrl} />}
+            {/* Word-timed captions, present when the worker aligned this scene with Whisper. */}
+            <CaptionTrack words={scene.captionWords} />
           </Series.Sequence>
         );
       })}
