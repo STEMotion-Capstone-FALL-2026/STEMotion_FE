@@ -335,8 +335,8 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
                 ? currentRole === 'producer'
                   ? 'Chưa có kịch bản nào được phê duyệt để dựng video. Khi Reviewer duyệt kịch bản, dự án sẽ xuất hiện tại đây.'
                   : currentRole === 'reviewer'
-                  ? 'Hiện chưa có kịch bản hoặc video nào cần thẩm định trong tổ này.'
-                  : 'Tổ bộ môn chưa có kịch bản nào. Hãy bấm "Tạo Kịch Bản Mới" để bắt đầu.'
+                  ? 'Hiện chưa có kịch bản hoặc video nào cần thẩm định trong nhóm này.'
+                  : 'Nhóm chưa có kịch bản nào. Hãy bấm "Tạo Kịch Bản Mới" để bắt đầu.'
                 : 'Thử đổi từ khóa tìm kiếm hoặc chọn bộ lọc trạng thái khác.'}
             </p>
             {canCreate && roleAccessibleScripts.length === 0 && (
@@ -408,7 +408,7 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
                   <div className="mt-auto flex items-center justify-between pt-1">
                     <div className="text-[11px] text-slate-400 flex items-center space-x-1">
                       <User className="w-3 h-3" />
-                      <span>{sc.ownerName || 'Thành viên tổ'}</span>
+                      <span>{sc.ownerName || 'Thành viên nhóm'}</span>
                     </div>
 
                     {currentRole === 'producer' ? (

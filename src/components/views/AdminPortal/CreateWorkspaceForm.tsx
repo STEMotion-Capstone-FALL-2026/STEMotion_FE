@@ -33,7 +33,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
           }
         }
       } catch (err: any) {
-        if (!cancelled) setError('Không thể tải danh sách tài khoản để chọn Tổ trưởng.');
+        if (!cancelled) setError('Không thể tải danh sách tài khoản để chọn Trưởng nhóm.');
       } finally {
         if (!cancelled) setLoadingUsers(false);
       }
@@ -62,7 +62,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
       setDepartment('');
       onWorkspaceCreated?.(created);
     } catch (err: any) {
-      setError(err?.message || 'Không thể tạo tổ chuyên môn.');
+      setError(err?.message || 'Không thể tạo không gian làm việc.');
     } finally {
       setBusy(false);
     }
@@ -75,33 +75,33 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
           <Building2 className="w-4 h-4" />
         </div>
         <div>
-          <h2 className="font-extrabold text-sm text-slate-900">Tạo Tổ Chuyên Môn Mới</h2>
+          <h2 className="font-extrabold text-sm text-slate-900">Tạo Không Gian Làm Việc Mới</h2>
           <p className="text-[11px] text-slate-500">
-            Tạo không gian làm việc cho tổ bộ môn và chỉ định Tổ trưởng phụ trách ngay từ đầu.
+            Tạo không gian làm việc (Workspace) cho nhóm sản xuất và chỉ định Trưởng nhóm phụ trách ngay từ đầu.
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label className="block">
-          <span className="font-semibold text-slate-700">Tên tổ chuyên môn *</span>
+          <span className="font-semibold text-slate-700">Tên Không gian làm việc *</span>
           <input
             type="text"
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Ví dụ: Tổ Vật Lý - Khối 11"
+            placeholder="Ví dụ: Team Vật Lý - K11 hoặc Kênh STEM Motion"
             className="mt-1 block w-full border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
           />
         </label>
 
         <label className="block">
-          <span className="font-semibold text-slate-700">Phòng ban / Môn học</span>
+          <span className="font-semibold text-slate-700">Bộ môn / Lĩnh vực</span>
           <input
             type="text"
             value={department}
             onChange={(e) => setDepartment(e.target.value)}
-            placeholder="Ví dụ: Khoa Khoa Học Tự Nhiên"
+            placeholder="Ví dụ: Khoa học Tự nhiên / EdTech Content"
             className="mt-1 block w-full border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
           />
         </label>
@@ -109,7 +109,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label className="block">
-          <span className="font-semibold text-slate-700">Chỉ định Tổ trưởng *</span>
+          <span className="font-semibold text-slate-700">Chỉ định Trưởng nhóm *</span>
           <select
             required
             value={leaderUserId}
@@ -118,7 +118,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
             className="mt-1 block w-full border border-slate-200 bg-white rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
           >
             {users.length === 0 ? (
-              <option value="">{loadingUsers ? 'Đang tải người dùng...' : 'Chưa có giáo viên nào (vui lòng tạo tài khoản Giáo viên trước)'}</option>
+              <option value="">{loadingUsers ? 'Đang tải người dùng...' : 'Chưa có thành viên nào (vui lòng tạo tài khoản Thành viên trước)'}</option>
             ) : (
               users.map((u) => (
                 <option key={u.id} value={u.id}>
@@ -130,7 +130,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
         </label>
 
         <label className="block">
-          <span className="font-semibold text-slate-700">Vai trò của Tổ trưởng trong tổ</span>
+          <span className="font-semibold text-slate-700">Vai trò của Trưởng nhóm trong nhóm</span>
           <select
             value={leaderRole}
             onChange={(e) => setLeaderRole(e.target.value)}
@@ -153,7 +153,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
       {createdName && (
         <div role="status" className="p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 flex items-start space-x-2">
           <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>Đã tạo thành công tổ &quot;{createdName}&quot; cùng Tổ trưởng phụ trách.</span>
+          <span>Đã tạo thành công không gian làm việc &quot;{createdName}&quot; cùng Trưởng nhóm phụ trách.</span>
         </div>
       )}
 
@@ -163,7 +163,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
         className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center space-x-1.5 shadow-xs"
       >
         <PlusCircle className="w-4 h-4" />
-        <span>{busy ? 'Đang tạo tổ…' : 'Tạo tổ chuyên môn'}</span>
+        <span>{busy ? 'Đang tạo…' : 'Tạo không gian làm việc'}</span>
       </button>
     </form>
   );

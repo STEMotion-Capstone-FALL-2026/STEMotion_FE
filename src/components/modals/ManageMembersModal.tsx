@@ -200,13 +200,13 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
       });
       setSuccessMsg(
         !member.isLeader
-          ? `Đã bổ nhiệm ${member.name} làm Tổ trưởng.`
-          : `Đã hạ quyền Tổ trưởng của ${member.name}.`
+          ? `Đã bổ nhiệm ${member.name} làm Trưởng nhóm.`
+          : `Đã hạ quyền Trưởng nhóm của ${member.name}.`
       );
       await loadData(activeWorkspaceId);
       onMembersUpdated?.();
     } catch (err: any) {
-      setError(err?.message || 'Không thể thay đổi quyền Tổ trưởng.');
+      setError(err?.message || 'Không thể thay đổi quyền Trưởng nhóm.');
     } finally {
       setActionBusy(false);
     }
@@ -235,11 +235,11 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   const currentWsObj = workspaceList.find((w) => w.id === activeWorkspaceId);
   const currentWsDisplayName =
     currentWsObj?.name ||
-    (activeWorkspaceId === workspaceId && workspaceName !== 'Chưa có tổ' ? workspaceName : 'Tổ bộ môn');
+    (activeWorkspaceId === workspaceId && workspaceName !== 'Chưa có nhóm' ? workspaceName : 'Không gian làm việc');
 
   const handleRemoveMember = async (member: WorkspaceMemberDto) => {
     if (!activeWorkspaceId) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa "${member.name}" khỏi tổ ${currentWsDisplayName}?`)) {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa "${member.name}" khỏi nhóm ${currentWsDisplayName}?`)) {
       return;
     }
     setActionBusy(true);
@@ -247,11 +247,11 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     setSuccessMsg(null);
     try {
       await workspaceService.removeMember(activeWorkspaceId, member.id);
-      setSuccessMsg(`Đã xóa ${member.name} khỏi tổ.`);
+      setSuccessMsg(`Đã xóa ${member.name} khỏi nhóm.`);
       await loadData(activeWorkspaceId);
       onMembersUpdated?.();
     } catch (err: any) {
-      setError(err?.message || 'Không thể xóa thành viên khỏi tổ.');
+      setError(err?.message || 'Không thể xóa thành viên khỏi nhóm.');
     } finally {
       setActionBusy(false);
     }
@@ -278,7 +278,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                       value={activeWorkspaceId}
                       onChange={(e) => handleSwitchWorkspace(e.target.value)}
                       className="font-bold text-xs text-brand-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg pl-8 pr-7 py-1 focus:ring-2 focus:ring-brand-500 focus:outline-hidden cursor-pointer transition-colors shadow-2xs appearance-none max-w-xs truncate"
-                      title="Chuyển đổi Tổ chuyên môn để quản lý"
+                      title="Chuyển đổi Không gian làm việc để quản lý"
                     >
                       {workspaceList.map((ws) => (
                         <option key={ws.id} value={ws.id}>
@@ -296,8 +296,8 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">
                 {isCurrentUserAdminOrLeader
-                  ? 'Chuyển đổi tổ chuyên môn để quản lý thành viên, phân công vai trò và chỉ định Tổ trưởng.'
-                  : 'Danh sách thành viên hiện tại trong tổ.'}
+                  ? 'Chuyển đổi không gian làm việc để quản lý thành viên, phân công vai trò và chỉ định Trưởng nhóm.'
+                  : 'Danh sách thành viên hiện tại trong nhóm.'}
               </p>
             </div>
           </div>
@@ -332,12 +332,12 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
           >
             <div className="flex items-center space-x-2 font-bold text-slate-800">
               <UserPlus className="w-4 h-4 text-brand-600" />
-              <span>Gán thành viên mới vào tổ</span>
+              <span>Gán thành viên mới vào nhóm</span>
             </div>
 
             {candidates.length === 0 ? (
               <p className="text-slate-500 text-[11px]">
-                Tất cả người dùng hệ thống hiện tại đã là thành viên của tổ này.
+                Tất cả người dùng hệ thống hiện tại đã là thành viên của nhóm này.
               </p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
@@ -351,7 +351,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                     required
                     className="w-full border border-slate-200 bg-white rounded-lg p-2 text-xs"
                   >
-                    <option value="">-- Chọn giáo viên / người dùng --</option>
+                    <option value="">-- Chọn thành viên / người dùng --</option>
                     {candidates.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.fullName} ({c.email})
@@ -362,7 +362,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
 
                 <div className="md:col-span-3">
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Vai trò trong tổ
+                    Vai trò trong nhóm
                   </label>
                   <select
                     value={newMemberRole}
@@ -383,7 +383,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                       onChange={(e) => setNewMemberIsLeader(e.target.checked)}
                       className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                     />
-                    <span className="font-semibold text-slate-700 text-[11px]">Tổ trưởng</span>
+                    <span className="font-semibold text-slate-700 text-[11px]">Trưởng nhóm</span>
                   </label>
                 </div>
 
@@ -414,7 +414,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
           </div>
 
           {members.length === 0 && !isLoading && (
-            <p className="text-slate-400 py-6 text-center">Tổ chưa có thành viên nào.</p>
+            <p className="text-slate-400 py-6 text-center">Nhóm chưa có thành viên nào.</p>
           )}
 
           <div className="divide-y divide-slate-100">
@@ -433,7 +433,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                       {m.isLeader && (
                         <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold text-[10px] border border-amber-200 flex items-center space-x-0.5">
                           <ShieldCheck className="w-3 h-3 text-amber-600" />
-                          <span>Tổ trưởng</span>
+                          <span>Trưởng nhóm</span>
                         </span>
                       )}
                       {m.status === 'INACTIVE' && (
@@ -467,14 +467,14 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                         type="button"
                         disabled={actionBusy}
                         onClick={() => handleToggleLeader(m)}
-                        title={m.isLeader ? 'Hạ quyền tổ trưởng' : 'Đặt làm tổ trưởng'}
+                        title={m.isLeader ? 'Hạ quyền Trưởng nhóm' : 'Đặt làm Trưởng nhóm'}
                         className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
                           m.isLeader
                             ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
                             : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                         }`}
                       >
-                        {m.isLeader ? 'Bỏ Tổ trưởng' : '+ Làm Tổ trưởng'}
+                        {m.isLeader ? 'Bỏ Trưởng nhóm' : '+ Làm Trưởng nhóm'}
                       </button>
 
                       {/* Toggle Status */}
