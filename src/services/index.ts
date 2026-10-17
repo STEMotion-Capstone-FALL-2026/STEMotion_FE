@@ -10,4 +10,5 @@ export * from './scriptService';
 export * from './renderService';
 export * from './reviewService';
 export * from './adminService';
+export * from './libraryService';
 export type { UserRole } from '../types/stem';

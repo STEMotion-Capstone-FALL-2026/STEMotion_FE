@@ -24,7 +24,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 }) => {
   const [newProjTitle, setNewProjTitle] = useState('');
   const [newProjSubject, setNewProjSubject] = useState<STEMSubject>('Physics');
-  const [newProjGrade, setNewProjGrade] = useState('Lớp 10');
+  const [newProjGrade, setNewProjGrade] = useState('Đại chúng');
   // Writers write the script; an AI draft is an optional suggestion they review first.
   const [useAi, setUseAi] = useState(false);
   const [targetDurationSec, setTargetDurationSec] = useState<number>(0);
@@ -118,16 +118,16 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="font-bold text-slate-700 block mb-1">Khối Lớp:</label>
+              <label className="font-bold text-slate-700 block mb-1">Cấp độ / Định dạng:</label>
               <select
                 value={newProjGrade}
                 onChange={(e) => setNewProjGrade(e.target.value)}
                 className="w-full p-2 border border-slate-200 rounded-lg bg-white"
               >
-                <option value="Lớp 9">Lớp 9</option>
-                <option value="Lớp 10">Lớp 10</option>
-                <option value="Lớp 11">Lớp 11</option>
-                <option value="Lớp 12">Lớp 12</option>
+                <option value="Đại chúng">Đại chúng (General STEM)</option>
+                <option value="Cơ bản">Cơ bản / Khái niệm</option>
+                <option value="Nâng cao">Nâng cao / Chuyên sâu</option>
+                <option value="EdTech">EdTech / Khóa học ngắn</option>
               </select>
             </div>
           </div>

@@ -10,9 +10,9 @@ import { STEMScript, WorkspaceMember, FeedbackComment, Workspace } from '@/types
 
 export const DEFAULT_SAMPLE_SCRIPT: STEMScript = {
   id: 'proj_pendulum_physics_11',
-  title: 'Con Lắc Đơn & Dao Động Điều Hòa Vật Lý 11',
+  title: 'Con Lắc Đơn & Dao Động Điều Hòa Vật Lý',
   subject: 'Physics',
-  gradeLevel: 'Lớp 11',
+  gradeLevel: 'Đại chúng',
   totalDurationSeconds: 35,
   scriptStatus: 'APPROVED',
   videoStatus: 'IN_QA',
@@ -25,9 +25,9 @@ export const DEFAULT_SAMPLE_SCRIPT: STEMScript = {
       title: 'Dao Động Tuần Hoàn Của Con Lắc Đơn',
       subtitle: 'Khám phá chu kỳ dao động T, tần số f và gia tốc trọng trường g thông qua chuyển động thực tế',
       subject: 'Physics',
-      gradeLevel: 'Lớp 11 • Nâng cao',
-      badgeText: 'Chương trình GDPT mới',
-      narration: 'Chào mừng các bạn đến với bài học vật lý 11. Hôm nay chúng ta sẽ tìm hiểu cơ chế dao động của con lắc đơn.',
+      gradeLevel: 'Đại chúng • Trực quan',
+      badgeText: 'STEM Visual Explainer',
+      narration: 'Chào mừng các bạn đến với video giải thích STEM. Hôm nay chúng ta sẽ tìm hiểu cơ chế dao động của con lắc đơn.',
       durationInFrames: 150,
     },
     {

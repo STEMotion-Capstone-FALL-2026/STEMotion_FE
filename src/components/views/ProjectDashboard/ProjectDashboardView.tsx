@@ -27,6 +27,8 @@ interface ProjectDashboardViewProps {
   onOpenCreateProjectModal: () => void;
   onRefresh: () => void;
   isRefreshing?: boolean;
+  scope?: 'WORKSPACE' | 'MINE';
+  onScopeChange?: (scope: 'WORKSPACE' | 'MINE') => void;
 }
 
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -54,6 +56,8 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
   onOpenCreateProjectModal,
   onRefresh,
   isRefreshing = false,
+  scope = 'WORKSPACE',
+  onScopeChange,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('ALL');
@@ -251,6 +255,32 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
           </div>
 
           <div className="flex items-center space-x-3">
+            {onScopeChange && (
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
+                <button
+                  onClick={() => onScopeChange('WORKSPACE')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    scope === 'WORKSPACE'
+                      ? 'bg-white text-slate-900 shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Kịch bản nhóm
+                </button>
+                <button
+                  onClick={() => onScopeChange('MINE')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    scope === 'MINE'
+                      ? 'bg-white text-brand-700 shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                  title="Các kịch bản do bạn làm tác giả (GET /api/v1/scripts/mine)"
+                >
+                  Của tôi
+                </button>
+              </div>
+            )}
+
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
@@ -299,7 +329,7 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Tìm theo tên bài, môn, lớp..."
+              placeholder="Tìm theo tiêu đề kịch bản, môn STEM..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:border-brand-500 shadow-2xs"
@@ -374,7 +404,7 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
                     <span
                       className={`px-2.5 py-1 rounded-md text-[11px] font-bold border ${subStyle.bg} ${subStyle.text} ${subStyle.border}`}
                     >
-                      {sc.subject} · {sc.gradeLevel}
+                      {sc.subject}
                     </span>
 
                     <span

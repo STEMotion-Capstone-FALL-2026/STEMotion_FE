@@ -49,6 +49,31 @@ export interface AiUsageStats {
   ttsProvider: string;
 }
 
+export interface AiUsageGroup {
+  day: string; // YYYY-MM-DD
+  model: string;
+  userId?: string | null;
+  requestCount: number;
+  tokensIn?: number | null;
+  tokensOut?: number | null;
+  unknownTokenRequests: number;
+  failedRequests: number;
+  estimatedCostUsd?: number | null;
+  knownEstimatedCostUsd?: number | null;
+  unknownCostRequests: number;
+}
+
+export interface AiUsagePage {
+  content: AiUsageGroup[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  from: string;
+  to: string;
+  timezone: string;
+}
+
 export interface AdminDashboardOverview {
   metrics: SystemMetrics;
   aiUsage: AiUsageStats;
@@ -164,5 +189,24 @@ export const adminService = {
 
   async getRenderJobs(): Promise<AdminRenderJobSummary[]> {
     return apiClient.get<AdminRenderJobSummary[]>('/admin/render-jobs');
+  },
+
+  async getAiUsageHistory(params?: {
+    from?: string;
+    to?: string;
+    model?: string;
+    userId?: string;
+    page?: number;
+    size?: number;
+  }): Promise<AiUsagePage> {
+    const query = new URLSearchParams();
+    if (params?.from) query.set('from', params.from);
+    if (params?.to) query.set('to', params.to);
+    if (params?.model) query.set('model', params.model);
+    if (params?.userId) query.set('userId', params.userId);
+    if (params?.page !== undefined) query.set('page', String(params.page));
+    if (params?.size !== undefined) query.set('size', String(params.size));
+    const qs = query.toString();
+    return apiClient.get<AiUsagePage>(`/admin/ai-usage${qs ? `?${qs}` : ''}`);
   },
 };

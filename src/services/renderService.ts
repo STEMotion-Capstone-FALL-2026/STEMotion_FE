@@ -74,4 +74,10 @@ export const renderService = {
     await apiClient.delete(`/render/jobs/${renderId}`);
     return true;
   },
+
+  /** Retries a failed or timed-out render job */
+  async retryRender(jobId: string): Promise<RenderJobStatus> {
+    const job = await apiClient.post<any>(`/render/jobs/${jobId}/retry`);
+    return this._toRenderJobStatus(job);
+  },
 };

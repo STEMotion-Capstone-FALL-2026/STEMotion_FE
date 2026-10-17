@@ -11,6 +11,47 @@ function toComment(c: any): FeedbackComment {
   };
 }
 
+export type QaSeverity = 'PASS' | 'WARN' | 'FAIL';
+
+export type QaCheck =
+  | 'DURATION_BOUNDS'
+  | 'NARRATION_PACING'
+  | 'ON_SCREEN_TEXT_OVERFLOW'
+  | 'CONTRAST_READABILITY'
+  | 'SCENE_STRUCTURE'
+  | 'RENDER_FRESHNESS'
+  | 'CAPTION_SYNC';
+
+export interface QaFinding {
+  check: QaCheck;
+  severity: QaSeverity;
+  sceneId?: string | null;
+  message: string;
+  suggestion?: string | null;
+}
+
+export interface QaReport {
+  projectId: string;
+  passed: boolean;
+  failCount: number;
+  warnCount: number;
+  findings: QaFinding[];
+}
+
+export interface ReviewQueueItem {
+  id: string;
+  title: string;
+  subject: string;
+  gradeLevel: string;
+  totalDurationSeconds: number;
+  sceneCount: number;
+  scriptStatus: string;
+  videoStatus: string;
+  ownerName?: string;
+  workspaceName?: string;
+  updatedAt: string;
+}
+
 /** Only server-confirmed decisions and comments are reflected in the studio. */
 export const reviewService = {
   async getComments(projectId: string): Promise<FeedbackComment[]> {
@@ -28,8 +69,8 @@ export const reviewService = {
     return projectService.getProjectById(projectId);
   },
 
-  async sendBackVideo(projectId: string): Promise<STEMScript> {
-    await apiClient.post(`/scripts/${projectId}/send-back`, {});
+  async sendBackVideo(projectId: string, note?: string): Promise<STEMScript> {
+    await apiClient.post(`/scripts/${projectId}/send-back`, { note: note || undefined });
     return projectService.getProjectById(projectId);
   },
 
@@ -45,4 +86,24 @@ export const reviewService = {
     await apiClient.put(`/qa-comments/${commentId}/resolve`, {});
     return true;
   },
+
+  async reopenComment(commentId: string): Promise<boolean> {
+    await apiClient.put(`/qa-comments/${commentId}/reopen`, {});
+    return true;
+  },
+
+  async deleteComment(commentId: string): Promise<boolean> {
+    await apiClient.delete(`/qa-comments/${commentId}`);
+    return true;
+  },
+
+  async getQaReport(projectId: string): Promise<QaReport> {
+    return apiClient.get<QaReport>(`/scripts/${projectId}/qa-report`);
+  },
+
+  async getReviewQueue(): Promise<ReviewQueueItem[]> {
+    const res = await apiClient.get<ReviewQueueItem[]>('/scripts/review-queue');
+    return Array.isArray(res) ? res : [];
+  },
 };
+

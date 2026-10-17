@@ -61,7 +61,7 @@ const res = await apiClient.post<any>('/ai/script/action', {
       action,
       scriptText,
       subject: subject || 'Math',
-      gradeLevel: gradeLevel || 'Lớp 10',
+      gradeLevel: gradeLevel || 'Đại chúng',
     });
     return {
       action,

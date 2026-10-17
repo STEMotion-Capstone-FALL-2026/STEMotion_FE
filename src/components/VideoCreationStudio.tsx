@@ -28,9 +28,9 @@ export const VideoCreationStudio: React.FC = () => {
   const [activeSceneId, setActiveSceneId] = useState<string>(script.scenes[0].id);
 
   // Topic prompt state
-  const [promptTopic, setPromptTopic] = useState('Con Lắc Đơn & Dao Động Điều Hòa Vật Lý 11');
+  const [promptTopic, setPromptTopic] = useState('Con Lắc Đơn & Dao Động Điều Hòa Vật Lý');
   const [subject, setSubject] = useState<STEMSubject>('Physics');
-  const [gradeLevel, setGradeLevel] = useState('Lớp 11');
+  const [gradeLevel, setGradeLevel] = useState('Đại chúng');
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Render Hub state
@@ -50,25 +50,25 @@ export const VideoCreationStudio: React.FC = () => {
     {
       title: 'Con Lắc Đơn & Dao Động Điều Hòa',
       subject: 'Physics' as STEMSubject,
-      grade: 'Lớp 11',
+      grade: 'Đại chúng',
       desc: 'Mô phỏng chu kỳ T, công thức vi tích phân KaTeX và code mô phỏng Euler trong Python.',
     },
     {
       title: 'Đạo Hàm & Tiếp Tuyến Đường Cong',
       subject: 'Math' as STEMSubject,
-      grade: 'Lớp 12',
+      grade: 'Cơ bản',
       desc: 'Trực quan hóa đạo hàm bằng giới hạn tỉ số delta y / delta x và minh họa đồ thị.',
     },
     {
       title: 'Phản Ứng Oxi Hóa - Khử & Cân Bằng Electron',
       subject: 'Chemistry' as STEMSubject,
-      grade: 'Lớp 10',
+      grade: 'Đại chúng',
       desc: 'Cơ chế trao đổi e, sơ đồ thăng bằng electron và câu hỏi trắc nghiệm kiểm tra nhanh.',
     },
     {
       title: 'Thuật Toán Tìm Kiếm Nhị Phân (Binary Search)',
       subject: 'ComputerScience' as STEMSubject,
-      grade: 'Lớp 11',
+      grade: 'Nâng cao',
       desc: 'Trace từng bước mảng chia đôi O(log N), trực quan hóa con trỏ Low/Mid/High.',
     },
   ];

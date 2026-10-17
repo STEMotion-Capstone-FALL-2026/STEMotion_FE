@@ -33,7 +33,7 @@ export const TemplateCatalogModal: React.FC<TemplateCatalogModalProps> = ({
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <span>Kho Template Phân Cảnh STEMotion 4.0</span>
                 <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-mono font-bold">
-                  11 Templates Chuẩn GDPT
+                  11 Mẫu Phân Cảnh STEM
                 </span>
               </h3>
               <p className="text-[11px] text-slate-500">
@@ -121,7 +121,7 @@ export const TemplateCatalogModal: React.FC<TemplateCatalogModalProps> = ({
 
         {/* Footer */}
         <div className="flex justify-between items-center pt-3 border-t border-slate-100 text-[11px] text-slate-500 shrink-0 font-mono">
-          <span>Được xây dựng chuẩn sư phạm chương trình GDPT 2018</span>
+          <span>Được tối ưu cho video giải thích STEM trực quan ngắn</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-lg"

@@ -749,13 +749,13 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-600 font-bold block mb-0.5">Khối Lớp:</label>
+                <label className="text-[10px] text-slate-600 font-bold block mb-0.5">Cấp độ / Phân loại:</label>
                 <input
                   type="text"
                   value={(selectedScene as any).gradeLevel || ''}
                   onChange={(e) => updateSceneProperty((s) => ({ ...s, gradeLevel: e.target.value }))}
                   className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white font-medium"
-                  placeholder="Lớp 10 / 11 / 12"
+                  placeholder="Cơ bản / Nâng cao / Đại chúng"
                 />
               </div>
             </div>

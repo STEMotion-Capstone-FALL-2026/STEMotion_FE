@@ -29,6 +29,13 @@ export const projectService = {
     return filterSubject ? list.filter((p) => p.subject === filterSubject) : list;
   },
 
+  /** Scripts authored by the current authenticated user across all workspaces (GET /api/v1/scripts/mine). */
+  async getMyScripts(filterSubject?: STEMSubject): Promise<STEMScript[]> {
+    const list = await apiClient.get<STEMScript[]>('/scripts/mine');
+    const safeList = Array.isArray(list) ? list : [];
+    return filterSubject ? safeList.filter((p) => p.subject === filterSubject) : safeList;
+  },
+
   /** One script in full, including its ordered scenes. */
   async getProjectById(id: string): Promise<STEMScript> {
     return apiClient.get<STEMScript>(`/scripts/${id}`);

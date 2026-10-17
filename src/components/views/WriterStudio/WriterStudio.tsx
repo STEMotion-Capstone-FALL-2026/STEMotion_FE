@@ -878,7 +878,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                   <BarChart2 className="w-4 h-4 text-brand-600" />
                   <span>2. Chấm Độ Khó (Readability)</span>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-0.5">Đánh giá theo khối lớp</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Đo độ dễ hiểu & đối tượng tiếp cận</p>
               </button>
 
               <button

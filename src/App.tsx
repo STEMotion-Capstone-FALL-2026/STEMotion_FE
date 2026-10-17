@@ -567,16 +567,26 @@ export default function App() {
     }
   };
 
-  const refreshProjectsList = async () => {
+  const [dashboardScope, setDashboardScope] = useState<'WORKSPACE' | 'MINE'>('WORKSPACE');
+
+  const refreshProjectsList = async (overrideScope?: 'WORKSPACE' | 'MINE') => {
+    const scopeToUse = overrideScope || dashboardScope;
     setIsFetchingProjects(true);
     try {
-      const list = await projectService.getProjects();
+      const list = scopeToUse === 'MINE'
+        ? await projectService.getMyScripts()
+        : await projectService.getProjects();
       setProjectsList(list);
     } catch (e: any) {
       showToast('Không làm mới được danh sách: ' + (e?.message || 'lỗi máy chủ'), 'warn');
     } finally {
       setIsFetchingProjects(false);
     }
+  };
+
+  const handleScopeChange = (newScope: 'WORKSPACE' | 'MINE') => {
+    setDashboardScope(newScope);
+    void refreshProjectsList(newScope);
   };
 
   /** Opens another project of the workspace, e.g. from the dashboard or pipeline board. */
@@ -748,7 +758,7 @@ export default function App() {
         }
         if (response?.estimatedGrade) {
           details.push(
-            `Khoi lop danh gia: ${response.estimatedGrade} (${
+            `Cap do tiep can danh gia: ${response.estimatedGrade} (${
               response.matchesTargetGrade ? 'Khop chuan muc tieu' : 'Can tinh chinh'
             })`
           );
@@ -912,6 +922,8 @@ export default function App() {
           onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
           onRefresh={() => void refreshProjectsList()}
           isRefreshing={isFetchingProjects}
+          scope={dashboardScope}
+          onScopeChange={handleScopeChange}
         />
       )}
 
@@ -983,6 +995,7 @@ export default function App() {
             }
             showToast('Video đã nằm trong hàng đợi QA trên máy chủ.', 'info');
           }}
+          showToast={showToast}
         />
       )}
 
@@ -1004,6 +1017,7 @@ export default function App() {
           handleAddComment={handleAddComment}
           onRoleChange={handleRoleChange}
           onOpenPublishModal={() => setIsPublishModalOpen(true)}
+          onOpenProject={openProject}
           showToast={showToast}
         />
       )}
@@ -1052,6 +1066,7 @@ export default function App() {
         <MediaLibraryView
           script={script}
           onOpenPublishModal={() => setIsPublishModalOpen(true)}
+          showToast={showToast}
         />
       )}
 

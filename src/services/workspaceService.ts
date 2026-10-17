@@ -138,6 +138,30 @@ export const workspaceService = {
     return this._toWorkspaceSummary(created);
   },
 
+  async getWorkspaceById(id: string): Promise<WorkspaceSummary> {
+    const raw = await apiClient.get<any>(`/workspaces/${id}`);
+    return this._toWorkspaceSummary(raw);
+  },
+
+  async updateWorkspace(
+    id: string,
+    data: { name: string; department?: string; leaderUserId: string; leaderRole?: string }
+  ): Promise<WorkspaceSummary> {
+    const updated = await apiClient.put<any>(`/workspaces/${id}`, {
+      name: data.name,
+      department: data.department,
+      leaderUserId: data.leaderUserId,
+      leaderRole: data.leaderRole ? data.leaderRole.toUpperCase() : 'WRITER',
+    });
+    cachedWorkspaces = null;
+    return this._toWorkspaceSummary(updated);
+  },
+
+  async deleteWorkspace(id: string): Promise<void> {
+    await apiClient.delete<void>(`/workspaces/${id}`);
+    cachedWorkspaces = null;
+  },
+
   async getMembers(workspaceId: string): Promise<WorkspaceMemberDto[]> {
     const rawList = await apiClient.get<any[]>(`/workspaces/${workspaceId}/members`);
     return (rawList || []).map((m) => this._toMemberDto(m));

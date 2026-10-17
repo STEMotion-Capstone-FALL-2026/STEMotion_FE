@@ -7,6 +7,8 @@ import {
   AdminTemplateDto,
   SystemUserRole,
   SystemUserStatus,
+  AiUsagePage,
+  AiUsageGroup,
 } from '../../../services/adminService';
 import { AccountProvisionForm } from './AccountProvisionForm';
 import { CreateWorkspaceForm } from './CreateWorkspaceForm';
@@ -31,6 +33,7 @@ import {
   ToggleRight,
   Building2,
   ChevronDown,
+  BarChart3,
 } from 'lucide-react';
 
 interface AdminPortalProps {
@@ -94,11 +97,42 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     isActive: true,
   });
 
+  // AI Usage Drill-down state (GET /api/v1/admin/ai-usage)
+  const [aiUsagePage, setAiUsagePage] = useState<AiUsagePage | null>(null);
+  const [loadingAiUsage, setLoadingAiUsage] = useState(false);
+  const [aiUsageFilter, setAiUsageFilter] = useState({
+    from: '',
+    to: '',
+    model: '',
+    userId: '',
+    page: 0,
+    size: 10,
+  });
+
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const notify = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
   };
+
+  const loadAiUsage = useCallback(async () => {
+    setLoadingAiUsage(true);
+    try {
+      const data = await adminService.getAiUsageHistory({
+        from: aiUsageFilter.from || undefined,
+        to: aiUsageFilter.to || undefined,
+        model: aiUsageFilter.model || undefined,
+        userId: aiUsageFilter.userId || undefined,
+        page: aiUsageFilter.page,
+        size: aiUsageFilter.size,
+      });
+      setAiUsagePage(data);
+    } catch (err: any) {
+      console.warn('Could not load AI usage history:', err);
+    } finally {
+      setLoadingAiUsage(false);
+    }
+  }, [aiUsageFilter]);
 
   const loadOverview = useCallback(async () => {
     setLoadingOverview(true);
@@ -191,7 +225,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     void loadOverview();
     void loadUsersAndMembers();
     void loadTemplates();
-  }, [loadOverview, loadUsersAndMembers, loadTemplates]);
+    void loadAiUsage();
+  }, [loadOverview, loadUsersAndMembers, loadTemplates, loadAiUsage]);
 
   useEffect(() => {
     const onMembersUpdated = () => {
@@ -221,6 +256,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
       notify(`Đã thêm ${user.fullName} (${user.email}) vào Không gian làm việc hiện tại!`);
     } catch (err: any) {
       notify(err?.message || 'Không thể thêm thành viên vào Không gian làm việc.');
+    }
+  };
+
+  const handleDeleteWorkspace = async () => {
+    const curWs = workspaceList.find((w) => w.id === currentWorkspaceId);
+    if (!curWs) return;
+    if (!window.confirm(`Xác nhận xóa Không gian làm việc "${curWs.name}"? Mọi dữ liệu liên quan sẽ bị xóa vĩnh viễn.`)) return;
+    try {
+      await workspaceService.deleteWorkspace(curWs.id);
+      notify(`Đã xóa Không gian làm việc "${curWs.name}"`);
+      await loadUsersAndMembers();
+    } catch (err: any) {
+      notify(err?.message || 'Không thể xóa Không gian làm việc.');
     }
   };
 
@@ -361,6 +409,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                 void loadOverview();
                 void loadUsersAndMembers();
                 void loadTemplates();
+                void loadAiUsage();
                 notify('Đã làm mới toàn bộ số liệu hệ thống!');
               }}
               className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
@@ -572,7 +621,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                     Phân Bổ Học Liệu Theo 5 Môn STEM
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Độ phủ bài giảng theo chuẩn GDPT 2018.
+                    Độ phủ học liệu theo 5 lĩnh vực STEM.
                   </p>
                 </div>
 
@@ -608,6 +657,157 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Row 2.5: AI Usage Telemetry Drill-down (GET /api/v1/admin/ai-usage — UC-31) */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-brand-600" />
+                    <span>Nhật Ký Sử Dụng AI & Chi Phí Chi Tiết (AI Usage Drill-Down — UC-31)</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Thống kê chi tiết số lượt request, token tiêu thụ và chi phí ước tính theo ngày, mô hình AI và người dùng.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => void loadAiUsage()}
+                    disabled={loadingAiUsage}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingAiUsage ? 'animate-spin' : ''}`} />
+                    <span>Tải lại</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center gap-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 font-medium">Từ ngày:</span>
+                  <input
+                    type="date"
+                    value={aiUsageFilter.from}
+                    onChange={(e) => setAiUsageFilter((prev) => ({ ...prev, from: e.target.value, page: 0 }))}
+                    className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 font-medium">Đến ngày:</span>
+                  <input
+                    type="date"
+                    value={aiUsageFilter.to}
+                    onChange={(e) => setAiUsageFilter((prev) => ({ ...prev, to: e.target.value, page: 0 }))}
+                    className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 font-medium">Model:</span>
+                  <input
+                    type="text"
+                    placeholder="Tất cả model..."
+                    value={aiUsageFilter.model}
+                    onChange={(e) => setAiUsageFilter((prev) => ({ ...prev, model: e.target.value, page: 0 }))}
+                    className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs w-36"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 font-medium">User ID:</span>
+                  <input
+                    type="text"
+                    placeholder="Lọc theo User..."
+                    value={aiUsageFilter.userId}
+                    onChange={(e) => setAiUsageFilter((prev) => ({ ...prev, userId: e.target.value, page: 0 }))}
+                    className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs w-36"
+                  />
+                </div>
+                {(aiUsageFilter.from || aiUsageFilter.to || aiUsageFilter.model || aiUsageFilter.userId) && (
+                  <button
+                    onClick={() => setAiUsageFilter({ from: '', to: '', model: '', userId: '', page: 0, size: 10 })}
+                    className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
+                  >
+                    Xóa lọc
+                  </button>
+                )}
+              </div>
+
+              {/* Table */}
+              {loadingAiUsage ? (
+                <div className="py-8 text-center text-slate-500 text-xs">
+                  <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-600" />
+                  Đang tải dữ liệu AI Usage...
+                </div>
+              ) : !aiUsagePage || aiUsagePage.content.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
+                  Không tìm thấy bản ghi sử dụng AI nào trong khoảng thời gian đã chọn.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50/50">
+                        <th className="py-2.5 px-3">Ngày</th>
+                        <th className="py-2.5 px-3">Mô hình (Model)</th>
+                        <th className="py-2.5 px-3">Người dùng (User ID)</th>
+                        <th className="py-2.5 px-3 text-right">Lượt gọi</th>
+                        <th className="py-2.5 px-3 text-right">Tokens In</th>
+                        <th className="py-2.5 px-3 text-right">Tokens Out</th>
+                        <th className="py-2.5 px-3 text-right">Chi phí ước tính</th>
+                        <th className="py-2.5 px-3 text-center">Thất bại</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {aiUsagePage.content.map((row, rIdx) => (
+                        <tr key={rIdx} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-2.5 px-3 font-mono font-medium text-slate-700">{row.day}</td>
+                          <td className="py-2.5 px-3 font-mono font-semibold text-indigo-700">{row.model}</td>
+                          <td className="py-2.5 px-3 text-slate-600 font-mono text-[11px]">{row.userId || 'Hệ thống / Chung'}</td>
+                          <td className="py-2.5 px-3 text-right font-semibold text-slate-900">{row.requestCount.toLocaleString()}</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">{(row.tokensIn ?? 0).toLocaleString()}</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">{(row.tokensOut ?? 0).toLocaleString()}</td>
+                          <td className="py-2.5 px-3 text-right font-semibold text-emerald-700">
+                            ${row.knownEstimatedCostUsd != null ? Number(row.knownEstimatedCostUsd).toFixed(4) : '0.0000'}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            {row.failedRequests > 0 ? (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 font-bold text-[10px]">
+                                {row.failedRequests}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">0</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Pagination */}
+                  <div className="pt-3 flex items-center justify-between border-t border-slate-100 text-xs text-slate-500">
+                    <div>
+                      Trang <span className="font-bold text-slate-800">{aiUsagePage.page + 1}</span> / {Math.max(1, aiUsagePage.totalPages)} ({aiUsagePage.totalElements} bản ghi)
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setAiUsageFilter((prev) => ({ ...prev, page: Math.max(0, prev.page - 1) }))}
+                        disabled={aiUsagePage.page <= 0}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded text-xs font-semibold cursor-pointer"
+                      >
+                        Trước
+                      </button>
+                      <button
+                        onClick={() => setAiUsageFilter((prev) => ({ ...prev, page: prev.page + 1 }))}
+                        disabled={aiUsagePage.page >= aiUsagePage.totalPages - 1}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded text-xs font-semibold cursor-pointer"
+                      >
+                        Sau
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Row 3: Render Queue & Recent Render Jobs Table */}
@@ -776,9 +976,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                         <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-1.5 pointer-events-none" />
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-brand-700 font-semibold shrink-0">
-                      {currentWorkspaceId.slice(0, 6)}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 text-brand-700 font-semibold shrink-0">
+                        {currentWorkspaceId.slice(0, 6)}
+                      </span>
+                      <button
+                        onClick={() => void handleDeleteWorkspace()}
+                        title="Xóa Không gian làm việc này"
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 )}
                 <div className="divide-y divide-slate-100 text-xs max-h-72 overflow-y-auto">
@@ -1004,7 +1213,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                     Danh Mục Mẫu Hoạt Họa Remotion STEM (Template Registry — FE-16)
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Quản lý metadata, cấu hình schema JSON và trạng thái kích hoạt của 12 mẫu phân cảnh chuẩn GDPT 2018.
+                    Quản lý metadata, cấu hình schema JSON và trạng thái kích hoạt của các mẫu phân cảnh đồ họa Remotion STEM.
                   </p>
                 </div>
 
