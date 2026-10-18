@@ -31,6 +31,7 @@ interface RemotionPlayerWrapperProps {
   updateSceneProperty?: (updater: (s: any) => any) => void;
   activeLegoPieceId?: string | null;
   onSelectLegoPiece?: (pieceId: string | null) => void;
+  disabled?: boolean;
 }
 
 export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
@@ -42,6 +43,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
   updateSceneProperty,
   activeLegoPieceId,
   onSelectLegoPiece,
+  disabled = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<PlayerRef>(null);
@@ -312,6 +314,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
             stageContainerRef={canvasStageRef}
             activeLegoPieceId={activeLegoPieceId}
             onSelectLegoPiece={onSelectLegoPiece}
+            disabled={disabled}
             onPauseVideo={() => {
               if (playerRef.current?.isPlaying()) {
                 playerRef.current.pause();

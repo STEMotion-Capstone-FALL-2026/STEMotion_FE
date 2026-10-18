@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mic, Send, Type, Maximize2, BarChart2, Plus, Trash2, Palette, Code2, HelpCircle, Layers, CheckCircle2, Award, Sparkles, X, Save, Check, Volume2 } from 'lucide-react';
+import { Mic, Send, Type, Maximize2, BarChart2, Plus, Trash2, Palette, Code2, HelpCircle, Layers, CheckCircle2, Award, Sparkles, X, Save, Check, Volume2, Lock } from 'lucide-react';
 import { SceneData } from '../../../types/stem';
 import { IllustratedExplainerInspector } from './IllustratedExplainerInspector';
 import { LegoInspectorSection } from './LegoInspectorSection';
@@ -10,6 +10,7 @@ interface SceneInspectorProps {
   onStartRender?: () => void;
   activeLegoPieceId?: string | null;
   onSelectLegoPiece?: (pieceId: string | null) => void;
+  disabled?: boolean;
 }
 
 export const SceneInspector: React.FC<SceneInspectorProps> = ({
@@ -18,6 +19,7 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
   onStartRender,
   activeLegoPieceId,
   onSelectLegoPiece,
+  disabled = false,
 }) => {
   const [isVoiceSaved, setIsVoiceSaved] = useState(false);
 
@@ -36,7 +38,14 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
         </span>
       </div>
 
-      <div className="space-y-4">
+      {disabled && (
+        <div className="mb-4 p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2">
+          <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+          <span className="font-medium">Bản dựng đang khóa. Các thuộc tính ở chế độ chỉ đọc.</span>
+        </div>
+      )}
+
+      <fieldset disabled={disabled} className={`border-none p-0 m-0 ${disabled ? 'opacity-65 pointer-events-none select-none space-y-4' : 'space-y-4'}`}>
         {/* Tiêu đề phân cảnh */}
         <div>
           <label className="font-bold text-slate-700 block mb-1">Tiêu đề phân cảnh:</label>
@@ -1223,16 +1232,19 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
             <option value="elevenlabs">ElevenLabs Multilingual v2</option>
           </select>
         </div>
-      </div>
+      </fieldset>
 
       <div className="pt-3 border-t border-slate-100 shrink-0 mt-4 space-y-2">
         <button
           type="button"
+          disabled={disabled}
           onClick={handleSaveVoice}
           className={`w-full py-2.5 font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-xs transition-all ${
-            isVoiceSaved
+            disabled
+              ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+              : isVoiceSaved
               ? 'bg-emerald-600 text-white shadow-emerald-500/20'
-              : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20'
+              : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20 cursor-pointer'
           }`}
         >
           {isVoiceSaved ? (

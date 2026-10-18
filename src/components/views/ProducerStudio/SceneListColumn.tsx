@@ -9,6 +9,7 @@ import {
   Check,
   Library,
   GripVertical,
+  Lock,
 } from 'lucide-react';
 import { SceneData } from '../../../types/stem';
 
@@ -24,6 +25,7 @@ interface SceneListColumnProps {
   onChangeDuration: (sceneId: string, seconds: number) => void;
   onUpdateSceneTitle: (sceneId: string, newTitle: string) => void;
   onOpenTemplateCatalog: () => void;
+  disabled?: boolean;
 }
 
 export const SceneListColumn: React.FC<SceneListColumnProps> = ({
@@ -38,6 +40,7 @@ export const SceneListColumn: React.FC<SceneListColumnProps> = ({
   onChangeDuration,
   onUpdateSceneTitle,
   onOpenTemplateCatalog,
+  disabled = false,
 }) => {
   const [editingSceneTitleId, setEditingSceneTitleId] = useState<string | null>(null);
   const [inlineTitleValue, setInlineTitleValue] = useState<string>('');
@@ -60,15 +63,24 @@ export const SceneListColumn: React.FC<SceneListColumnProps> = ({
   return (
     <aside className="w-72 bg-white border-r border-slate-200 flex flex-col p-4 h-full min-h-0 overflow-hidden shrink-0">
       <div className="flex items-center justify-between mb-3 text-xs">
-        <span className="font-bold uppercase tracking-wider text-slate-500">
-          Phân cảnh ({scenes.length})
-        </span>
-        <button
-          onClick={() => onAddNewScene('MATH_FORMULA')}
-          className="text-brand-600 hover:text-brand-700 font-bold flex items-center gap-1"
-        >
-          <Plus className="w-3 h-3" /> Thêm Cảnh
-        </button>
+        <div className="flex items-center gap-1.5">
+          <span className="font-bold uppercase tracking-wider text-slate-500">
+            Phân cảnh ({scenes.length})
+          </span>
+          {disabled && (
+            <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium flex items-center gap-0.5">
+              <Lock className="w-2.5 h-2.5" /> Khóa
+            </span>
+          )}
+        </div>
+        {!disabled && (
+          <button
+            onClick={() => onAddNewScene('MATH_FORMULA')}
+            className="text-brand-600 hover:text-brand-700 font-bold flex items-center gap-1 cursor-pointer"
+          >
+            <Plus className="w-3 h-3" /> Thêm Cảnh
+          </button>
+        )}
       </div>
 
       <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
@@ -81,12 +93,14 @@ export const SceneListColumn: React.FC<SceneListColumnProps> = ({
           return (
             <div
               key={sc.id}
-              draggable={!isEditingTitle}
+              draggable={!disabled && !isEditingTitle}
               onDragStart={(e) => {
+                if (disabled) return;
                 setDraggedIdx(idx);
                 e.dataTransfer.effectAllowed = 'move';
               }}
               onDragOver={(e) => {
+                if (disabled) return;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
                 if (dragOverIdx !== idx) setDragOverIdx(idx);
@@ -96,6 +110,7 @@ export const SceneListColumn: React.FC<SceneListColumnProps> = ({
                 setDragOverIdx(null);
               }}
               onDrop={(e) => {
+                if (disabled) return;
                 e.preventDefault();
                 if (draggedIdx !== null && draggedIdx !== idx) {
                   onReorderScenes(draggedIdx, idx);
@@ -117,12 +132,14 @@ export const SceneListColumn: React.FC<SceneListColumnProps> = ({
               {/* Top Header of Card: Index, Reorder arrows, Duration select, Duplicate & Delete */}
               <div className="flex items-center justify-between mb-1.5 text-xs">
                 <div className="flex items-center gap-1.5">
-                  <span
-                    className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-600 transition-colors p-0.5"
-                    title="Kéo thả chuột để di chuyển thứ tự phân cảnh"
-                  >
-                    <GripVertical className="w-3.5 h-3.5" />
-                  </span>
+                  {!disabled && (
+                    <span
+                      className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-600 transition-colors p-0.5"
+                      title="Kéo thả chuột để di chuyển thứ tự phân cảnh"
+                    >
+                      <GripVertical className="w-3.5 h-3.5" />
+                    </span>
+                  )}
                   <span
                     className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
                       isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
@@ -132,32 +149,34 @@ export const SceneListColumn: React.FC<SceneListColumnProps> = ({
                   </span>
 
                   {/* Reorder Up / Down */}
-                  <div className="flex items-center">
-                    {idx > 0 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onMoveScene(idx, 'up');
-                        }}
-                        className="text-slate-400 hover:text-indigo-600 p-0.5 transition-colors"
-                        title="Di chuyển phân cảnh lên trước"
-                      >
-                        <ChevronUp className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    {idx < scenes.length - 1 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onMoveScene(idx, 'down');
-                        }}
-                        className="text-slate-400 hover:text-indigo-600 p-0.5 transition-colors"
-                        title="Di chuyển phân cảnh xuống sau"
-                      >
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+                  {!disabled && (
+                    <div className="flex items-center">
+                      {idx > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onMoveScene(idx, 'up');
+                          }}
+                          className="text-slate-400 hover:text-indigo-600 p-0.5 transition-colors cursor-pointer"
+                          title="Di chuyển phân cảnh lên trước"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {idx < scenes.length - 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onMoveScene(idx, 'down');
+                          }}
+                          className="text-slate-400 hover:text-indigo-600 p-0.5 transition-colors cursor-pointer"
+                          title="Di chuyển phân cảnh xuống sau"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-1">
@@ -167,14 +186,17 @@ export const SceneListColumn: React.FC<SceneListColumnProps> = ({
                     const standardOptions = [3, 4, 5, 6, 7, 8, 10, 12, 15, 20];
                     return (
                       <select
+                        disabled={disabled}
                         value={currentSec}
                         onChange={(e) => {
                           e.stopPropagation();
                           onChangeDuration(sc.id, parseInt(e.target.value));
                         }}
                         onClick={(e) => e.stopPropagation()}
-                        className="text-[10px] font-mono font-bold text-slate-600 bg-white border border-slate-200 rounded px-1.5 py-0.5 hover:border-indigo-400 cursor-pointer focus:outline-none shadow-2xs"
-                        title="Thời lượng phân cảnh"
+                        className={`text-[10px] font-mono font-bold text-slate-600 bg-white border border-slate-200 rounded px-1.5 py-0.5 shadow-2xs ${
+                          disabled ? 'cursor-not-allowed opacity-75' : 'hover:border-indigo-400 cursor-pointer focus:outline-none'
+                        }`}
+                        title={disabled ? 'Bản dựng đang khóa' : 'Thời lượng phân cảnh'}
                       >
                         {!standardOptions.includes(currentSec) && (
                           <option value={currentSec}>{currentSec}s (Hiện tại)</option>
@@ -188,29 +210,32 @@ export const SceneListColumn: React.FC<SceneListColumnProps> = ({
                     );
                   })()}
 
-                  {/* Nhân bản Scene */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDuplicateScene(sc);
-                    }}
-                    className="text-slate-400 hover:text-indigo-600 transition-colors p-1"
-                    title="Nhân bản phân cảnh này"
-                  >
-                    <Copy className="w-3 h-3" />
-                  </button>
+                  {/* Nhân bản & Xóa Scene */}
+                  {!disabled && (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDuplicateScene(sc);
+                        }}
+                        className="text-slate-400 hover:text-indigo-600 transition-colors p-1 cursor-pointer"
+                        title="Nhân bản phân cảnh này"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </button>
 
-                  {/* Xóa Scene */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteScene(sc.id);
-                    }}
-                    className="text-slate-300 hover:text-rose-600 transition-colors p-1"
-                    title="Xóa phân cảnh này"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteScene(sc.id);
+                        }}
+                        className="text-slate-300 hover:text-rose-600 transition-colors p-1 cursor-pointer"
+                        title="Xóa phân cảnh này"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -240,19 +265,26 @@ export const SceneListColumn: React.FC<SceneListColumnProps> = ({
               ) : (
                 <div className="flex items-center justify-between group/title mt-1">
                   <h4
-                    onDoubleClick={(e) => handleStartEditTitle(e, sc.id, sc.title)}
-                    className="text-xs font-bold text-slate-800 line-clamp-1 hover:text-indigo-600 transition-colors cursor-text flex-1 pr-1"
-                    title="Nhấp đúp chuột để đổi tên nhanh phân cảnh này"
+                    onDoubleClick={(e) => {
+                      if (disabled) return;
+                      handleStartEditTitle(e, sc.id, sc.title);
+                    }}
+                    className={`text-xs font-bold text-slate-800 line-clamp-1 flex-1 pr-1 ${
+                      disabled ? 'cursor-default' : 'hover:text-indigo-600 transition-colors cursor-text'
+                    }`}
+                    title={disabled ? sc.title : 'Nhấp đúp chuột để đổi tên nhanh phân cảnh này'}
                   >
                     {sc.title}
                   </h4>
-                  <button
-                    onClick={(e) => handleStartEditTitle(e, sc.id, sc.title)}
-                    className="text-slate-300 hover:text-indigo-600 transition-colors opacity-0 group-hover/title:opacity-100 p-0.5 shrink-0"
-                    title="Sửa tên cảnh trực tiếp"
-                  >
-                    <Edit2 className="w-3 h-3" />
-                  </button>
+                  {!disabled && (
+                    <button
+                      onClick={(e) => handleStartEditTitle(e, sc.id, sc.title)}
+                      className="text-slate-300 hover:text-indigo-600 transition-colors opacity-0 group-hover/title:opacity-100 p-0.5 shrink-0 cursor-pointer"
+                      title="Sửa tên cảnh trực tiếp"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               )}
 

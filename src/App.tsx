@@ -327,14 +327,31 @@ export default function App() {
   // Active scene pointer
   const selectedScene = viewScript.scenes.find((s) => s.id === activeSceneId) || viewScript.scenes[0];
 
+  const lastLockToastTimeRef = React.useRef<number>(0);
+
   /** Producer edits: per-scene properties of the draft; scenes and templates stay as approved. */
   const editComposition = (change: (scenes: SceneData[]) => SceneData[]) => {
     if (!composition) {
+      if (['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '')) {
+        const now = Date.now();
+        if (now - lastLockToastTimeRef.current > 3000) {
+          lastLockToastTimeRef.current = now;
+          showToast('Bản dựng đang khóa (đang chờ Reviewer thẩm định hoặc đã hoàn tất). Không thể chỉnh sửa.', 'warn');
+        }
+        return;
+      }
       setScript((prev) => ({ ...prev, scenes: change(prev.scenes) }));
       return;
     }
     if (!composition.editable) {
-      showToast(composition.lockedReason || 'Bản dựng đang khóa.', 'warn');
+      const now = Date.now();
+      if (now - lastLockToastTimeRef.current > 3000) {
+        lastLockToastTimeRef.current = now;
+        showToast(
+          composition.lockedReason || 'Bản dựng đang khóa (đang chờ Reviewer thẩm định hoặc đã hoàn tất). Không thể chỉnh sửa.',
+          'warn'
+        );
+      }
       return;
     }
     setComposition((prev) => {
@@ -350,7 +367,19 @@ export default function App() {
   const canEditScript = () => {
     // The producer edits the composition (editComposition), never the approved script.
     if (inProduction) {
-      showToast('Bản dựng giữ đúng danh sách, thứ tự và template cảnh đã duyệt; Producer chỉnh thuộc tính từng cảnh.', 'warn');
+      const now = Date.now();
+      if (now - lastLockToastTimeRef.current > 3000) {
+        lastLockToastTimeRef.current = now;
+        showToast('Bản dựng giữ đúng danh sách, thứ tự và template cảnh đã duyệt; Producer chỉnh thuộc tính từng cảnh.', 'warn');
+      }
+      return false;
+    }
+    if (['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '')) {
+      const now = Date.now();
+      if (now - lastLockToastTimeRef.current > 3000) {
+        lastLockToastTimeRef.current = now;
+        showToast('Video đang trong quá trình duyệt hoặc đã xuất bản, không thể thay đổi.', 'warn');
+      }
       return false;
     }
     // Roles are per workspace: the role of the active workspace decides, not the account role.
@@ -370,7 +399,7 @@ export default function App() {
       editComposition((scenes) => scenes.map((sc) => (sc.id === id ? updater(sc) : sc)));
       return;
     }
-    if (currentRole === 'producer' && !['APPROVED', 'PUBLISHED'].includes(script.videoStatus || '')) {
+    if (currentRole === 'producer' && !['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '')) {
       const id = selectedScene.id;
       setScript((prev) => ({
         ...prev,

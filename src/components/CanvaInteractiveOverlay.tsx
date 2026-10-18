@@ -23,6 +23,7 @@ import {
   ArrowUp,
   ArrowDown,
   Palette,
+  Lock,
 } from 'lucide-react';
 
 interface CanvaInteractiveOverlayProps {
@@ -34,6 +35,7 @@ interface CanvaInteractiveOverlayProps {
   stageContainerRef?: React.RefObject<HTMLDivElement | null>;
   activeLegoPieceId?: string | null;
   onSelectLegoPiece?: (pieceId: string | null) => void;
+  disabled?: boolean;
 }
 
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
@@ -69,6 +71,7 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
   stageContainerRef,
   activeLegoPieceId,
   onSelectLegoPiece,
+  disabled = false,
 }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [internalSelectedId, setInternalSelectedId] = useState<string | null>(null);
@@ -415,6 +418,7 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
     mode: 'move' | 'resize',
     handle?: ResizeHandle
   ) => {
+    if (disabled) return;
     e.stopPropagation();
     e.preventDefault();
     onPauseVideo();
@@ -688,91 +692,97 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
         onPointerDown={(e) => e.stopPropagation()}
         className="absolute top-2.5 left-3 right-3 flex items-center justify-between gap-2 pointer-events-none z-40"
       >
-        <div className="flex items-center gap-1.5 pointer-events-auto bg-slate-950/90 border border-blue-500/40 px-2.5 py-1 rounded-xl backdrop-blur-md shadow-xl">
-          <Puzzle className="w-3.5 h-3.5 text-blue-400" />
+        <div className={`flex items-center gap-1.5 pointer-events-auto bg-slate-950/90 border px-2.5 py-1 rounded-xl backdrop-blur-md shadow-xl ${
+          disabled ? 'border-amber-500/40 text-amber-200' : 'border-blue-500/40'
+        }`}>
+          {disabled ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Puzzle className="w-3.5 h-3.5 text-blue-400" />}
           <span className="text-[11px] font-bold text-slate-200">
-            Lego Mode ({visiblePieces.length} khối độc lập)
+            {disabled ? `Chỉ đọc (${visiblePieces.length} khối)` : `Lego Mode (${visiblePieces.length} khối độc lập)`}
           </span>
           <span className="text-[10px] text-slate-400 hidden md:inline">
-            • Kéo từng khối để di chuyển, kéo góc co giãn, đúp chuột sửa nội dung
+            {disabled
+              ? '• Bản dựng đang khóa trong thời gian chờ Reviewer thẩm định'
+              : '• Kéo từng khối để di chuyển, kéo góc co giãn, đúp chuột sửa nội dung'}
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 pointer-events-auto">
-          {/* Add Freeform Lego Block Button */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowAddMenu((v) => !v)}
-              className="px-2.5 py-1 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-lg border border-emerald-400/40 cursor-pointer transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Thêm Khối Lego</span>
-            </button>
+        {!disabled && (
+          <div className="flex items-center gap-1.5 pointer-events-auto">
+            {/* Add Freeform Lego Block Button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowAddMenu((v) => !v)}
+                className="px-2.5 py-1 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-lg border border-emerald-400/40 cursor-pointer transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Thêm Khối Lego</span>
+              </button>
 
-            {showAddMenu && (
-              <div className="absolute right-0 mt-1.5 w-60 bg-slate-950/95 border border-slate-700 rounded-xl shadow-2xl p-1.5 z-50 backdrop-blur-md space-y-1">
-                <div className="px-2 py-1 text-[10px] font-mono uppercase text-slate-400 border-b border-slate-800">
-                  Chọn loại khối Lego mới
+              {showAddMenu && (
+                <div className="absolute right-0 mt-1.5 w-60 bg-slate-950/95 border border-slate-700 rounded-xl shadow-2xl p-1.5 z-50 backdrop-blur-md space-y-1">
+                  <div className="px-2 py-1 text-[10px] font-mono uppercase text-slate-400 border-b border-slate-800">
+                    Chọn loại khối Lego mới
+                  </div>
+                  {scene.type === 'ILLUSTRATED_EXPLAINER' && (
+                    <button
+                      type="button"
+                      onClick={handleAddStageIcon}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-300 bg-emerald-950/50 hover:bg-emerald-600/40 hover:text-white border border-emerald-500/30 transition-colors cursor-pointer"
+                    >
+                      ✨ Thêm Icon Vệ tinh vào Sân khấu
+                    </button>
+                  )}
+                  {[
+                    { id: 'text', label: '📝 Thẻ Ghi chú / Giải thích' },
+                    { id: 'formula', label: '∑ Công thức Toán / KaTeX' },
+                    { id: 'number', label: '🔢 Chỉ số Khoa học Nổi bật' },
+                    { id: 'icon', label: '⚛️ Biểu tượng STEM Tự do' },
+                    { id: 'list', label: '📋 Danh sách Ý chính' },
+                    { id: 'guide', label: '🦉 Trợ giảng Cú Mèo (Guide)' },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleAddLegoBlock(item.id as any)}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-slate-200 hover:bg-blue-600/30 hover:text-white transition-colors cursor-pointer"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
-                {scene.type === 'ILLUSTRATED_EXPLAINER' && (
-                  <button
-                    type="button"
-                    onClick={handleAddStageIcon}
-                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-300 bg-emerald-950/50 hover:bg-emerald-600/40 hover:text-white border border-emerald-500/30 transition-colors cursor-pointer"
-                  >
-                    ✨ Thêm Icon Vệ tinh vào Sân khấu
-                  </button>
-                )}
-                {[
-                  { id: 'text', label: '📝 Thẻ Ghi chú / Giải thích' },
-                  { id: 'formula', label: '∑ Công thức Toán / KaTeX' },
-                  { id: 'number', label: '🔢 Chỉ số Khoa học Nổi bật' },
-                  { id: 'icon', label: '⚛️ Biểu tượng STEM Tự do' },
-                  { id: 'list', label: '📋 Danh sách Ý chính' },
-                  { id: 'guide', label: '🦉 Trợ giảng Cú Mèo (Guide)' },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleAddLegoBlock(item.id as any)}
-                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-slate-200 hover:bg-blue-600/30 hover:text-white transition-colors cursor-pointer"
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+              )}
+            </div>
+
+            {/* Decompose Template into Freeform COMPOSED Scene */}
+            {(scene.type !== 'COMPOSED' ||
+              scene.blocks.some((b) => b.kind === 'icons' && (b.icons?.length || 0) > 1)) && (
+              <button
+                type="button"
+                onClick={handleDecomposeScene}
+                className="px-2.5 py-1 rounded-xl bg-indigo-600/90 hover:bg-indigo-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-lg border border-indigo-400/40 cursor-pointer transition-all"
+                title="Tách khuôn mẫu cố định thành cảnh COMPOSED tự do hoàn toàn"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Tách Lego Tự Do</span>
+              </button>
+            )}
+
+            {/* Reset All Layouts */}
+            {(Object.keys(scene.componentLayouts || {}).length > 0 ||
+              (scene.extraBlocks && scene.extraBlocks.length > 0)) && (
+              <button
+                type="button"
+                onClick={handleResetAllLayouts}
+                className="px-2 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 text-[11px] font-medium flex items-center gap-1 border border-slate-700 cursor-pointer"
+                title="Đặt lại toàn bộ vị trí các khối về mặc định"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span className="hidden lg:inline">Reset</span>
+              </button>
             )}
           </div>
-
-          {/* Decompose Template into Freeform COMPOSED Scene */}
-          {(scene.type !== 'COMPOSED' ||
-            scene.blocks.some((b) => b.kind === 'icons' && (b.icons?.length || 0) > 1)) && (
-            <button
-              type="button"
-              onClick={handleDecomposeScene}
-              className="px-2.5 py-1 rounded-xl bg-indigo-600/90 hover:bg-indigo-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-lg border border-indigo-400/40 cursor-pointer transition-all"
-              title="Tách khuôn mẫu cố định thành cảnh COMPOSED tự do hoàn toàn"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Tách Lego Tự Do</span>
-            </button>
-          )}
-
-          {/* Reset All Layouts */}
-          {(Object.keys(scene.componentLayouts || {}).length > 0 ||
-            (scene.extraBlocks && scene.extraBlocks.length > 0)) && (
-            <button
-              type="button"
-              onClick={handleResetAllLayouts}
-              className="px-2 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 text-[11px] font-medium flex items-center gap-1 border border-slate-700 cursor-pointer"
-              title="Đặt lại toàn bộ vị trí các khối về mặc định"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span className="hidden lg:inline">Reset</span>
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Interactive Bounding Boxes for Every Lego Piece (Sorted Largest -> Smallest so inner pieces sit on top) */}
@@ -803,15 +813,23 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
               height: `${heightPct}%`,
               zIndex: dynamicZIndex,
             }}
-            onPointerDown={(e) => startDrag(e, piece, 'move')}
+            onPointerDown={(e) => {
+              if (disabled) {
+                e.stopPropagation();
+                setSelectedId(piece.id);
+                return;
+              }
+              startDrag(e, piece, 'move');
+            }}
             onDoubleClick={(e) => {
               e.stopPropagation();
+              if (disabled) return;
               setSelectedId(piece.id);
               if (piece.buildTextPatch) {
                 handleOpenTextEdit(piece);
               }
             }}
-            className={`absolute rounded-xl transition-shadow cursor-move group ${
+            className={`absolute rounded-xl transition-shadow ${disabled ? 'cursor-pointer' : 'cursor-move'} group ${
               isSelected
                 ? `ring-2 ${borderAccent} bg-blue-500/10 shadow-[0_0_25px_rgba(59,130,246,0.25)]`
                 : 'border border-dashed border-blue-400/35 hover:border-solid hover:ring-2 hover:ring-blue-400/90 hover:bg-blue-500/10'
@@ -825,7 +843,7 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
                   : 'opacity-0 group-hover:opacity-100 bg-slate-900/95 text-blue-300 border border-blue-500/50 shadow-md'
               }`}
             >
-              <Move className="w-2.5 h-2.5" />
+              {disabled ? <Lock className="w-2.5 h-2.5 text-amber-300" /> : <Move className="w-2.5 h-2.5" />}
               <span>{piece.label}</span>
               {(scene.componentLayouts?.[piece.id]?.dx ||
                 scene.componentLayouts?.[piece.id]?.dy) && (
@@ -837,7 +855,7 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
             </div>
 
             {/* 8-Point Resize Handles when Selected */}
-            {isSelected && (
+            {isSelected && !disabled && (
               <>
                 {(
                   [
@@ -877,17 +895,24 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
             </span>
           </div>
 
-          {/* Edit Text Button */}
-          {selectedPiece.buildTextPatch && (
-            <button
-              type="button"
-              onClick={() => handleOpenTextEdit(selectedPiece)}
-              className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold flex items-center gap-1 text-[11px] cursor-pointer"
-            >
-              <Edit3 className="w-3 h-3" />
-              <span>Sửa Nội Dung</span>
-            </button>
-          )}
+          {disabled ? (
+            <div className="flex items-center gap-1.5 text-[11px] text-amber-300 px-2 py-0.5">
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span>Chỉ đọc (Bản dựng đang khóa)</span>
+            </div>
+          ) : (
+            <>
+              {/* Edit Text Button */}
+              {selectedPiece.buildTextPatch && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenTextEdit(selectedPiece)}
+                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold flex items-center gap-1 text-[11px] cursor-pointer"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Sửa Nội Dung</span>
+                </button>
+              )}
 
           {/* Font Size Controls */}
           <div className="flex items-center gap-1 border-r border-slate-800 pr-2">
@@ -1033,16 +1058,18 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={() => setSelectedId(null)}
-              className="p-1 text-slate-400 hover:text-white cursor-pointer ml-1"
-              title="Đóng thanh công cụ"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
           </div>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setSelectedId(null)}
+            className="p-1 text-slate-400 hover:text-white cursor-pointer ml-1"
+            title="Đóng thanh công cụ"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 

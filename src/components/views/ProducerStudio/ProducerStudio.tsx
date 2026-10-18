@@ -97,6 +97,20 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   // Driven by the clip's state, not by whether an old video URL exists: a clip
   // sent back to production keeps its old URL but must be rendered again.
   const status = script.videoStatus;
+  const isLocked = Boolean(
+    (production && !production.editable) ||
+    status === 'IN_QA' ||
+    status === 'APPROVED' ||
+    status === 'PUBLISHED'
+  );
+  const lockReason = production?.lockedReason || (
+    status === 'IN_QA'
+      ? 'Clip đang trong quá trình chờ Reviewer thẩm định chất lượng trên Web Player. Bản dựng tạm thời được khóa để bảo đảm tính nhất quán.'
+      : status === 'APPROVED' || status === 'PUBLISHED'
+      ? 'Clip đã được phê duyệt hoặc xuất bản. Không thể chỉnh sửa thêm.'
+      : 'Bản dựng đang ở chế độ chỉ đọc.'
+  );
+
   const action = status === 'APPROVED' || status === 'PUBLISHED'
     ? { label: status === 'PUBLISHED' ? 'Xuất bản lại' : 'Xuất bản (đã duyệt)', run: onOpenPublishModal, disabled: !onOpenPublishModal }
     : status === 'RENDERING'
@@ -113,6 +127,10 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   );
 
   const handleSelectTheme = (themeId: VisualTheme) => {
+    if (isLocked) {
+      showToast?.(lockReason, 'warn');
+      return;
+    }
     setSelectedTheme(themeId);
     (script as any).visualTheme = themeId;
     // Embed theme seed suffix into workspaceId so RemotionPlayer picks up variation if workspace is present
@@ -189,10 +207,13 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
             <Palette className="w-3.5 h-3.5 text-indigo-600" />
             <span className="text-[11px] text-slate-500 font-medium">Style:</span>
             <select
+              disabled={isLocked}
               value={selectedTheme}
               onChange={(e) => handleSelectTheme(e.target.value as VisualTheme)}
-              className="bg-transparent text-xs font-semibold text-slate-800 border-none outline-none cursor-pointer pr-1"
-              title="Chọn bộ Theme màu & phong cách hình ảnh đồng nhất (Google Vids style)"
+              className={`bg-transparent text-xs font-semibold border-none outline-none pr-1 ${
+                isLocked ? 'cursor-not-allowed opacity-60 text-slate-500' : 'cursor-pointer text-slate-800'
+              }`}
+              title={isLocked ? lockReason : 'Chọn bộ Theme màu & phong cách hình ảnh đồng nhất (Google Vids style)'}
             >
               {THEME_OPTIONS.map((theme) => (
                 <option key={theme.id} value={theme.id}>
@@ -202,18 +223,23 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
             </select>
           </div>
 
-          {!production && (
-          <button
-            onClick={onOpenTemplateCatalog}
-            className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-lg flex items-center space-x-1 shadow-xs"
-          >
-            <Image className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Đổi Tài Nguyên STEM</span>
-          </button>
+          {!production && !isLocked && (
+            <button
+              onClick={onOpenTemplateCatalog}
+              className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-lg flex items-center space-x-1 shadow-xs cursor-pointer"
+            >
+              <Image className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Đổi Tài Nguyên STEM</span>
+            </button>
           )}
 
           <button
+            disabled={isLocked}
             onClick={() => {
+              if (isLocked) {
+                showToast?.(lockReason, 'warn');
+                return;
+              }
               let adjustedCount = 0;
               script.scenes.forEach((sc) => {
                 if (sc.narration && sc.narration.trim()) {
@@ -226,10 +252,18 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
               });
               showToast?.(`⚡ Đã tự động khớp thời lượng cho ${adjustedCount} phân cảnh theo lời thoại`, 'success');
             }}
-            className="px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 font-semibold rounded-lg border border-amber-200 flex items-center space-x-1.5 shadow-xs cursor-pointer transition-colors"
-            title="Tự động căn chỉnh độ dài (frames) của toàn bộ phân cảnh cho khớp với lời thoại đọc mẫu (~2.3 từ/giây)"
+            className={`px-3 py-1.5 font-semibold rounded-lg border flex items-center space-x-1.5 shadow-xs transition-colors ${
+              isLocked
+                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border-amber-200 cursor-pointer'
+            }`}
+            title={
+              isLocked
+                ? lockReason
+                : 'Tự động căn chỉnh độ dài (frames) của toàn bộ phân cảnh cho khớp với lời thoại đọc mẫu (~2.3 từ/giây)'
+            }
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+            <Sparkles className={`w-3.5 h-3.5 ${isLocked ? 'text-slate-400' : 'text-amber-600'}`} />
             <span>⚡ Tự Khớp Giọng Đọc</span>
           </button>
           {onSubmitForReview && (
@@ -297,6 +331,26 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
         </div>
       </div>
 
+      {/* Banner Khóa Bản Dựng Khi Đang Chờ Duyệt Hoặc Đã Duyệt */}
+      {isLocked && (
+        <div className="bg-amber-500/10 border-b border-amber-500/25 px-6 py-2.5 flex items-center justify-between text-amber-900 shrink-0 z-10 animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-800">
+              <Lock className="w-3.5 h-3.5" />
+            </div>
+            <div className="text-xs">
+              <span className="font-bold text-amber-950">Chế độ xem (Chỉ đọc): </span>
+              <span className="text-amber-900 font-medium">{lockReason}</span>
+            </div>
+          </div>
+          {status === 'IN_QA' && (
+            <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/90 px-2.5 py-0.5 rounded-full border border-amber-300">
+              Chờ phản hồi từ Reviewer
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Banner Thông Báo Nếu Clip Bị Reviewer Trả Về */}
       {Boolean((script as any).videoReviewNote || (script as any).reviewNote) && script.videoStatus === 'NOT_RENDERED' && (
         <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-start gap-3 text-amber-900 shrink-0 z-10 animate-in fade-in">
@@ -325,6 +379,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
           onChangeDuration={handleChangeDuration}
           onUpdateSceneTitle={handleUpdateSceneTitle}
           onOpenTemplateCatalog={onOpenTemplateCatalog}
+          disabled={isLocked}
         />
 
         {/* Cột 2: LIVE REMOTION PLAYER (Chạy Animation, KaTeX thật) */}
@@ -337,6 +392,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
               updateSceneProperty={updateSceneProperty}
               activeLegoPieceId={activeLegoPieceId}
               onSelectLegoPiece={setActiveLegoPieceId}
+              disabled={isLocked}
             />
 
             {/* BullMQ Render Progress Simulator (Khi bấm Kết Xuất MP4) */}
@@ -367,6 +423,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
           onStartRender={startRender}
           activeLegoPieceId={activeLegoPieceId}
           onSelectLegoPiece={setActiveLegoPieceId}
+          disabled={isLocked}
         />
       </div>
 
