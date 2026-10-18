@@ -408,6 +408,24 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
     };
   }, [dragState, updateSceneProperty, measureDomBoxes]);
 
+  // Every hook runs before the early return below: a hook after it would change the hook
+  // count when playback starts and crash React (error #300, blank page).
+  const canDeleteSelectedPiece = useMemo(() => {
+    if (!selectedPiece) return false;
+    if (selectedPiece.isExtraBlock) return true;
+    if (selectedPiece.isComposedBlock && scene.type === 'COMPOSED' && scene.blocks.length > 1) {
+      return true;
+    }
+    if (
+      scene.type === 'ILLUSTRATED_EXPLAINER' &&
+      selectedPiece.id.startsWith('icon-') &&
+      (scene.icons?.length || 0) > 1
+    ) {
+      return true;
+    }
+    return false;
+  }, [selectedPiece, scene]);
+
   if (isPlaying || !updateSceneProperty) {
     return null;
   }
@@ -536,22 +554,6 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
       return { ...s, componentLayouts: nextLayouts };
     });
   };
-
-  const canDeleteSelectedPiece = useMemo(() => {
-    if (!selectedPiece) return false;
-    if (selectedPiece.isExtraBlock) return true;
-    if (selectedPiece.isComposedBlock && scene.type === 'COMPOSED' && scene.blocks.length > 1) {
-      return true;
-    }
-    if (
-      scene.type === 'ILLUSTRATED_EXPLAINER' &&
-      selectedPiece.id.startsWith('icon-') &&
-      (scene.icons?.length || 0) > 1
-    ) {
-      return true;
-    }
-    return false;
-  }, [selectedPiece, scene]);
 
   const deleteExtraOrComposedPiece = () => {
     if (!selectedPiece) return;
