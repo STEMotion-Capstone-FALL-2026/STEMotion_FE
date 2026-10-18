@@ -34,6 +34,8 @@ import {
   Building2,
   ChevronDown,
   BarChart3,
+  Edit3,
+  X,
 } from 'lucide-react';
 
 interface AdminPortalProps {
@@ -89,13 +91,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [templateSubjectFilter, setTemplateSubjectFilter] = useState<string>('ALL');
   const [showNewTemplateForm, setShowNewTemplateForm] = useState(false);
-  const [newTemplate, setNewTemplate] = useState({
+  const [newTemplate, setNewTemplate] = useState<{
+    name: string;
+    category: string;
+    previewUrl: string;
+    propsSchema: string;
+    isActive: boolean;
+    recommendedSubjects: string[];
+    defaultVisualTheme: string;
+  }>({
     name: '',
     category: 'Physics',
     previewUrl: 'ILLUSTRATED_EXPLAINER',
     propsSchema: '{"sceneType":"ILLUSTRATED_EXPLAINER","stemPillar":"Science"}',
     isActive: true,
+    recommendedSubjects: [],
+    defaultVisualTheme: '',
   });
+  const [editingTemplate, setEditingTemplate] = useState<AdminTemplateDto | null>(null);
 
   // AI Usage Drill-down state (GET /api/v1/admin/ai-usage)
   const [aiUsagePage, setAiUsagePage] = useState<AiUsagePage | null>(null);
@@ -328,7 +341,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     e.preventDefault();
     if (!newTemplate.name.trim()) return;
     try {
-      const created = await adminService.createTemplate(newTemplate);
+      const created = await adminService.createTemplate({
+        ...newTemplate,
+        defaultVisualTheme: newTemplate.defaultVisualTheme || undefined,
+      });
       setTemplates((prev) => [created, ...prev]);
       setNewTemplate({
         name: '',
@@ -336,11 +352,34 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
         previewUrl: 'ILLUSTRATED_EXPLAINER',
         propsSchema: '{"sceneType":"ILLUSTRATED_EXPLAINER","stemPillar":"Science"}',
         isActive: true,
+        recommendedSubjects: [],
+        defaultVisualTheme: '',
       });
       setShowNewTemplateForm(false);
       notify(`Đã đăng ký mẫu Remotion "${created.name}" vào thư viện!`);
     } catch (err: any) {
       notify(err?.message || 'Không thể tạo mẫu hoạt họa mới.');
+    }
+  };
+
+  const handleUpdateTemplateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTemplate || !editingTemplate.name.trim()) return;
+    try {
+      const updated = await adminService.updateTemplate(editingTemplate.id, {
+        name: editingTemplate.name,
+        category: editingTemplate.category,
+        propsSchema: editingTemplate.propsSchema,
+        previewUrl: editingTemplate.previewUrl,
+        isActive: editingTemplate.isActive,
+        recommendedSubjects: editingTemplate.recommendedSubjects || [],
+        defaultVisualTheme: editingTemplate.defaultVisualTheme || '',
+      });
+      setTemplates((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      setEditingTemplate(null);
+      notify(`Đã cập nhật mẫu Remotion "${updated.name}"!`);
+    } catch (err: any) {
+      notify(err?.message || 'Không thể cập nhật mẫu hoạt họa.');
     }
   };
 
@@ -509,7 +548,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                 </div>
                 <p className="text-[11px] text-slate-400 mt-2">
                   Lỗi hôm nay: <b className="text-rose-600">{metrics?.failedToday ?? 0}</b> • Tỉ lệ thành công:{' '}
-                  <b className="text-emerald-600">{metrics?.successRate ?? 100}%</b>
+                  <b className="text-emerald-600">
+                    {metrics?.successRate === -1 || metrics?.successRate == null ? '—' : `${metrics.successRate}%`}
+                  </b>
                 </p>
               </div>
 
@@ -1294,7 +1335,50 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-mono text-[11px]"
                     />
                   </div>
-                  <div className="flex items-end justify-end gap-2">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Theme Mặc Định</label>
+                    <select
+                      value={newTemplate.defaultVisualTheme}
+                      onChange={(e) =>
+                        setNewTemplate({ ...newTemplate, defaultVisualTheme: e.target.value })
+                      }
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-semibold"
+                    >
+                      <option value="">(Không gán theme)</option>
+                      <option value="default">Hiện đại (Indigo)</option>
+                      <option value="cyber">Dark Cyber (Tin / Lý)</option>
+                      <option value="emerald">Nature Lab (Sinh / Hóa)</option>
+                      <option value="sunset">Sáng tạo (Sunset)</option>
+                      <option value="academic">Học thuật (Toán)</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-4">
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Môn Khuyến Nghị (recommendedSubjects)
+                    </label>
+                    <div className="flex flex-wrap gap-4 pt-1">
+                      {['Math', 'Physics', 'Chemistry', 'Biology', 'ComputerScience'].map((subj) => {
+                        const checked = newTemplate.recommendedSubjects.includes(subj);
+                        return (
+                          <label key={subj} className="flex items-center gap-1.5 cursor-pointer font-medium text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const next = e.target.checked
+                                  ? [...newTemplate.recommendedSubjects, subj]
+                                  : newTemplate.recommendedSubjects.filter((s) => s !== subj);
+                                setNewTemplate({ ...newTemplate, recommendedSubjects: next });
+                              }}
+                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span>{subj}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex items-end justify-end gap-2 md:col-span-4">
                     <button
                       type="button"
                       onClick={() => setShowNewTemplateForm(false)}
@@ -1310,6 +1394,125 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                     </button>
                   </div>
                 </form>
+              )}
+
+              {/* Modal chỉnh sửa template (Edit Template Modal) */}
+              {editingTemplate && (
+                <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                      <div className="flex items-center gap-2">
+                        <Edit3 className="w-4 h-4 text-indigo-600" />
+                        <h2 className="text-sm font-bold text-slate-900">Sửa Mẫu Remotion Template</h2>
+                      </div>
+                      <button
+                        onClick={() => setEditingTemplate(null)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleUpdateTemplateSubmit} className="p-6 space-y-4 text-xs">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Tên Mẫu</label>
+                        <input
+                          required
+                          value={editingTemplate.name}
+                          onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="font-bold text-slate-700 block mb-1">Môn STEM Chính</label>
+                          <select
+                            value={editingTemplate.category}
+                            onChange={(e) => setEditingTemplate({ ...editingTemplate, category: e.target.value })}
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-semibold"
+                          >
+                            <option value="Physics">Vật Lý (Science)</option>
+                            <option value="Chemistry">Hóa Học (Science)</option>
+                            <option value="Biology">Sinh Học (Science)</option>
+                            <option value="ComputerScience">Tin Học (Technology)</option>
+                            <option value="Math">Toán Học (Mathematics)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="font-bold text-slate-700 block mb-1">Theme Mặc Định</label>
+                          <select
+                            value={editingTemplate.defaultVisualTheme || ''}
+                            onChange={(e) => setEditingTemplate({ ...editingTemplate, defaultVisualTheme: e.target.value })}
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-semibold"
+                          >
+                            <option value="">(Không gán theme)</option>
+                            <option value="default">Hiện đại (Indigo)</option>
+                            <option value="cyber">Dark Cyber (Tin / Lý)</option>
+                            <option value="emerald">Nature Lab (Sinh / Hóa)</option>
+                            <option value="sunset">Sáng tạo (Sunset)</option>
+                            <option value="academic">Học thuật (Toán)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Mã Composition</label>
+                        <input
+                          required
+                          value={editingTemplate.previewUrl || ''}
+                          onChange={(e) => setEditingTemplate({ ...editingTemplate, previewUrl: e.target.value })}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">
+                          Môn Khuyến Nghị (recommendedSubjects)
+                        </label>
+                        <div className="flex flex-wrap gap-4 pt-1">
+                          {['Math', 'Physics', 'Chemistry', 'Biology', 'ComputerScience'].map((subj) => {
+                            const cur = editingTemplate.recommendedSubjects || [];
+                            const checked = cur.includes(subj);
+                            return (
+                              <label key={subj} className="flex items-center gap-1.5 cursor-pointer font-medium text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...cur, subj]
+                                      : cur.filter((s) => s !== subj);
+                                    setEditingTemplate({ ...editingTemplate, recommendedSubjects: next });
+                                  }}
+                                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <span>{subj}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingTemplate(null)}
+                          className="px-4 py-2 border border-slate-300 text-slate-600 font-bold rounded-xl"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2 bg-indigo-600 text-white font-bold rounded-xl shadow-xs"
+                        >
+                          Lưu Thay Đổi
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
               )}
 
               {loadingTemplates ? (
@@ -1336,7 +1539,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                         return (
                           <tr key={tpl.id} className="hover:bg-slate-50/80">
                             <td className="py-3.5 pr-4 font-bold text-slate-900">
-                              {tpl.name}
+                              <div>{tpl.name}</div>
+                              <div className="flex flex-wrap gap-1 mt-1 font-normal">
+                                {tpl.defaultVisualTheme && (
+                                  <span className="px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 text-[10px] font-mono border border-purple-200">
+                                    Theme: {tpl.defaultVisualTheme}
+                                  </span>
+                                )}
+                                {tpl.recommendedSubjects && tpl.recommendedSubjects.length > 0 && (
+                                  <span className="px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 text-[10px] font-mono border border-blue-200">
+                                    Môn: {tpl.recommendedSubjects.join(', ')}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-3.5 px-3">
                               <span
@@ -1374,6 +1589,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                               </button>
                             </td>
                             <td className="py-3.5 pl-3 text-right">
+                              <button
+                                onClick={() => setEditingTemplate(tpl)}
+                                className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition mr-1"
+                                title="Sửa mẫu hoạt họa"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
                               <button
                                 onClick={() => void handleDeleteTemplate(tpl)}
                                 className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition"

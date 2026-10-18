@@ -19,6 +19,7 @@ export interface Composition {
   scenes: SceneData[];
   updatedAt?: string | null;
   updatedByName?: string | null;
+  visualTheme?: string | null;
 }
 
 export const compositionService = {
@@ -27,14 +28,18 @@ export const compositionService = {
   },
 
   /** Fails with 409 when someone saved a newer revision first. */
-  save(projectId: string, baseRevision: number, scenes: SceneData[]): Promise<Composition> {
-    return apiClient.put<Composition>(`/scripts/${projectId}/composition`, { baseRevision, scenes });
+  save(projectId: string, baseRevision: number, scenes: SceneData[], visualTheme?: string | null): Promise<Composition> {
+    return apiClient.put<Composition>(`/scripts/${projectId}/composition`, {
+      baseRevision,
+      scenes,
+      visualTheme: visualTheme ?? undefined,
+    });
   },
 };
 
 export interface CompositionSaver {
-  /** For continuous edits: only the latest scenes are sent, once edits pause. */
-  schedule(scenes: SceneData[]): void;
+  /** For continuous edits: only the latest scenes and theme are sent, once edits pause. */
+  schedule(scenes: SceneData[], visualTheme?: string | null): void;
   /** Sends a pending edit now and waits for every save, e.g. before a render. */
   flush(): Promise<void>;
   dispose(): void;
@@ -53,7 +58,7 @@ export function createCompositionSaver(
   const delayMs = options.delayMs ?? SAVE_DEBOUNCE_MS;
   const save = options.save ?? compositionService.save;
   let revision = startRevision;
-  let pending: SceneData[] | null = null;
+  let pending: { scenes: SceneData[]; visualTheme?: string | null } | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let chain: Promise<void> = Promise.resolve();
   let disposed = false;
@@ -61,13 +66,15 @@ export function createCompositionSaver(
   const flush = (): Promise<void> => {
     if (timer) clearTimeout(timer);
     timer = undefined;
-    const scenes = pending;
+    const current = pending;
     pending = null;
-    if (scenes) {
+    if (current) {
       chain = chain.then(async () => {
         if (disposed) return;
         try {
-          const saved = await save(projectId, revision, scenes);
+          const saved = current.visualTheme !== undefined
+            ? await save(projectId, revision, current.scenes, current.visualTheme)
+            : await save(projectId, revision, current.scenes);
           revision = saved.revision;
           if (!disposed) handlers.onSaved(saved);
         } catch (error) {
@@ -79,9 +86,9 @@ export function createCompositionSaver(
   };
 
   return {
-    schedule(scenes) {
+    schedule(scenes, visualTheme) {
       if (disposed) return;
-      pending = scenes;
+      pending = { scenes, visualTheme };
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => void flush(), delayMs);
     },

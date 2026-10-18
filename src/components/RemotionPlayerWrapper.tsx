@@ -2,9 +2,9 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Player, PlayerRef } from '@remotion/player';
 import { Audio } from 'remotion';
 import { STEMScript, SceneData } from '../types/stem';
-import { FullSTEMVideo, SceneErrorBoundary, renderSceneComponent } from '../remotion/compositions/FullSTEMVideo';
+import { FullSTEMVideo, SceneErrorBoundary, renderSceneComponent, SafeAudio } from '../remotion/compositions/FullSTEMVideo';
 import { SceneSeedContext, VideoSeedContext } from '../remotion/flat/variation';
-import { Play, Pause, RotateCcw, Sparkles, Maximize, Minimize, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, RotateCcw, Sparkles, Maximize, Minimize, Volume2, VolumeX, AlertTriangle } from 'lucide-react';
 import { CanvaInteractiveOverlay } from './CanvaInteractiveOverlay';
 
 const SingleSceneRenderer: React.FC<{ scene: SceneData; workspaceId?: string }> = ({ scene, workspaceId }) => {
@@ -16,7 +16,7 @@ const SingleSceneRenderer: React.FC<{ scene: SceneData; workspaceId?: string }> 
         <SceneSeedContext.Provider value={scene.id}>
           {renderSceneComponent(scene)}
         </SceneSeedContext.Provider>
-        {narrationUrl && <Audio src={narrationUrl} />}
+        {narrationUrl && <SafeAudio src={narrationUrl} />}
       </SceneErrorBoundary>
     </VideoSeedContext.Provider>
   );
@@ -153,17 +153,69 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
       playerRef.current.pause();
       setIsPlaying(false);
     } else {
-      playerRef.current.play();
-      setIsPlaying(true);
+      const maxFrames = viewMode === 'FULL' ? totalFrames : (selectedScene?.durationInFrames || 150);
+      if (currentFrame >= maxFrames - 1) {
+        playerRef.current.seekTo(0);
+        setCurrentFrame(0);
+      }
+      try {
+        const playResult: any = playerRef.current.play();
+        if (playResult && typeof playResult.catch === 'function') {
+          playResult.catch((err: any) => {
+            console.warn('[RemotionPlayerWrapper] play() rejected:', err);
+            setIsPlaying(false);
+          });
+        }
+        setIsPlaying(true);
+      } catch (err) {
+        console.warn('[RemotionPlayerWrapper] play() threw error:', err);
+        setIsPlaying(false);
+      }
     }
   };
 
   const restartVideo = () => {
     if (!playerRef.current) return;
     playerRef.current.seekTo(0);
-    playerRef.current.play();
-    setIsPlaying(true);
+    setCurrentFrame(0);
+    try {
+      const playResult: any = playerRef.current.play();
+      if (playResult && typeof playResult.catch === 'function') {
+        playResult.catch((err: any) => {
+          console.warn('[RemotionPlayerWrapper] restart play rejected:', err);
+          setIsPlaying(false);
+        });
+      }
+      setIsPlaying(true);
+    } catch (err) {
+      console.warn('[RemotionPlayerWrapper] restart play threw error:', err);
+      setIsPlaying(false);
+    }
   };
+
+  const renderPlayerErrorFallback = (errorProps: { error: Error }) => (
+    <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-white select-none">
+      <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 max-w-md shadow-2xl">
+        <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3">
+          <AlertTriangle className="w-5 h-5" />
+        </div>
+        <h4 className="font-bold text-slate-200 text-sm mb-1">Không thể phát hoạt cảnh này</h4>
+        <p className="text-xs text-slate-400 mb-4">{errorProps.error?.message || 'Có lỗi xảy ra khi dựng phân cảnh'}</p>
+        <button
+          type="button"
+          onClick={() => {
+            if (playerRef.current) {
+              playerRef.current.seekTo(0);
+              setCurrentFrame(0);
+            }
+          }}
+          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-bold text-white transition-all cursor-pointer"
+        >
+          Phát lại từ đầu
+        </button>
+      </div>
+    </div>
+  );
 
   const formatTime = (frameNum: number) => {
     const totalSec = Math.floor(frameNum / 30);
@@ -285,6 +337,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
             inputProps={fullInputProps}
             controls={false}
             loop={false}
+            errorFallback={renderPlayerErrorFallback}
           />
         ) : (
           <Player
@@ -301,6 +354,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
             inputProps={singleInputProps}
             controls={false}
             loop={false}
+            errorFallback={renderPlayerErrorFallback}
           />
         )}
 

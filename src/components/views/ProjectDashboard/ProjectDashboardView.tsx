@@ -48,6 +48,27 @@ const STAGE_CONFIGS: Record<PipelineStage, { label: string; bg: string; text: st
   PUBLISHED: { label: 'Đã xuất bản', bg: 'bg-teal-50', text: 'text-teal-800', border: 'border-teal-300' },
 };
 
+export const getProjectStageBadge = (sc: STEMScript) => {
+  if (sc.scriptStatus === 'CHANGE_REQUESTED') {
+    return {
+      label: 'Cần sửa lại',
+      bg: 'bg-rose-50',
+      text: 'text-rose-700',
+      border: 'border-rose-200',
+    };
+  }
+  if (sc.videoStatus === 'APPROVED') {
+    return {
+      label: 'Video đã duyệt',
+      bg: 'bg-emerald-50',
+      text: 'text-emerald-800',
+      border: 'border-emerald-300',
+    };
+  }
+  const stage = pipelineStage(sc);
+  return STAGE_CONFIGS[stage] || STAGE_CONFIGS.DRAFT;
+};
+
 export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
   scripts,
   currentRole,
@@ -382,7 +403,7 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredScripts.map((sc) => {
               const stage = pipelineStage(sc);
-              const stageConfig = STAGE_CONFIGS[stage] || STAGE_CONFIGS.DRAFT;
+              const stageConfig = getProjectStageBadge(sc);
               const subStyle = SUBJECT_COLORS[sc.subject] || {
                 bg: 'bg-slate-50',
                 text: 'text-slate-700',
@@ -444,25 +465,34 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
                     {currentRole === 'producer' ? (
                       <span
                         className={`text-xs font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1 transition-all ${
-                          isReadyForProducer
+                          sc.videoStatus === 'APPROVED'
+                            ? 'bg-emerald-600 text-white shadow-xs group-hover:bg-emerald-700'
+                            : isReadyForProducer
                             ? 'bg-brand-600 text-white shadow-xs group-hover:bg-brand-700'
                             : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
                         }`}
                       >
                         <PlayCircle className="w-3.5 h-3.5" />
-                        <span>{isReadyForProducer ? 'Vào Dựng Video' : 'Xem Kịch Bản'}</span>
+                        <span>{sc.videoStatus === 'APPROVED' ? 'Video Đã Duyệt' : isReadyForProducer ? 'Vào Dựng Video' : 'Xem Kịch Bản'}</span>
                       </span>
                     ) : currentRole === 'reviewer' ? (
                       <span
                         className={`text-xs font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1 transition-all ${
-                          stage === 'CLIP_REVIEW'
+                          sc.videoStatus === 'APPROVED'
+                            ? 'bg-emerald-600 text-white shadow-xs group-hover:bg-emerald-700'
+                            : stage === 'CLIP_REVIEW'
                             ? 'bg-purple-600 text-white shadow-xs group-hover:bg-purple-700'
                             : stage === 'SCRIPT_REVIEW'
                             ? 'bg-amber-600 text-white shadow-xs group-hover:bg-amber-700'
                             : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
                         }`}
                       >
-                        {stage === 'CLIP_REVIEW' ? (
+                        {sc.videoStatus === 'APPROVED' ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Video Đã Duyệt</span>
+                          </>
+                        ) : stage === 'CLIP_REVIEW' ? (
                           <>
                             <PlayCircle className="w-3.5 h-3.5" />
                             <span>Duyệt Video Thành Phẩm</span>
@@ -482,12 +512,14 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
                     ) : (
                       <span
                         className={`text-xs font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1 transition-all ${
-                          isNeedsWriter
+                          sc.scriptStatus === 'CHANGE_REQUESTED'
+                            ? 'bg-rose-600 text-white shadow-xs group-hover:bg-rose-700'
+                            : isNeedsWriter
                             ? 'bg-brand-600 text-white shadow-xs group-hover:bg-brand-700'
                             : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
                         }`}
                       >
-                        <span>{isNeedsWriter ? 'Soạn Kịch Bản' : 'Xem Chi Tiết'}</span>
+                        <span>{sc.scriptStatus === 'CHANGE_REQUESTED' ? 'Sửa Lại Kịch Bản' : isNeedsWriter ? 'Soạn Kịch Bản' : 'Xem Chi Tiết'}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </span>
                     )}

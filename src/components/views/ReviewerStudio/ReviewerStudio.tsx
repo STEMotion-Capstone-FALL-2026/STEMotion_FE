@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Columns2,
   FileText,
@@ -20,9 +20,20 @@ import {
   ListOrdered,
   X,
   Loader2,
+  Reply,
 } from 'lucide-react';
 import { STEMScript, SceneData, FeedbackComment } from '../../../types/stem';
-import { UserRole, reviewService, QaReport, ReviewQueueItem } from '../../../services';
+import {
+  UserRole,
+  reviewService,
+  QaReport,
+  ReviewQueueItem,
+  compositionService,
+  type Composition,
+  groupCommentsWithReplies,
+  projectService,
+  renderService,
+} from '../../../services';
 import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
 import { renderLatexToString } from '../../../utils/latex';
 import { ClipCompareModal } from '../../modals/ClipCompareModal';
@@ -48,6 +59,191 @@ interface ReviewerStudioProps {
   onStartRender?: () => Promise<void>;
   isRendering?: boolean;
   showToast: (message: string, type?: 'success' | 'info' | 'warn') => void;
+}
+
+interface CommentCardProps {
+  comment: FeedbackComment;
+  onResolve: (id: string) => Promise<void>;
+  onReopen: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onReply: (id: string) => Promise<void>;
+  onSeek?: (timestampSec: number) => void;
+  replyingToId: string | null;
+  setReplyingToId: (id: string | null) => void;
+  replyInput: string;
+  setReplyInput: (val: string) => void;
+  submittingReply: boolean;
+}
+
+function CommentCard({
+  comment,
+  onResolve,
+  onReopen,
+  onDelete,
+  onReply,
+  onSeek,
+  replyingToId,
+  setReplyingToId,
+  replyInput,
+  setReplyInput,
+  submittingReply,
+}: CommentCardProps) {
+  const isResolved = comment.status === 'RESOLVED';
+  const hasReplies = Boolean(comment.replies && comment.replies.length > 0);
+  const isReplying = replyingToId === comment.id;
+
+  return (
+    <div
+      className={`p-3 rounded-xl text-xs space-y-1.5 transition-colors border ${
+        isResolved
+          ? 'bg-slate-100/70 border-slate-200 opacity-80'
+          : 'bg-white border-slate-200 hover:border-purple-300 shadow-2xs'
+      }`}
+    >
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {comment.timestampSec !== undefined && comment.timestampSec !== null && !comment.sceneId && (
+            <span className="font-mono font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 text-[10px]">
+              ⏱ {Math.floor(comment.timestampSec / 60).toString().padStart(2, '0')}:
+              {(Math.floor(comment.timestampSec) % 60).toString().padStart(2, '0')}
+            </span>
+          )}
+          {isResolved ? (
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-semibold flex items-center gap-1">
+              <Check className="w-3 h-3" />
+              Đã sửa{comment.resolvedByName ? ` bởi ${comment.resolvedByName}` : ''}
+            </span>
+          ) : (
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">
+              Chưa sửa
+            </span>
+          )}
+          {comment.author && (
+            <span className="text-[10px] text-slate-500 font-medium">
+              • {comment.author} ({comment.role || 'Reviewer'})
+            </span>
+          )}
+        </div>
+        {onSeek && comment.timestampSec !== undefined && (
+          <button
+            type="button"
+            onClick={() => onSeek(comment.timestampSec)}
+            className="text-[10px] text-blue-600 font-semibold hover:underline cursor-pointer"
+          >
+            Nhảy tới ▶
+          </button>
+        )}
+      </div>
+
+      <p className={`text-[11px] leading-relaxed ${isResolved ? 'line-through text-slate-500' : 'text-slate-700'}`}>
+        {comment.content}
+      </p>
+
+      {/* Action buttons for ROOT comment */}
+      <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+        <button
+          type="button"
+          onClick={() => {
+            if (isReplying) {
+              setReplyingToId(null);
+            } else {
+              setReplyingToId(comment.id);
+              setReplyInput('');
+            }
+          }}
+          className="text-[10px] text-purple-700 hover:text-purple-800 font-semibold flex items-center gap-0.5 cursor-pointer"
+        >
+          <Reply className="w-3 h-3" /> Trả lời
+        </button>
+
+        {isResolved ? (
+          <button
+            type="button"
+            onClick={() => void onReopen(comment.id)}
+            className="text-[10px] text-amber-700 hover:text-amber-800 font-semibold cursor-pointer"
+          >
+            Mở lại
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void onResolve(comment.id)}
+            className="text-[10px] text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-0.5 cursor-pointer"
+          >
+            <Check className="w-3 h-3" /> Đánh dấu đã sửa
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => void onDelete(comment.id)}
+          className="text-[10px] text-rose-600 hover:text-rose-700 p-0.5 rounded hover:bg-rose-50 cursor-pointer"
+          title="Xóa nhận xét"
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </div>
+
+      {/* Nested Replies (Bug 2.2: Note that reply items do NOT have a resolve button) */}
+      {hasReplies && (
+        <div className="ml-3 pl-3 border-l-2 border-purple-200 space-y-1.5 mt-2 pt-1">
+          {comment.replies!.map((reply) => (
+            <div key={reply.id} className="p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-[11px] space-y-1">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="font-bold text-slate-800">
+                  {reply.author || 'Thành viên'} <span className="font-normal text-slate-500">({reply.role || 'Member'})</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void onDelete(reply.id)}
+                  className="text-rose-600 hover:text-rose-700 p-0.5 rounded cursor-pointer"
+                  title="Xóa phản hồi"
+                >
+                  <Trash2 className="w-2.5 h-2.5" />
+                </button>
+              </div>
+              <p className="text-slate-700 leading-snug">{reply.content}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Inline Reply Form */}
+      {isReplying && (
+        <div className="ml-3 pl-3 border-l-2 border-purple-300 space-y-1.5 mt-2 pt-1">
+          <textarea
+            rows={2}
+            value={replyInput}
+            onChange={(e) => setReplyInput(e.target.value)}
+            placeholder="Nhập câu trả lời cho nhận xét này..."
+            className="w-full p-2 border border-purple-200 rounded-lg text-xs bg-white focus:outline-none focus:border-purple-400"
+            autoFocus
+          />
+          <div className="flex justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setReplyingToId(null);
+                setReplyInput('');
+              }}
+              className="px-2.5 py-1 text-[11px] text-slate-600 hover:bg-slate-100 rounded cursor-pointer"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              disabled={submittingReply || !replyInput.trim()}
+              onClick={() => void onReply(comment.id)}
+              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+            >
+              {submittingReply && <Loader2 className="w-3 h-3 animate-spin" />}
+              <span>Gửi Phản Hồi</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
@@ -81,6 +277,137 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   const [queueItems, setQueueItems] = useState<ReviewQueueItem[]>([]);
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [localComments, setLocalComments] = useState<FeedbackComment[]>(comments);
+
+  const [composition, setComposition] = useState<Composition | null>(null);
+  const [loadingComposition, setLoadingComposition] = useState(false);
+  const [videoPlayerSource, setVideoPlayerSource] = useState<'mp4' | 'web'>('web');
+
+  useEffect(() => {
+    if (script.videoUrl) {
+      setVideoPlayerSource('mp4');
+    }
+  }, [script.videoUrl]);
+
+  const fetchComposition = useCallback(async () => {
+    setLoadingComposition(true);
+    try {
+      const comp = await compositionService.get(script.id);
+      setComposition(comp);
+    } catch {
+      setComposition(null);
+    } finally {
+      setLoadingComposition(false);
+    }
+  }, [script.id]);
+
+  useEffect(() => {
+    if (reviewerMode === 'video') {
+      void fetchComposition();
+    }
+  }, [reviewerMode, fetchComposition]);
+
+  const reviewScript = useMemo<STEMScript>(() => {
+    if (composition && composition.scenes && composition.scenes.length > 0) {
+      return {
+        ...script,
+        scenes: composition.scenes,
+        visualTheme: composition.visualTheme || (script as any).visualTheme,
+        totalDurationSeconds: Math.round(
+          composition.scenes.reduce((acc, s) => acc + (s.durationInFrames || 150), 0) / (script.fps || 30)
+        ),
+      };
+    }
+    return script;
+  }, [script, composition]);
+
+  const [bgRenderStatus, setBgRenderStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (script.videoStatus !== 'APPROVED' || script.videoUrl) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const jobs = await renderService.getHistory(script.id);
+        if (!active) return;
+        const latestJob = jobs[0];
+        if (latestJob) {
+          setBgRenderStatus(latestJob.status);
+          if (latestJob.status === 'COMPLETED' && latestJob.videoUrl) {
+            setScript((prev) => ({ ...prev, videoUrl: latestJob.videoUrl }));
+            showToast('Kết xuất MP4 nền đã hoàn tất! Video đã sẵn sàng để xuất bản.', 'success');
+          }
+        }
+      } catch {
+        // ignore polling errors
+      }
+    };
+    void poll();
+    const interval = setInterval(poll, 4000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [script.id, script.videoStatus, script.videoUrl, setScript, showToast]);
+
+  const groupedComments = useMemo(() => {
+    return groupCommentsWithReplies(localComments);
+  }, [localComments]);
+
+  const sceneComments = useMemo(() => {
+    return groupedComments.filter((c) => c.sceneId === selectedScene.id);
+  }, [groupedComments, selectedScene.id]);
+
+  const timelineComments = useMemo(() => {
+    return groupedComments.filter((c) => !c.sceneId);
+  }, [groupedComments]);
+
+  const [sceneCommentInput, setSceneCommentInput] = useState('');
+  const [submittingSceneComment, setSubmittingSceneComment] = useState(false);
+
+  const handleAddSceneComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sceneCommentInput.trim()) return;
+    setSubmittingSceneComment(true);
+    try {
+      const added = await reviewService.addComment(script.id, {
+        content: sceneCommentInput.trim(),
+        sceneId: selectedScene.id,
+        timestampSec: 0,
+        status: 'OPEN',
+        author: 'Reviewer',
+        avatar: 'RV',
+        role: 'Reviewer',
+        createdAt: 'Vừa xong',
+      });
+      setLocalComments((prev) => [...prev, added]);
+      setSceneCommentInput('');
+      showToast('Đã thêm nhận xét cho phân cảnh.', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Không gửi được nhận xét phân cảnh.', 'warn');
+    } finally {
+      setSubmittingSceneComment(false);
+    }
+  };
+
+  const [replyingToId, setReplyingToId] = useState<string | null>(null);
+  const [replyInput, setReplyInput] = useState('');
+  const [submittingReply, setSubmittingReply] = useState(false);
+
+  const handleSendReply = async (commentId: string) => {
+    if (!replyInput.trim()) return;
+    setSubmittingReply(true);
+    try {
+      const replied = await reviewService.replyComment(commentId, replyInput.trim());
+      setLocalComments((prev) => [...prev, replied]);
+      setReplyInput('');
+      setReplyingToId(null);
+      showToast('Đã gửi phản hồi nhận xét.', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Không gửi được phản hồi.', 'warn');
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
 
   useEffect(() => {
     setLocalComments(comments);
@@ -120,7 +447,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       await reviewService.resolveComment(script.id, commentId);
       showToast('Đã đánh dấu đã giải quyết góp ý.', 'success');
       setLocalComments((prev) =>
-        prev.map((c) => (c.id === commentId ? { ...c, status: 'RESOLVED' } : c))
+        prev.map((c) => (c.id === commentId ? { ...c, status: 'RESOLVED', resolvedByName: 'Reviewer', resolvedAt: new Date().toISOString() } : c))
       );
     } catch (err: any) {
       showToast(err.message || 'Lỗi khi giải quyết góp ý.', 'warn');
@@ -132,7 +459,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       await reviewService.reopenComment(commentId);
       showToast('Đã mở lại nhận xét.', 'info');
       setLocalComments((prev) =>
-        prev.map((c) => (c.id === commentId ? { ...c, status: 'OPEN' } : c))
+        prev.map((c) => (c.id === commentId ? { ...c, status: 'OPEN', resolvedByName: undefined, resolvedAt: undefined } : c))
       );
     } catch (err: any) {
       showToast(err.message || 'Lỗi khi mở lại nhận xét.', 'warn');
@@ -198,11 +525,14 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
     const noteToSubmit = overrideNote !== undefined ? overrideNote : reviewNote;
     setDecisionPending(true);
     try {
-      const updated = decision === 'VIDEO_APPROVED'
-        ? await reviewService.approveVideo(script.id)
-        : decision === 'VIDEO_RETURNED'
-          ? await reviewService.sendBackVideo(script.id, noteToSubmit)
-          : await reviewService.submitReviewDecision(script.id, decision, noteToSubmit);
+      if (decision === 'VIDEO_APPROVED') {
+        await reviewService.approveVideo(script.id);
+      } else if (decision === 'VIDEO_RETURNED') {
+        await reviewService.sendBackVideo(script.id, noteToSubmit);
+      } else {
+        await reviewService.submitReviewDecision(script.id, decision, noteToSubmit);
+      }
+      const updated = await projectService.getProjectById(script.id);
       setScript(updated);
       setActiveSceneId(updated.scenes[0]?.id || '');
       showToast(decision.includes('RETURNED') || decision === 'CHANGE_REQUESTED'
@@ -211,7 +541,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
         if (!updated.videoUrl && onStartRender) {
           showToast('Clip đã được phê duyệt! Bắt đầu kết xuất MP4 tự động...', 'info');
           void onStartRender();
-        } else {
+        } else if (updated.videoUrl) {
           onOpenPublishModal();
         }
       }
@@ -336,55 +666,70 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
             )
           ) : (
             <>
-              <button
-                onClick={() => setCompareOpen(true)}
-                className="px-3 py-1.5 bg-purple-50 border border-purple-300 hover:bg-purple-100 text-purple-800 rounded-lg font-bold flex items-center space-x-1"
-                title="Đặt hai bản render của clip cạnh nhau"
-              >
-                <Columns2 className="w-3.5 h-3.5" />
-                <span>So sánh bản render</span>
-              </button>
-              <button
-                onClick={() => handleOpenRejectModal('VIDEO')}
-                disabled={decisionPending}
-                className="px-3 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Yêu Cầu Producer Sửa Clip</span>
-              </button>
-              <button
-                onClick={onOpenPublishModal}
-                disabled={!script.videoUrl}
-                className={`px-3 py-1.5 rounded-lg font-bold flex items-center space-x-1.5 shadow-2xs ${
-                  !script.videoUrl
-                    ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
-                    : 'bg-blue-50 border border-blue-300 hover:bg-blue-100 text-blue-800 cursor-pointer'
-                }`}
-                title={script.videoUrl ? 'Tải video MP4 Full HD về máy tính' : 'Chưa có file MP4; cần kết xuất sau khi duyệt'}
-              >
-                <Download className="w-3.5 h-3.5 text-blue-600" />
-                <span>Tải Video MP4</span>
-              </button>
-              <button
-                onClick={() => void decide('VIDEO_APPROVED')}
-                disabled={decisionPending || isRendering}
-                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer"
-              >
-                {decisionPending || isRendering ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <CheckCheck className="w-4 h-4" />
-                )}
-                <span>
-                  {script.videoStatus === 'APPROVED'
-                    ? script.videoUrl
-                      ? 'Đã Duyệt ➔ Tải MP4 / Xuất Bản'
-                      : isRendering
-                      ? 'Đang Render MP4...'
-                      : 'Đã Duyệt ➔ Bắt Đầu Render MP4'
-                    : 'Duyệt Video ➔ Kích Hoạt Render MP4'}
-                </span>
-              </button>
+              {script.videoStatus === 'APPROVED' || script.videoStatus === 'PUBLISHED' ? (
+                <div className="flex items-center space-x-2">
+                  <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-xs flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Video đã được duyệt</span>
+                  </span>
+                  {(bgRenderStatus === 'RENDERING' || isRendering) && (
+                    <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-xs flex items-center gap-1.5 animate-pulse">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Đang render MP4 ngầm...</span>
+                    </span>
+                  )}
+                  {script.videoUrl ? (
+                    <button
+                      onClick={onOpenPublishModal}
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer"
+                      title="Tải video MP4 Full HD hoặc xuất bản"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Tải MP4 / Xuất Bản</span>
+                    </button>
+                  ) : !isRendering && onStartRender ? (
+                    <button
+                      onClick={onStartRender}
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer"
+                      title="Bắt đầu kết xuất MP4"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      <span>Bắt Đầu Render MP4</span>
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setCompareOpen(true)}
+                    className="px-3 py-1.5 bg-purple-50 border border-purple-300 hover:bg-purple-100 text-purple-800 rounded-lg font-bold flex items-center space-x-1"
+                    title="Đặt hai bản render của clip cạnh nhau"
+                  >
+                    <Columns2 className="w-3.5 h-3.5" />
+                    <span>So sánh bản render</span>
+                  </button>
+                  <button
+                    onClick={() => handleOpenRejectModal('VIDEO')}
+                    disabled={decisionPending}
+                    className="px-3 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Yêu Cầu Producer Sửa Clip</span>
+                  </button>
+                  <button
+                    onClick={() => void decide('VIDEO_APPROVED')}
+                    disabled={decisionPending || isRendering}
+                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer"
+                  >
+                    {decisionPending || isRendering ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCheck className="w-4 h-4" />
+                    )}
+                    <span>Duyệt Video ➔ Kích Hoạt Render MP4</span>
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>
@@ -402,28 +747,38 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
               Danh Sách Cảnh Cần Duyệt ({script.scenes.length})
             </span>
             <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-1">
-              {script.scenes.map((sc, i) => (
-                <div
-                  key={sc.id}
-                  onClick={() => setActiveSceneId(sc.id)}
-                  className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                    sc.id === selectedScene.id
-                      ? 'bg-amber-50 border-amber-400 font-semibold shadow-xs ring-2 ring-amber-400/20'
-                      : 'bg-white border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex justify-between items-center text-[10px] text-slate-500 mb-1">
-                    <span className="font-mono font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
-                      0{i + 1}
+              {script.scenes.map((sc, i) => {
+                const sceneCommentCount = localComments.filter((c) => c.sceneId === sc.id).length;
+                return (
+                  <div
+                    key={sc.id}
+                    onClick={() => setActiveSceneId(sc.id)}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      sc.id === selectedScene.id
+                        ? 'bg-amber-50 border-amber-400 font-semibold shadow-xs ring-2 ring-amber-400/20'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center text-[10px] text-slate-500 mb-1">
+                      <span className="font-mono font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
+                        0{i + 1}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {sceneCommentCount > 0 && (
+                          <span className="font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded text-[10px]">
+                            💬 {sceneCommentCount}
+                          </span>
+                        )}
+                        <span>{Math.round((sc.durationInFrames || 150) / 30)}s</span>
+                      </div>
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-800 line-clamp-1">{sc.title}</h4>
+                    <span className="text-[10px] font-mono text-amber-700 block mt-0.5">
+                      {sc.type}
                     </span>
-                    <span>{Math.round((sc.durationInFrames || 150) / 30)}s</span>
                   </div>
-                  <h4 className="text-xs font-bold text-slate-800 line-clamp-1">{sc.title}</h4>
-                  <span className="text-[10px] font-mono text-amber-700 block mt-0.5">
-                    {sc.type}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </aside>
 
@@ -669,6 +1024,77 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                   </p>
                 </div>
               )}
+
+              {/* KHUNG GÓP Ý DÀNH RIÊNG CHO PHÂN CẢNH (Scene-Level Comments - Bug 2.1) */}
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <MessageSquare className="w-4 h-4 text-amber-600" />
+                    <h3 className="font-bold text-slate-900 text-xs">
+                      Góp Ý Phân Cảnh Này ({sceneComments.length})
+                    </h3>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-semibold">
+                    Cảnh: {selectedScene.title}
+                  </span>
+                </div>
+
+                {/* Danh sách góp ý của phân cảnh */}
+                <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                  {sceneComments.length === 0 ? (
+                    <p className="text-center text-slate-400 py-3 text-[11px] italic">
+                      Chưa có góp ý nào cho phân cảnh này.
+                    </p>
+                  ) : (
+                    sceneComments.map((cm) => (
+                      <CommentCard
+                        key={cm.id}
+                        comment={cm}
+                        onResolve={handleResolveComment}
+                        onReopen={handleReopenComment}
+                        onDelete={handleDeleteComment}
+                        onReply={handleSendReply}
+                        replyingToId={replyingToId}
+                        setReplyingToId={setReplyingToId}
+                        replyInput={replyInput}
+                        setReplyInput={setReplyInput}
+                        submittingReply={submittingReply}
+                      />
+                    ))
+                  )}
+                </div>
+
+                {/* Form thêm góp ý cho phân cảnh */}
+                <form
+                  onSubmit={handleAddSceneComment}
+                  className="p-3 bg-white border border-amber-200 rounded-xl space-y-2 shadow-2xs"
+                >
+                  <label className="font-bold text-amber-900 block text-[11px]">
+                    Thêm nhận xét cho phân cảnh {selectedScene.title}:
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={sceneCommentInput}
+                    onChange={(e) => setSceneCommentInput(e.target.value)}
+                    placeholder="Nhập nội dung cần tác giả sửa ở cảnh này..."
+                    className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:bg-white focus:outline-none focus:border-amber-400"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={submittingSceneComment || !sceneCommentInput.trim()}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold rounded-lg text-xs shadow-xs flex items-center space-x-1 cursor-pointer"
+                    >
+                      {submittingSceneComment ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
+                      <span>Gửi Nhận Xét Cảnh</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </main>
 
@@ -792,14 +1218,65 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
         /* CHẾ ĐỘ 2: THẨM ĐỊNH VIDEO THÀNH PHẨM (VIDEO QA) */
         /* ========================================================================= */
         <div className="flex-1 min-h-0 flex overflow-hidden">
-          {/* Cột Trái: Remotion Player trực tiếp để Reviewer thẩm định từng frame */}
+          {/* Cột Trái: Remotion Player trực tiếp để Reviewer thẩm định từng frame hoặc video MP4 */}
           <main className="flex-1 min-h-0 bg-slate-900 p-4 md:p-6 flex flex-col justify-start overflow-y-auto custom-scrollbar">
             <div className="w-full max-w-3xl mx-auto space-y-4 pb-8">
-              <RemotionPlayerWrapper
-                script={script}
-                seekTimestampSec={seekTimestampSec}
-                onFrameUpdate={(_f, s) => setCurrentSec(s)}
-              />
+              {/* Header switch between MP4 and Web Player if MP4 is ready */}
+              {script.videoUrl && (
+                <div className="flex items-center justify-between bg-slate-800/80 p-1.5 rounded-xl border border-slate-700 text-xs">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setVideoPlayerSource('mp4')}
+                      className={`px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                        videoPlayerSource === 'mp4'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Video MP4 Kết Xuất</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVideoPlayerSource('web')}
+                      className={`px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                        videoPlayerSource === 'web'
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Web Player Trực Tiếp (Bản Dựng Producer)</span>
+                    </button>
+                  </div>
+                  <span className="text-[11px] text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-800">
+                    MP4 Full HD sẵn sàng
+                  </span>
+                </div>
+              )}
+
+              {loadingComposition ? (
+                <div className="aspect-video bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 gap-2 border border-slate-700">
+                  <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+                  <span className="text-sm">Đang tải bản dựng Producer...</span>
+                </div>
+              ) : script.videoUrl && videoPlayerSource === 'mp4' ? (
+                <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-slate-700">
+                  <video
+                    src={script.videoUrl}
+                    controls
+                    onTimeUpdate={(e) => setCurrentSec(e.currentTarget.currentTime)}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              ) : (
+                <RemotionPlayerWrapper
+                  script={reviewScript}
+                  seekTimestampSec={seekTimestampSec}
+                  onFrameUpdate={(_f, s) => setCurrentSec(s)}
+                />
+              )}
             </div>
           </main>
 
@@ -810,7 +1287,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                 <div className="flex items-center space-x-2">
                   <MessageSquare className="w-4 h-4 text-purple-600" />
                   <h3 className="font-bold text-slate-900">
-                    Ghi Chú Mốc Thời Gian ({localComments.length})
+                    Ghi Chú Mốc Thời Gian ({timelineComments.length})
                   </h3>
                 </div>
                 <span className="font-mono text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
@@ -824,77 +1301,25 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
 
               {/* Danh sách bình luận động */}
               <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                {localComments.length === 0 ? (
+                {timelineComments.length === 0 ? (
                   <p className="text-center text-slate-400 py-4 text-[11px]">Chưa có nhận xét nào được ghim trên video.</p>
                 ) : (
-                  localComments.map((cm) => {
-                    const isResolved = cm.status === 'RESOLVED';
-                    return (
-                      <div
-                        key={cm.id}
-                        className={`p-3 rounded-xl text-xs space-y-1.5 transition-colors border ${
-                          isResolved
-                            ? 'bg-slate-100/70 border-slate-200 opacity-75'
-                            : 'bg-slate-50 border-slate-200 hover:border-purple-300'
-                        }`}
-                      >
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-bold text-purple-700 bg-white px-1.5 py-0.5 rounded border text-[10px]">
-                              ⏱{' '}
-                              {Math.floor(cm.timestampSec / 60)
-                                .toString()
-                                .padStart(2, '0')}
-                              :
-                              {(Math.floor(cm.timestampSec) % 60).toString().padStart(2, '0')}
-                            </span>
-                            {isResolved ? (
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-semibold">
-                                Đã sửa
-                              </span>
-                            ) : (
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">
-                                Chưa sửa
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => setSeekTimestampSec(cm.timestampSec)}
-                            className="text-[10px] text-blue-600 font-semibold hover:underline cursor-pointer"
-                          >
-                            Nhảy tới ▶
-                          </button>
-                        </div>
-                        <p className={`text-[11px] leading-relaxed ${isResolved ? 'line-through text-slate-500' : 'text-slate-700'}`}>
-                          {cm.content}
-                        </p>
-                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-200/60">
-                          {isResolved ? (
-                            <button
-                              onClick={() => void handleReopenComment(cm.id)}
-                              className="text-[10px] text-amber-700 hover:text-amber-800 font-semibold cursor-pointer"
-                            >
-                              Mở lại
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => void handleResolveComment(cm.id)}
-                              className="text-[10px] text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-0.5 cursor-pointer"
-                            >
-                              <Check className="w-3 h-3" /> Đánh dấu đã sửa
-                            </button>
-                          )}
-                          <button
-                            onClick={() => void handleDeleteComment(cm.id)}
-                            className="text-[10px] text-rose-600 hover:text-rose-700 p-0.5 rounded hover:bg-rose-50 cursor-pointer"
-                            title="Xóa nhận xét"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
+                  timelineComments.map((cm) => (
+                    <CommentCard
+                      key={cm.id}
+                      comment={cm}
+                      onResolve={handleResolveComment}
+                      onReopen={handleReopenComment}
+                      onDelete={handleDeleteComment}
+                      onReply={handleSendReply}
+                      onSeek={setSeekTimestampSec}
+                      replyingToId={replyingToId}
+                      setReplyingToId={setReplyingToId}
+                      replyInput={replyInput}
+                      setReplyInput={setReplyInput}
+                      submittingReply={submittingReply}
+                    />
+                  ))
                 )}
               </div>
 

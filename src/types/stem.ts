@@ -320,6 +320,7 @@ export interface STEMScript {
   videoStatus?: 'NOT_RENDERED' | 'RENDERING' | 'IN_QA' | 'APPROVED' | 'PUBLISHED';
   fps?: number;
   videoUrl?: string | null;
+  visualTheme?: string | null;
   scenes: SceneData[];
   createdAt?: string;
   reviewComments?: FeedbackComment[];
@@ -341,6 +342,11 @@ export interface FeedbackComment {
   content: string;
   status: 'OPEN' | 'RESOLVED';
   createdAt: string;
+  clipId?: string | null;
+  parentId?: string | null;
+  resolvedByName?: string | null;
+  resolvedAt?: string | null;
+  replies?: FeedbackComment[];
 }
 
 export type ReviewComment = FeedbackComment;

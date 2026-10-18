@@ -19,7 +19,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { STEMScript, SceneData } from '../../../types/stem';
-import { renderService, RenderHistoryEntry } from '../../../services';
+import { renderService, RenderHistoryEntry, reviewService } from '../../../services';
 import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
 import { SceneListColumn } from './SceneListColumn';
 import { SceneInspector } from './SceneInspector';
@@ -66,6 +66,8 @@ interface ProducerStudioProps {
   startRender: () => void;
   onOpenPublishModal?: () => void;
   onSubmitForReview?: () => void;
+  onUpdateTheme?: (theme: VisualTheme) => void;
+  onSyncDurations?: () => Promise<void>;
   showToast?: (message: string, type?: 'success' | 'info' | 'warn') => void;
 }
 
@@ -92,6 +94,8 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   startRender,
   onOpenPublishModal,
   onSubmitForReview,
+  onUpdateTheme,
+  onSyncDurations,
   showToast,
 }) => {
   // Driven by the clip's state, not by whether an old video URL exists: a clip
@@ -122,6 +126,28 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   const [historyJobs, setHistoryJobs] = useState<RenderHistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+  const [historyRejectNote, setHistoryRejectNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void reviewService
+      .getReviewHistory(script.id)
+      .then((history) => {
+        if (!active) return;
+        const latestReturn =
+          history.find(
+            (h) => h.action === 'REJECT' && (h.targetType === 'CLIP' || h.targetType === 'COMPOSITION')
+          ) || history.find((h) => h.action === 'REJECT');
+        if (latestReturn?.note) {
+          setHistoryRejectNote(latestReturn.note);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [script.id]);
+
   const [selectedTheme, setSelectedTheme] = useState<VisualTheme>(
     () => ((script as any).visualTheme as VisualTheme) || 'default'
   );
@@ -138,6 +164,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
       const baseWorkspace = script.workspaceId.split('::')[0];
       script.workspaceId = themeId === 'default' ? baseWorkspace : `${baseWorkspace}::${themeId}`;
     }
+    onUpdateTheme?.(themeId);
     showToast?.(`Đã áp dụng phong cách hình ảnh: ${THEME_OPTIONS.find(t => t.id === themeId)?.name}`, 'info');
   };
 
@@ -238,6 +265,10 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
             onClick={() => {
               if (isLocked) {
                 showToast?.(lockReason, 'warn');
+                return;
+              }
+              if (onSyncDurations) {
+                void onSyncDurations();
                 return;
               }
               let adjustedCount = 0;
@@ -352,13 +383,13 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
       )}
 
       {/* Banner Thông Báo Nếu Clip Bị Reviewer Trả Về */}
-      {Boolean((script as any).videoReviewNote || (script as any).reviewNote) && script.videoStatus === 'NOT_RENDERED' && (
+      {Boolean(historyRejectNote || (script as any).videoReviewNote || (script as any).reviewNote) && script.videoStatus === 'NOT_RENDERED' && (
         <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-start gap-3 text-amber-900 shrink-0 z-10 animate-in fade-in">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <div className="text-xs">
             <span className="font-bold text-slate-900">Reviewer yêu cầu sửa lại clip: </span>
             <span className="font-medium text-amber-900 italic">
-              &ldquo;{(script as any).videoReviewNote || (script as any).reviewNote}&rdquo;
+              &ldquo;{historyRejectNote || (script as any).videoReviewNote || (script as any).reviewNote}&rdquo;
             </span>
           </div>
         </div>

@@ -96,6 +96,8 @@ export interface AdminTemplateDto {
   propsSchema?: string;
   previewUrl?: string;
   isActive: boolean;
+  recommendedSubjects?: string[];
+  defaultVisualTheme?: string | null;
 }
 
 export interface AdminTemplateRequest {
@@ -104,6 +106,8 @@ export interface AdminTemplateRequest {
   propsSchema?: string;
   previewUrl?: string;
   isActive?: boolean;
+  recommendedSubjects?: string[];
+  defaultVisualTheme?: string | null;
 }
 
 export type SystemUserRole = 'WRITER' | 'REVIEWER' | 'PRODUCER' | 'ADMIN';

@@ -12,6 +12,7 @@ import {
   projectService,
   scriptService,
   reviewService,
+  narrationService,
   UserRole,
 } from './services';
 
@@ -20,7 +21,7 @@ import { HeaderNav } from './components/layout/HeaderNav';
 import { ToastContainer, ToastItem } from './components/layout/ToastContainer';
 
 // Studio Views
-import { ProducerStudio } from './components/views/ProducerStudio/ProducerStudio';
+import { ProducerStudio, type VisualTheme } from './components/views/ProducerStudio/ProducerStudio';
 import { WriterStudio } from './components/views/WriterStudio/WriterStudio';
 import { ReviewerStudio } from './components/views/ReviewerStudio/ReviewerStudio';
 import { AdminPortal } from './components/views/AdminPortal/AdminPortal';
@@ -322,7 +323,57 @@ export default function App() {
   useEffect(() => () => compositionSaver.current?.dispose(), []);
 
   // What the studio shows: the producer's draft in production, the script otherwise.
-  const viewScript: STEMScript = inProduction && composition ? { ...script, scenes: composition.scenes } : script;
+  const viewScript: STEMScript = inProduction && composition ? {
+    ...script,
+    scenes: composition.scenes,
+    visualTheme: (composition.visualTheme as VisualTheme) || script.visualTheme,
+  } : script;
+
+  const handleUpdateTheme = (theme: VisualTheme) => {
+    if (inProduction && composition) {
+      setComposition((prev) => (prev ? { ...prev, visualTheme: theme } : prev));
+      compositionSaver.current?.schedule(composition.scenes, theme);
+    }
+    setScript((prev) => ({ ...prev, visualTheme: theme }));
+  };
+
+  const handleProducerSyncDurations = async () => {
+    try {
+      showToast('Đang đồng bộ thời lượng phân cảnh theo giọng đọc AI...', 'info');
+      const res = await narrationService.syncDurations(script.id, composition?.revision ?? undefined);
+      if (res && Array.isArray(res.scenes) && res.scenes.length > 0) {
+        const durationMap = new Map(res.scenes.map((s) => [s.id, s.durationInFrames]));
+        setScript((prev) => {
+          const updatedScenes = prev.scenes.map((sc) => {
+            const frames = durationMap.get(sc.id);
+            return frames ? { ...sc, durationInFrames: frames } : sc;
+          });
+          const totalSec = res.totalDurationSeconds || Math.round(
+            updatedScenes.reduce((acc, sc) => acc + (sc.durationInFrames || 150), 0) / 30
+          );
+          return {
+            ...prev,
+            scenes: updatedScenes,
+            totalDurationSeconds: totalSec,
+          };
+        });
+      }
+      if (inProduction) {
+        await loadComposition(script.id);
+      }
+      showToast('Đã đồng bộ thời lượng các phân cảnh theo giọng đọc AI thành công!', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Không thể đồng bộ thời lượng từ máy chủ.', 'warn');
+    }
+  };
+
+  // Keep projectsList synchronized with the active script so Dashboard reflects changes immediately
+  useEffect(() => {
+    if (!script.id) return;
+    setProjectsList((prev) =>
+      prev.map((p) => (p.id === script.id ? { ...p, ...script } : p))
+    );
+  }, [script]);
 
   // Active scene pointer
   const selectedScene = viewScript.scenes.find((s) => s.id === activeSceneId) || viewScript.scenes[0];
@@ -1049,6 +1100,8 @@ export default function App() {
           startRender={startRender}
           onOpenPublishModal={() => setIsPublishModalOpen(true)}
           onSubmitForReview={handleSubmitVideoForReview}
+          onUpdateTheme={handleUpdateTheme}
+          onSyncDurations={handleProducerSyncDurations}
           showToast={showToast}
         />
       )}

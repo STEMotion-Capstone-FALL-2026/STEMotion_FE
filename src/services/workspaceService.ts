@@ -71,38 +71,16 @@ export const workspaceService = {
   async getMyWorkspaces(forceRefresh = false): Promise<WorkspaceSummary[]> {
     if (forceRefresh) cachedWorkspaces = null;
     if (cachedWorkspaces) return cachedWorkspaces;
-    let list: any[] = [];
-    try {
-      const mine = await apiClient.get<any[]>('/workspaces/mine');
-      if (Array.isArray(mine) && mine.length > 0) {
-        list = mine;
-      }
-    } catch {
-      // fallback
-    }
-    // If empty or failed, fallback to /workspaces (for ADMIN or system-level access)
-    if (list.length === 0) {
-      try {
-        const all = await apiClient.get<any[]>('/workspaces');
-        if (Array.isArray(all) && all.length > 0) {
-          list = all;
-        }
-      } catch {
-        // ignore
-      }
-    }
+    const mine = await apiClient.get<any[]>('/workspaces/mine');
+    const list = Array.isArray(mine) ? mine : [];
     cachedWorkspaces = list.map((w) => this._toWorkspaceSummary(w));
     return cachedWorkspaces;
   },
 
   async getAllWorkspaces(): Promise<WorkspaceSummary[]> {
-    try {
-      const all = await apiClient.get<any[]>('/workspaces');
-      if (Array.isArray(all) && all.length > 0) {
-        return all.map((w) => this._toWorkspaceSummary(w));
-      }
-    } catch {
-      // ignore
+    const all = await apiClient.get<any[]>('/workspaces');
+    if (Array.isArray(all) && all.length > 0) {
+      return all.map((w) => this._toWorkspaceSummary(w));
     }
     return this.getMyWorkspaces(true);
   },

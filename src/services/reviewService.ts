@@ -4,11 +4,58 @@ import { projectService } from './projectService';
 
 function toComment(c: any): FeedbackComment {
   return {
-    id: c.id, author: c.author, avatar: c.avatar,
+    id: c.id,
+    author: c.author,
+    avatar: c.avatar,
     role: (c.role?.charAt(0) + c.role?.slice(1).toLowerCase()) as FeedbackComment['role'],
-    timestampSec: c.timestampSec ?? 0, sceneId: c.sceneId ?? undefined,
-    content: c.content, status: c.status, createdAt: c.createdAt,
+    timestampSec: c.timestampSec ?? 0,
+    sceneId: c.sceneId ?? undefined,
+    content: c.content,
+    status: c.status,
+    createdAt: c.createdAt,
+    clipId: c.clipId ?? undefined,
+    parentId: c.parentId ?? undefined,
+    resolvedByName: c.resolvedByName ?? undefined,
+    resolvedAt: c.resolvedAt ?? undefined,
   };
+}
+
+export function groupCommentsWithReplies(comments: FeedbackComment[]): FeedbackComment[] {
+  const rootComments: (FeedbackComment & { replies: FeedbackComment[] })[] = [];
+  const replyMap = new Map<string, FeedbackComment[]>();
+
+  for (const c of comments) {
+    if (c.parentId) {
+      if (!replyMap.has(c.parentId)) {
+        replyMap.set(c.parentId, []);
+      }
+      replyMap.get(c.parentId)!.push(c);
+    }
+  }
+
+  for (const c of comments) {
+    if (!c.parentId) {
+      rootComments.push({
+        ...c,
+        replies: replyMap.get(c.id) || [],
+      });
+    }
+  }
+
+  return rootComments;
+}
+
+export interface ReviewHistoryEntry {
+  id: string;
+  actorName: string;
+  actorRole: string;
+  action: 'APPROVE' | 'REJECT';
+  targetType: 'SCRIPT' | 'CLIP' | 'COMPOSITION';
+  scriptVersionNo?: number | null;
+  clipId?: string | null;
+  compositionRevision?: number | null;
+  note?: string | null;
+  createdAt: string;
 }
 
 export type QaSeverity = 'PASS' | 'WARN' | 'FAIL';
@@ -58,6 +105,11 @@ export const reviewService = {
     return (await apiClient.get<any[]>(`/scripts/${projectId}/qa-comments`)).map(toComment);
   },
 
+  async getReviewHistory(projectId: string): Promise<ReviewHistoryEntry[]> {
+    const res = await apiClient.get<ReviewHistoryEntry[]>(`/scripts/${projectId}/review-history`);
+    return Array.isArray(res) ? res : [];
+  },
+
   async submitReviewDecision(projectId: string, decision: 'APPROVED' | 'CHANGE_REQUESTED',
     feedbackNote?: string): Promise<STEMScript> {
     const path = decision === 'APPROVED' ? 'approve' : 'request-changes';
@@ -89,6 +141,11 @@ export const reviewService = {
       timestampSec: comment.sceneId ? null : comment.timestampSec,
       sceneId: comment.sceneId, content: comment.content,
     });
+    return toComment(saved);
+  },
+
+  async replyComment(commentId: string, content: string): Promise<FeedbackComment> {
+    const saved = await apiClient.post<any>(`/qa-comments/${commentId}/replies`, { content });
     return toComment(saved);
   },
 
