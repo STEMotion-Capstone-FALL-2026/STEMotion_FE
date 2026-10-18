@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { sceneSaveQueue } from './services/sceneSaveQueue';
-import { renderService } from './services/renderService';
+import { renderService, type RenderJobStatus } from './services/renderService';
 import { compositionService, createCompositionSaver, type Composition, type CompositionSaver } from './services/compositionService';
 import { STEMScript, FeedbackComment, SceneData, STEMSubject } from './types/stem';
 import { LoginScreen } from './components/LoginScreen';
@@ -503,7 +503,19 @@ export default function App() {
     try {
       // The render takes the saved draft, so the last edit must reach the server first.
       if (inProduction) await compositionSaver.current?.flush();
-      let job = await renderService.requestRender(projectId, { fps: script.fps || 30 });
+      let job: RenderJobStatus;
+      try {
+        job = await renderService.requestRender(projectId, { fps: script.fps || 30 });
+      } catch (err: any) {
+        // If BE already queued the render job on approveVideo, poll that active job
+        const history = await renderService.getHistory(projectId);
+        const active = history.find(j => j.status === 'PROCESSING' || j.status === 'QUEUED' || j.status === 'RENDERING');
+        if (active) {
+          job = await renderService.getRenderStatus(active.jobId);
+        } else {
+          throw err;
+        }
+      }
       showToast('Máy chủ đã nhận yêu cầu kết xuất.', 'info');
       const deadline = Date.now() + 20 * 60 * 1000;
       while (generation === renderGeneration.current) {
