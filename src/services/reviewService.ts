@@ -65,27 +65,13 @@ export const reviewService = {
   },
 
   async submitVideoForReview(projectId: string): Promise<STEMScript> {
-    try {
-      const updated = await apiClient.post<STEMScript>(`/scripts/${projectId}/submit-video-review`, {});
-      return updated;
-    } catch {
-      // Graceful fallback for mock/local development while BE deploys the endpoint
-      const project = await projectService.getProjectById(projectId);
-      project.videoStatus = 'IN_QA';
-      return project;
-    }
+    const updated = await apiClient.post<STEMScript>(`/scripts/${projectId}/submit-video-review`, {});
+    return updated;
   },
 
   async approveVideo(projectId: string): Promise<STEMScript> {
-    try {
-      await apiClient.post(`/scripts/${projectId}/approve-video`, {});
-      return projectService.getProjectById(projectId);
-    } catch (err: any) {
-      console.warn('Backend approveVideo fallback for Web-first review flow:', err);
-      const project = await projectService.getProjectById(projectId);
-      project.videoStatus = 'APPROVED';
-      return project;
-    }
+    await apiClient.post(`/scripts/${projectId}/approve-video`, {});
+    return projectService.getProjectById(projectId);
   },
 
   async sendBackVideo(projectId: string, note?: string): Promise<STEMScript> {
