@@ -747,6 +747,15 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 - [ ] **Template admin**: thêm ô chọn `recommendedSubjects` và `defaultVisualTheme` khi sửa template.
 - [ ] **Deploy**: các API có V20 chỉ chạy sau khi DB production được migrate V20 (BE lo).
 
+**Lỗi FE thấy khi test end-to-end trên bản deploy (18/10/2026, tổ Test1, project "Mạch điện nối tiếp"):**
+
+- [ ] **Reviewer duyệt nhầm bản (quan trọng):** ở "Duyệt Video Thành Phẩm", Remotion Player của Reviewer phát **scene của kịch bản** (118s, tiêu đề gốc) thay vì **composition revision** Producer đã gửi (89s, theme cyber, tiêu đề đã sửa). Khi chưa có MP4, Player phải lấy `GET /scripts/{id}/composition` (scenes + `visualTheme`).
+- [ ] **Không có ô comment theo scene khi duyệt kịch bản:** form "Ghim nhận xét" chỉ hiện ở chế độ duyệt video; chế độ duyệt kịch bản chỉ có ô lý do. BE nhận `POST /scripts/{id}/qa-comments` với `sceneId`.
+- [ ] **Reply hiện thành comment riêng** ("Chưa sửa", có nút "Đánh dấu đã sửa" → BE trả 400 vì reply không resolve riêng). Gom theo `parentId`, hiển thị dưới note gốc.
+- [ ] **Trạng thái không cập nhật sau thao tác:** Writer bấm gửi duyệt xong vẫn hiện `DRAFT`; Reviewer bấm "Duyệt Video" xong nút vẫn còn. DB đã đổi đúng, cần tải lại project từ response/API.
+- [ ] **Nhãn trạng thái sai trên dashboard:** project "định luật ôm" có `videoStatus = APPROVED` nhưng card Producer hiện "Chờ duyệt video"; project `CHANGE_REQUESTED` hiện nhãn "Bản nháp" ở dashboard Writer.
+- [ ] **Sau khi duyệt trên web player:** project giữ `APPROVED` và có job render chạy nền; nên hiện tiến độ render (poll `GET /render/projects/{id}/jobs`) và chỉ bật "Xuất bản" khi job `COMPLETED`.
+
 
 
 
