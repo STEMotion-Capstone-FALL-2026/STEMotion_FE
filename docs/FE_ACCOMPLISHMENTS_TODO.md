@@ -540,6 +540,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ### 9.1. Nhóm Ưu Tiên Cao (P0 - Cốt Lõi Studio & Đồng Bộ Google Vids)
 
 #### 📌 BE-P0-1: Lưu Trữ & Đồng Bộ Thuộc Tính Visual Theme (`visualTheme`)
+> **✅ BE đã làm (18/10/2026, V20).** Theme lưu ở `compositions.visual_theme` (không thêm cột ở `clip_projects`: theme là của bản dựng). `PUT /scripts/{id}/composition` nhận `visualTheme` (bỏ trống = giữ nguyên, sai giá trị → 400 `INVALID_VISUAL_THEME`); `GET /scripts/{id}/composition` và `GET /scripts/{id}` trả `visualTheme`. Không có endpoint `production-draft`. Khi render, BE gửi `script.visualTheme` và `script.workspaceId = "<id>::<theme>"` giống cách Player đang làm, nên MP4 khớp bản xem trước.
 * **Mục tiêu:** Lưu trữ lựa chọn 5 theme phong cách hình ảnh (`default`, `cyber`, `emerald`, `sunset`, `academic`) của Producer vào CSDL.
 * **Database Migration (Flyway `V20__add_visual_theme.sql`):**
   ```sql
@@ -556,6 +557,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ---
 
 #### 📌 BE-P0-2: Worker Căn Chỉnh Audio Thực Tế & Phụ Đề Whisper (`POST /scripts/{id}/sync-durations`)
+> **✅ BE + worker đã làm (18/10/2026).** `POST /scripts/{id}/sync-durations`, body `{ "baseRevision": n }` (bắt buộc khi kịch bản đã duyệt). Kịch bản nháp (WRITER): cập nhật `duration_in_frames` của scene. Kịch bản đã duyệt (PRODUCER): lưu **revision composition mới** với `durationInFrames` + `captionWords` (không thêm cột `caption_words` ở `scenes`; phụ đề nằm trong scene của composition). Response: `{ target: "SCRIPT"|"COMPOSITION", revision, totalDurationSeconds, scenes: [{ id, durationInFrames, captionWords? }], captionSync }`. `CAPTION_SYNC` trong QA vẫn đo trên audio của **lần render** (đúng như bản phát hành).
 * **Mục tiêu:** Thay thế tính năng ước lượng số từ bằng việc sinh âm thanh TTS thực tế và đo mốc thời gian chính xác từng từ qua Whisper Forced-Alignment.
 * **Luồng xử lý (Architecture Flow):**
   1. FE gọi: `POST /api/v1/scripts/{id}/sync-durations`
@@ -570,6 +572,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ---
 
 #### 📌 BE-P0-3: BE Proxy Cho Giọng Đọc Neural TTS Preview (`GET /scripts/{id}/tts-preview`)
+> **✅ BE đã làm (18/10/2026).** `GET /scripts/{id}/tts-preview?text=...` hoặc `?sceneId=...` (đọc narration của scene), tối đa 1500 ký tự, trả `audio/mpeg`. Khoá worker chỉ nằm ở BE. Thẻ `<audio src>` không gửi được JWT: FE phải `fetch` kèm `Authorization` rồi dùng `URL.createObjectURL(blob)`. `voice` được nhận nhưng hiện worker dùng một giọng chung. Máy render tắt → 503 `RENDER_UNAVAILABLE`.
 * **Mục tiêu:** Cung cấp API nghe thử giọng đọc chất lượng cao trực tiếp trên Studio mà không để lộ TTS API Key ở client (thay thế Web Speech API trình duyệt).
 * **Đặc tả API:**
   - `GET /api/v1/scripts/{id}/tts-preview?sceneId={sceneId}&text={encodedText}&voice={voiceId}`
@@ -580,6 +583,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ---
 
 #### 📌 BE-P0-4: API Lịch Sử Thẩm Định & Nhật Ký Phản Hồi (`GET /scripts/{id}/review-history`)
+> **✅ BE đã làm (18/10/2026).** Đúng shape bên dưới, với `action` là `APPROVE`/`REJECT`, `targetType` là `SCRIPT`/`CLIP`/`COMPOSITION`, thêm `compositionRevision`; `actorRole` là role trong tổ (vd `REVIEWER`). Mới nhất trước.
 * **Mục tiêu:** Cho phép Writer và Producer xem lại toàn bộ lý do từ chối kịch bản hoặc yêu cầu sửa bản dựng của Reviewer (được lưu tại `status_histories`).
 * **Đặc tả API:**
   - `GET /api/v1/scripts/{id}/review-history`
@@ -603,6 +607,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ---
 
 #### 📌 BE-P0-5: API Gửi Thẩm Định Video & Cho Phép Duyệt Video Trên Web Player Trước Khi Render (Web-First Review Architecture)
+> **✅ BE đã làm (18/10/2026, V20).** `POST /scripts/{id}/submit-video-review` (PRODUCER): `NOT_RENDERED`/`RENDERING` → `IN_QA`, khoá composition (tạo revision 1 từ kịch bản nếu chưa lưu), trả `ScriptResponse`. `approve-video`: nếu đã có MP4 của **đúng revision đang duyệt** thì duyệt clip như cũ; nếu chưa có thì duyệt **revision composition** (`targetType COMPOSITION`) rồi BE **tự render MP4** từ chính revision đó, project giữ `APPROVED` trong lúc render. `send-back` cũng chạy được khi chưa có MP4. Render tuỳ chọn trong lúc `IN_QA`/`APPROVED` không làm đổi trạng thái duyệt. Xuất bản vẫn cần có MP4 (đợi render sau duyệt xong).
 * **Bối cảnh & Vấn đề giải quyết:**
   - Trước đây: Backend bắt buộc video phải render xong MP4 máy chủ mới set `video_status = IN_QA`, và trong `approveVideo` (`FeedbackService.java`) bắt buộc `clipArtifactService.requireCurrent(...)` phải tồn tại file MP4.
   - Tuy nhiên, hiện tại Frontend đã tích hợp Remotion Web Player trực tiếp trên trình duyệt. Việc bắt buộc render MP4 trước khi gửi review gây lãng phí tài nguyên CPU/RAM máy chủ và làm chậm vòng lặp phản hồi của người dùng.
@@ -621,6 +626,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ### 9.2. Nhóm Ưu Tiên Trung Bình (P1 - Tương Tác Sư Phạm & Quản Trị Asset)
 
 #### 📌 BE-P1-1: Phân Định Feedback Comments Theo Clip ID (`clip_id` Scoping)
+> **✅ BE đã làm (18/10/2026).** Ghim theo thời gian gắn `clipId` của bản render đang xem (nếu có). Cổng duyệt chỉ đếm note `OPEN` của clip hiện tại + note không gắn clip (note kịch bản, note trên web player); note của clip cũ không chặn. `GET /scripts/{id}/qa-comments?clipId=...` lọc theo clip; response có `clipId`.
 * **Vấn đề hiện tại:** Cột `clip_id` đã có trong database migration `V7` nhưng Entity `FeedbackComment` chưa map trường này. Dẫn đến các ghi chú nhận xét của lần render cũ vẫn chặn cổng duyệt (`OPEN` comment gate) của bản render mới.
 * **Yêu cầu BE:**
   - Map `clipId` vào Entity `FeedbackComment` và DTO request/response.
@@ -629,6 +635,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ---
 
 #### 📌 BE-P1-2: Bình Luận Phân Nhánh & Nhật Ký Giải Quyết (Threaded Comments & Resolve Audit)
+> **✅ BE đã làm (18/10/2026, V20).** `POST /qa-comments/{id}/replies` `{ "content": "..." }` (WRITER/PRODUCER/REVIEWER); trả lời vào reply thì vẫn nằm cùng thread. `resolve` ghi `resolvedByName`/`resolvedAt`, **WRITER cũng được resolve** (UC-26); `reopen` xoá hai trường này. Reply không resolve riêng và không chặn duyệt. `GET qa-comments` trả note kèm reply (`parentId`); FE tự gom thread.
 * **Mục tiêu:** Cho phép Writer/Producer trả lời góp ý của Reviewer và ghi nhận ai là người giải quyết comment.
 * **Database Migration (Flyway `V21__feedback_comment_replies.sql`):**
   ```sql
@@ -644,6 +651,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ---
 
 #### 📌 BE-P1-3: API Gợi Ý Đồ Họa STEM Thông Minh (`POST /api/v1/ai/assets/recommend`)
+> **⏸ Chưa làm.** Hệ thống chưa có kho asset SVG/PNG (`svgUrl`, `previewUrl`) để gợi ý; chỉ có catalog icon dùng trong template. Cần chốt nguồn asset trước (đi cùng BE-P1-5).
 * **Mục tiêu:** Bổ sung tính năng gợi ý tài nguyên hình ảnh theo ngữ cảnh lời thoại tương tự Google Vids.
 * **Đặc tả API:**
   - `POST /api/v1/ai/assets/recommend`
@@ -673,6 +681,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ---
 
 #### 📌 BE-P1-4: Mở Rộng Quản Lý Thuộc Tính Template Trên Admin Portal
+> **✅ BE đã làm (18/10/2026, V20).** Route thật là `PUT /templates/{id}` (không có tiền tố `/admin`). `isActive` đã có từ trước; thêm `recommendedSubjects` (tên `StemSubject`: `Math`, `Physics`, `Chemistry`, `Biology`, `ComputerScience`) và `defaultVisualTheme`. Bỏ trống = giữ nguyên, `""` = xoá theme mặc định.
 * **Yêu cầu:** Mở rộng API `PUT /api/v1/admin/templates/{id}` cho phép Admin:
   - Bật/Tắt template (`isActive: boolean`).
   - Cấu hình môn học khuyến nghị (`recommendedSubjects: string[]`).
@@ -681,6 +690,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ---
 
 #### 📌 BE-P1-5: Dịch Vụ Tải Lên Asset Đồ Họa Của Người Dùng (MinIO / S3 Storage)
+> **⏸ Chưa làm.** Bản deploy chưa có MinIO/S3 (Render free không có ổ lưu bền). Cần chọn nơi lưu (vd Supabase Storage) và chính sách quét file trước.
 * **Đặc tả API:**
   - `POST /api/v1/assets/upload` (Content-Type: `multipart/form-data`)
   - **Hỗ trợ định dạng:** `.svg`, `.png`, `.jpg`, dung lượng tối đa 5MB.
@@ -691,6 +701,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ### 9.3. Nhóm Ưu Tiên Nâng Cao (P2 - Xuất Bản Ngoại Vi & LMS Giáo Dục)
 
 #### 📌 BE-P2-1: Tích Hợp OAuth 2.0 Cho YouTube Data API v3
+> **⏸ Chưa làm.** Cần Google Cloud project có màn hình đồng ý OAuth được xác minh cho scope `youtube.upload`. `publish` target `YOUTUBE` vẫn trả 503 `PUBLISH_TARGET_UNAVAILABLE`, FE nên hiển thị đúng như vậy.
 * **Vấn đề hiện tại:** Endpoint `/api/v1/scripts/{id}/publish` với target `YOUTUBE` hiện đang trả về `503 PUBLISH_TARGET_UNAVAILABLE`.
 * **Yêu cầu BE:**
   - Tích hợp Google OAuth2 flow lấy `access_token` và `refresh_token` với scope `https://www.googleapis.com/auth/youtube.upload`.
@@ -699,6 +710,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 ---
 
 #### 📌 BE-P2-2: Đóng Gói Khóa Học Xuất Chuẩn SCORM 1.2 / 2004 Cho Hệ Thống LMS
+> **⏸ Chưa làm.** Không nằm trong đề cương đã đăng ký; để sau khi team đưa vào phạm vi chính thức.
 * **Mục tiêu:** Cho phép xuất toàn bộ video bài giảng và câu hỏi tương tác `STEM_QUIZ` thành gói bài giảng chuẩn quốc tế để nạp vào Moodle, Canvas LMS, hoặc Blackboard.
 * **Đặc tả API:**
   - `GET /api/v1/scripts/{id}/export/scorm?version=1.2`
@@ -710,18 +722,31 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 
 | Mã Công Việc | Tên Hạng Mục | Trạng Thái FE | Trạng Thái BE | API / Contract Phối Hợp |
 | :--- | :--- | :---: | :---: | :--- |
-| **BE-P0-1** | Lưu & Đồng Bộ Visual Theme | ✅ Sẵn sàng | ⏳ Chờ làm | `POST/PUT /scripts/{id}/composition` (`visualTheme`) |
-| **BE-P0-2** | Sync Audio & Phụ Đề Whisper | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /scripts/{id}/sync-durations` |
-| **BE-P0-3** | Neural TTS Preview Proxy | ✅ Sẵn sàng | ⏳ Chờ làm | `GET /scripts/{id}/tts-preview` |
-| **BE-P0-4** | Lịch Sử Thẩm Định Review History | ✅ Sẵn sàng | ⏳ Chờ làm | `GET /scripts/{id}/review-history` |
-| **BE-P0-5** | Web-First Review & Video Submission | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /scripts/{id}/submit-video-review` & nới lỏng `approveVideo` |
-| **BE-P1-1** | Comment Scoping theo Clip ID | ✅ Sẵn sàng | ⏳ Chờ làm | `FeedbackComment.clipId` |
-| **BE-P1-2** | Threaded Comments & Resolve | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /qa-comments/{id}/replies` |
-| **BE-P1-3** | AI Asset Recommendation | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /api/v1/ai/assets/recommend` |
-| **BE-P1-4** | Template Catalog Cấu Hình Theme | ✅ Sẵn sàng | ⏳ Chờ làm | `PUT /admin/templates/{id}` |
-| **BE-P1-5** | Tải lên Media (MinIO Upload) | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /api/v1/assets/upload` |
-| **BE-P2-1** | Xuất bản YouTube OAuth API v3 | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /scripts/{id}/publish` (`YOUTUBE`) |
-| **BE-P2-2** | Đóng gói bài giảng SCORM / LTI | ⏳ Chờ BE | ⏳ Chờ làm | `GET /scripts/{id}/export/scorm` |
+| **BE-P0-1** | Lưu & Đồng Bộ Visual Theme | ✅ Sẵn sàng | ✅ Xong (V20) | `PUT /scripts/{id}/composition` (`visualTheme`); `GET` composition & script trả `visualTheme` |
+| **BE-P0-2** | Sync Audio & Phụ Đề Whisper | ✅ Sẵn sàng | ✅ Xong | `POST /scripts/{id}/sync-durations` `{baseRevision}` |
+| **BE-P0-3** | Neural TTS Preview Proxy | ✅ Sẵn sàng | ✅ Xong | `GET /scripts/{id}/tts-preview?text=` hoặc `?sceneId=` (fetch kèm JWT) |
+| **BE-P0-4** | Lịch Sử Thẩm Định Review History | ✅ Sẵn sàng | ✅ Xong | `GET /scripts/{id}/review-history` |
+| **BE-P0-5** | Web-First Review & Video Submission | ✅ Sẵn sàng | ✅ Xong (V20) | `POST /scripts/{id}/submit-video-review`; `approve-video` duyệt revision + tự render |
+| **BE-P1-1** | Comment Scoping theo Clip ID | ✅ Sẵn sàng | ✅ Xong | `clipId` trong comment; `GET qa-comments?clipId=` |
+| **BE-P1-2** | Threaded Comments & Resolve | ✅ Sẵn sàng | ✅ Xong (V20) | `POST /qa-comments/{id}/replies`; `resolvedByName/resolvedAt` |
+| **BE-P1-3** | AI Asset Recommendation | ✅ Sẵn sàng | ⏸ Chưa làm (chưa có kho asset) | `POST /api/v1/ai/assets/recommend` |
+| **BE-P1-4** | Template Catalog Cấu Hình Theme | ✅ Sẵn sàng | ✅ Xong (V20) | `PUT /templates/{id}` (`recommendedSubjects`, `defaultVisualTheme`) |
+| **BE-P1-5** | Tải lên Media (MinIO Upload) | ✅ Sẵn sàng | ⏸ Chưa làm (chưa có storage) | `POST /api/v1/assets/upload` |
+| **BE-P2-1** | Xuất bản YouTube OAuth API v3 | ✅ Sẵn sàng | ⏸ Chưa làm (cần OAuth đã xác minh) | `POST /scripts/{id}/publish` (`YOUTUBE`) |
+| **BE-P2-2** | Đóng gói bài giảng SCORM / LTI | ⏳ Chờ BE | ⏸ Ngoài đề cương | `GET /scripts/{id}/export/scorm` |
+
+### 9.5. Việc FE cần làm để nối các API vừa xong (BE, 18/10/2026)
+
+- [ ] **`reviewService.submitVideoForReview` / `approveVideo`**: đang `catch` lỗi rồi **tự gán** `videoStatus = 'IN_QA'` / `'APPROVED'` ở client, nên UI có thể báo đã duyệt trong khi DB chưa đổi. BE đã có cả hai endpoint: bỏ fallback, hiện lỗi thật (vd `Resolve the 2 open review note(s)…`).
+- [ ] **Duyệt trên web player**: sau `approve-video` không có MP4, project ở `APPROVED` và có một render job chạy nền; nút "Xuất bản" cần đợi job `COMPLETED` (poll `GET /render/projects/{id}/jobs`).
+- [ ] **Theme**: gửi `visualTheme` trong `PUT /scripts/{id}/composition` thay vì chỉ gán vào object `script`; đọc lại từ response.
+- [ ] **TTS preview**: gọi `GET /scripts/{id}/tts-preview` bằng `fetch` có `Authorization`, phát qua blob URL; bỏ `window.speechSynthesis` khi BE trả được audio.
+- [ ] **Sync durations**: nút "Đồng bộ thời lượng theo giọng đọc" gọi `POST /scripts/{id}/sync-durations` với `baseRevision` đang hiển thị; nhận 409 thì tải lại composition.
+- [ ] **Comment**: hiển thị reply theo `parentId`, nút "Trả lời" gọi `POST /qa-comments/{id}/replies`; hiện "đã giải quyết bởi … lúc …"; Writer được bấm resolve.
+- [ ] **Lịch sử review**: banner "Tại sao lại reject?" nên đọc `GET /scripts/{id}/review-history` (có cả lý do trả clip/composition) thay vì chỉ `versions`.
+- [ ] **Template admin**: thêm ô chọn `recommendedSubjects` và `defaultVisualTheme` khi sửa template.
+- [ ] **Deploy**: các API có V20 chỉ chạy sau khi DB production được migrate V20 (BE lo).
+
 
 
 
