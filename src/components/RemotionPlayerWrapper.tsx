@@ -88,6 +88,11 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
     }
   };
 
+  const onFrameUpdateRef = useRef(onFrameUpdate);
+  useEffect(() => {
+    onFrameUpdateRef.current = onFrameUpdate;
+  }, [onFrameUpdate]);
+
   // Listen to frame update
   useEffect(() => {
     const current = playerRef.current;
@@ -96,8 +101,8 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
     const onFrame = () => {
       const frame = current.getCurrentFrame();
       setCurrentFrame(frame);
-      if (onFrameUpdate) {
-        onFrameUpdate(frame, frame / 30);
+      if (onFrameUpdateRef.current) {
+        onFrameUpdateRef.current(frame, frame / 30);
       }
     };
 
@@ -114,7 +119,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
       current.removeEventListener('play', onPlayState);
       current.removeEventListener('pause', onPlayState);
     };
-  }, [onFrameUpdate]);
+  }, []);
 
   // Handle external seek requests (e.g. from Reviewer comment click)
   useEffect(() => {
@@ -126,15 +131,16 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
   }, [seekTimestampSec]);
 
   // Calculate total frames
-  const totalFrames = script.scenes.reduce((sum, sc) => sum + (sc.durationInFrames || 150), 0);
+  const scenes = script.scenes || [];
+  const totalFrames = Math.max(1, scenes.reduce((sum, sc) => sum + (sc.durationInFrames || 150), 0));
   const selectedSceneIndex = Math.max(
     0,
-    script.scenes.findIndex((s) => s.id === activeSceneId)
+    scenes.findIndex((s) => s.id === activeSceneId)
   );
-  const selectedScene = script.scenes[selectedSceneIndex] || script.scenes[0];
+  const selectedScene = scenes[selectedSceneIndex] || scenes[0];
 
   const getSettledFrameForScene = (sceneIndex: number, mode: 'FULL' | 'SINGLE') => {
-    const sc = script.scenes[sceneIndex] || script.scenes[0];
+    const sc = scenes[sceneIndex] || scenes[0];
     const dur = sc?.durationInFrames || 150;
     const settledLocal = Math.min(Math.max(0, dur - 5), Math.max(60, Math.round(dur * 0.65)));
     if (mode === 'SINGLE') {
@@ -142,7 +148,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
     }
     let startFrame = 0;
     for (let i = 0; i < sceneIndex; i++) {
-      startFrame += script.scenes[i].durationInFrames || 150;
+      startFrame += scenes[i]?.durationInFrames || 150;
     }
     return startFrame + settledLocal;
   };
@@ -311,7 +317,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Từng Scene ({selectedScene.type.replace('_', ' ')})
+              Từng Scene ({selectedScene?.type ? selectedScene.type.replace('_', ' ') : 'Scene'})
             </button>
           </div>
         </div>
@@ -343,7 +349,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
           <Player
             ref={playerRef}
             component={SingleSceneRenderer}
-            durationInFrames={selectedScene.durationInFrames || 150}
+            durationInFrames={selectedScene?.durationInFrames || 150}
             compositionWidth={1920}
             compositionHeight={1080}
             fps={30}
@@ -359,7 +365,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
         )}
 
         {/* Lớp Tương Tác Trực Tiếp Canva / Lego WYSIWYG phủ lên Canvas */}
-        {isCanvaModeEnabled && updateSceneProperty && (
+        {isCanvaModeEnabled && updateSceneProperty && !isPlaying && (
           <CanvaInteractiveOverlay
             scene={selectedScene}
             updateSceneProperty={updateSceneProperty}
