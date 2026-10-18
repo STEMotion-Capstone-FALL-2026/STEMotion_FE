@@ -72,9 +72,29 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     if (isOpen) {
       void (async () => {
         try {
-          const list = await workspaceService.getMyWorkspaces(true);
+          if (workspaces && workspaces.length > 0) {
+            setWorkspaceList(workspaces.map((w) => ({ id: w.id, name: w.name, department: w.department })));
+          }
+
+          let list: WorkspaceItemSummary[] = [];
+          try {
+            const rawList = isCurrentUserAdminOrLeader
+              ? await workspaceService.getAllWorkspaces()
+              : await workspaceService.getMyWorkspaces(true);
+            list = (rawList || []).map((w) => ({ id: w.id, name: w.name, department: w.department }));
+          } catch {
+            const rawList = await workspaceService.getMyWorkspaces(true).catch(() => []);
+            list = (rawList || []).map((w) => ({ id: w.id, name: w.name, department: w.department }));
+          }
+
           if (list && list.length > 0) {
-            const mapped = list.map((w) => ({ id: w.id, name: w.name, department: w.department }));
+            setWorkspaceList(list);
+            if (!activeWorkspaceId || !list.some((w) => w.id === activeWorkspaceId)) {
+              const matched = workspaceId && list.some((w) => w.id === workspaceId) ? workspaceId : list[0].id;
+              setActiveWorkspaceId(matched);
+            }
+          } else if (workspaces && workspaces.length > 0) {
+            const mapped = workspaces.map((w) => ({ id: w.id, name: w.name, department: w.department }));
             setWorkspaceList(mapped);
             if (!activeWorkspaceId || !mapped.some((w) => w.id === activeWorkspaceId)) {
               const matched = workspaceId && mapped.some((w) => w.id === workspaceId) ? workspaceId : mapped[0].id;
@@ -84,11 +104,14 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
             setActiveWorkspaceId(workspaceId);
           }
         } catch {
+          if (workspaces && workspaces.length > 0) {
+            setWorkspaceList(workspaces.map((w) => ({ id: w.id, name: w.name, department: w.department })));
+          }
           if (workspaceId) setActiveWorkspaceId(workspaceId);
         }
       })();
     }
-  }, [isOpen]);
+  }, [isOpen, isCurrentUserAdminOrLeader, workspaceId, workspaces]);
 
   useEffect(() => {
     if (workspaceId) {
@@ -289,9 +312,20 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                     <ChevronDown className="w-3.5 h-3.5 text-brand-600 absolute right-2 pointer-events-none" />
                   </div>
                 ) : (
-                  <span className="font-bold text-sm text-brand-600">
-                    {currentWsDisplayName}
-                  </span>
+                  <div className="relative inline-flex items-center">
+                    <Building className="w-3.5 h-3.5 text-brand-600 absolute left-2.5 pointer-events-none" />
+                    <select
+                      value={activeWorkspaceId}
+                      disabled
+                      className="font-bold text-xs text-brand-800 bg-blue-50 border border-blue-200 rounded-lg pl-8 pr-7 py-1 appearance-none max-w-xs truncate cursor-default"
+                      title="Không gian làm việc hiện tại"
+                    >
+                      <option value={activeWorkspaceId}>
+                        {currentWsDisplayName}
+                      </option>
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-brand-400 absolute right-2 pointer-events-none" />
+                  </div>
                 )}
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">

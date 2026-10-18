@@ -78,9 +78,13 @@ export const workspaceService = {
   },
 
   async getAllWorkspaces(): Promise<WorkspaceSummary[]> {
-    const all = await apiClient.get<any[]>('/workspaces');
-    if (Array.isArray(all) && all.length > 0) {
-      return all.map((w) => this._toWorkspaceSummary(w));
+    try {
+      const all = await apiClient.get<any[]>('/workspaces');
+      if (Array.isArray(all) && all.length > 0) {
+        return all.map((w) => this._toWorkspaceSummary(w));
+      }
+    } catch {
+      // not admin or /workspaces not accessible, fall back to /workspaces/mine
     }
     return this.getMyWorkspaces(true);
   },

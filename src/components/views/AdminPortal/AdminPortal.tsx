@@ -185,7 +185,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     try {
       const [allUsers, wsList, activeId] = await Promise.all([
         adminService.getAllUsers().catch(() => []),
-        workspaceService.getMyWorkspaces(true).catch(() => []),
+        workspaceService.getAllWorkspaces().catch(() => workspaceService.getMyWorkspaces(true).catch(() => [])),
         workspaceService.resolveActiveWorkspaceId().catch(() => ''),
       ]);
       setUsers(allUsers);
@@ -246,7 +246,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
       void loadUsersAndMembers();
     };
     window.addEventListener('stemotion:workspace-members-updated', onMembersUpdated);
-    return () => window.removeEventListener('stemotion:workspace-members-updated', onMembersUpdated);
+    window.addEventListener('stemotion:workspace-changed', onMembersUpdated);
+    return () => {
+      window.removeEventListener('stemotion:workspace-members-updated', onMembersUpdated);
+      window.removeEventListener('stemotion:workspace-changed', onMembersUpdated);
+    };
   }, [loadUsersAndMembers]);
 
   // Handlers for FE-15 (Users & Roles)

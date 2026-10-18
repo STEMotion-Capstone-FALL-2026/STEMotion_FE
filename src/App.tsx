@@ -173,7 +173,17 @@ export default function App() {
 
       // Remembered before resolving, which would otherwise fall back to the first workspace.
       const remembered = workspaceService.getCachedWorkspaceId();
-      const myWorkspaces = await workspaceService.getMyWorkspaces(true);
+      let myWorkspaces = await workspaceService.getMyWorkspaces(true);
+      if (profile.role === 'admin' || myWorkspaces.length === 0) {
+        try {
+          const allWorkspaces = await workspaceService.getAllWorkspaces();
+          if (allWorkspaces && allWorkspaces.length > 0) {
+            myWorkspaces = allWorkspaces;
+          }
+        } catch {
+          // keep myWorkspaces
+        }
+      }
 
       if (myWorkspaces.length > 0) {
         setHasNoWorkspace(false);
