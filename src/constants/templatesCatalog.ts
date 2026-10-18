@@ -124,17 +124,6 @@ export const STEM_TEMPLATES_CATALOG: STEMTemplateCatalogItem[] = [
     bgBadge: 'bg-slate-100 text-slate-700 border-slate-300',
   },
   {
-    type: 'STEM_QUIZ',
-    title: 'Trắc Nghiệm Tương Tác Checkpoint',
-    subject: 'Đa Môn STEM',
-    category: 'ALL',
-    badge: 'Củng Cố Kiến Thức',
-    duration: '6 giây (180 frames)',
-    description: 'Câu hỏi trắc nghiệm kiểm tra độ hiểu bài kèm đồng hồ đếm ngược 5 giây.',
-    color: 'text-yellow-600',
-    bgBadge: 'bg-yellow-50 text-yellow-800 border-yellow-200',
-  },
-  {
     type: 'OUTRO',
     title: 'Tổng Kết Bài Học & Bài Tập LMS',
     subject: 'Đa Môn STEM',
@@ -151,4 +140,6 @@ export const STEM_TEMPLATES_CATALOG: STEMTemplateCatalogItem[] = [
 export const getTemplateLabel = (type: SceneData['type']): string =>
   type === 'COMPOSED'
     ? 'Cảnh lắp ghép'
-    : STEM_TEMPLATES_CATALOG.find((t) => t.type === type)?.title ?? type;
+    : type === 'STEM_QUIZ'
+      ? 'Trắc Nghiệm Tương Tác (Legacy)'
+      : STEM_TEMPLATES_CATALOG.find((t) => t.type === type)?.title ?? type;

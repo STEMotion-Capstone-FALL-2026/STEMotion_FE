@@ -65,18 +65,26 @@ Frontend của STEMotion được thiết kế như một **SaaS Studio hoàn ch
   - Gợi ý hình ảnh minh họa và công thức toán học phù hợp.
   - Lưu và ghi nhận quyết định phê duyệt AI (`decideAiRequest`).
 - [x] **So sánh phiên bản (`VersionDiffModal`)**: Xem khác biệt giữa bản nháp hiện tại và phiên bản kịch bản trước đó.
+- [x] **Banner thông báo lý do bị từ chối (`CHANGE_REQUESTED Alert Banner`)**: Tự động truy vấn lịch sử phiên bản (`/scripts/{id}/versions`) và hiển thị khung cảnh báo màu hổ phách nổi bật kèm trích dẫn lời phê duyệt/nhận xét của Reviewer ("Tại sao lại reject?") giúp Writer hiểu rõ và sửa đúng trọng tâm.
 
 ### 1.5. Xưởng Thẩm Định & Kiểm Duyệt (`ReviewerStudio`)
 - [x] **Thẩm định từng phân cảnh (Scene Feedback Comments)**: Thêm ghi chú nhận xét trực tiếp vào từng scene.
-- [x] **Quy trình phê duyệt kịch bản (Approval Workflow)**:
+- [x] **Kiến trúc Thẩm Định Trực Tiếp Trên Web Player Trước Khi Render (Web-First Review Flow)**:
+  - Reviewer xem trực tiếp phân cảnh trên trình phát **Remotion Web Player 60fps** mà không cần đợi máy chủ render file MP4.
+  - Ghim nhận xét phản biện theo mốc thời gian giây (`timestampSec`).
+  - Tự động kích hoạt Render MP4 khi Reviewer phê duyệt video (`VIDEO_APPROVED`) nếu chưa có file MP4 trên máy chủ.
+- [x] **Quy trình phê duyệt & từ chối chặt chẽ (Approval / Rejection Workflow)**:
   - Phê duyệt kịch bản (`APPROVED`) -> Chuyển giao sang xưởng Producer dựng phim.
-  - Yêu cầu chỉnh sửa (`CHANGE_REQUESTED`) -> Gửi trả Writer kèm lý do chi tiết.
+  - **Modal bắt buộc nhập lý do từ chối (`RejectConfirmationModal`)**: Khi Reviewer bấm *"Yêu Cầu Writer Sửa Lại"* hoặc *"Yêu Cầu Producer Sửa Clip"*, modal popup bắt buộc nhập lý do cụ thể, ngăn chặn 100% việc gửi chuỗi rỗng gây lỗi `400 REVIEW_REASON_REQUIRED`.
 - [x] **Modal Duyệt Bản Nháp (`DraftReviewModal`)**: Xem trước các thay đổi bản nháp đang chờ xử lý.
 
 ### 1.6. Xưởng Dựng Video Remotion (`ProducerStudio`)
 - [x] **Tích hợp Remotion Player thời gian thực**: Trình phát canvas video chuẩn 60fps / 30fps ngay trên trình duyệt.
+- [x] **Luồng nộp sản phẩm trực tiếp (Direct Video Submission)**:
+  - Nút **"Gửi Reviewer Duyệt Clip"** chuyển trạng thái sang `IN_QA` ngay tức thì (0 giây chờ đợi, không bắt buộc phải render MP4 trước).
+  - Nút **"Kết xuất MP4 (Tùy chọn)"**: Cho phép Producer xuất thử video trước nếu muốn, nhưng không còn là điều kiện tiên quyết gây nghẽn luồng làm việc.
 - [x] **Điều chỉnh thông số thuộc tính phân cảnh (`SceneInspector`)**:
-  - Tinh chỉnh bố cục template Remotion: `TITLE_HERO`, `MATH_FORMULA`, `DIAGRAM_EXPLAINER`, `DATA_CHART`, `ALGORITHM_WALKTHROUGH`, `STEM_QUIZ`, `CHEMICAL_REACTION`, `GEOMETRY_SPACE`, `OUTRO`.
+  - Tinh chỉnh bố cục template Remotion: `TITLE_HERO`, `MATH_FORMULA`, `DIAGRAM_EXPLAINER`, `DATA_CHART`, `ALGORITHM_WALKTHROUGH`, `CHEMICAL_REACTION`, `GEOMETRY_SPACE`, `OUTRO`.
   - Căn chỉnh thời lượng phân cảnh theo số khung hình (`durationInFrames`).
   - Tùy chỉnh giọng đọc thuyết minh TTS tiếng Việt và hiển thị phụ đề thời gian thực (Whisper auto-captioning).
 - [x] **Đệ trình tác vụ Render video**: Gửi lệnh render sang Worker pool (Node.js + Remotion + BullMQ) và theo dõi tiến độ theo % hoàn thành.
@@ -427,6 +435,7 @@ Dưới đây là bảng tổng hợp và đánh giá chuyên sâu về các tí
 - [x] **Kết nối Nhật Ký Sử Dụng AI Chi Tiết (AI Usage Drill-Down)**: Nối `GET /api/v1/admin/ai-usage` trong `AdminPortal` & `adminService` với bộ lọc ngày, model, user, chi phí USD và phân trang.
 - [x] **Kết nối Kịch Bản Của Tôi (`/scripts/mine`)**: Nối `GET /api/v1/scripts/mine` trong `projectService` & toggle xem kịch bản nhóm / kịch bản của tôi trong `ProjectDashboardView`.
 - [x] **Kết nối Quản Lý Xóa Không Gian Làm Việc (`DELETE /workspaces/{id}`)**: Bổ sung thao tác xóa workspace trong `AdminPortal` & `workspaceService`.
+- [x] **Modal Bắt Buộc Nhập Lý Do Từ Chối & Banner Hiển Thị Phản Hồi ("Tại sao lại reject?")**: Đã triển khai `RejectConfirmationModal` trong `ReviewerStudio` (bắt buộc nhập lý do khi yêu cầu sửa kịch bản hoặc trả lại clip) và Alert Banner hiển thị lý do ("Tại sao lại reject?") trực quan trong `WriterStudio` & `ProducerStudio`.
 - [ ] **Nâng cấp Neural TTS Preview qua BE Proxy**: Chuyển từ `window.speechSynthesis` sang API proxy an toàn từ BE (`GET /scripts/{id}/tts-preview`) khi BE hoàn thiện.
 - [ ] **Tích hợp Tải Lên Media (Asset Upload)**: Bổ sung input upload file ảnh/vector trực tiếp trong `SceneInspector` khi BE hoàn thiện catalog lưu trữ MinIO/S3.
 
@@ -478,10 +487,10 @@ Thay vì yêu cầu người quản trị (Admin) phải viết code định ngh
     - **Toán học** (`tính`, `phương trình`, `hàm số`, `đạo hàm`, `tích phân`, `nghiệm`, `ma trận`...) -> Gợi ý mẫu `MATH_FORMULA` (Công thức Toán học LaTeX).
     - **Hóa học** (`phản ứng`, `dung dịch`, `chất`, `kết tủa`, `axit`, `phân tử`, `nguyên tử`...) -> Gợi ý mẫu `CHEMICAL_REACTION` (Mô phỏng Phản ứng Hóa học).
     - **Tin học / Thuật toán** (`thuật toán`, `vòng lặp`, `mảng`, `sắp xếp`, `độ phức tạp`, `đệ quy`...) -> Gợi ý mẫu `ALGORITHM_WALKTHROUGH` (Diễn giải Giải thuật).
-    - **Kiểm tra / Tương tác** (`hỏi`, `chọn đáp án`, `câu nào sau đây`, `trắc nghiệm`, `đố bạn`...) -> Gợi ý mẫu `STEM_QUIZ` (Trắc nghiệm Tương tác).
     - **Quy trình / Lịch sử** (`bước`, `quy trình`, `giai đoạn`, `lịch sử`, `tiến trình`...) -> Gợi ý mẫu `PROCESS_TIMELINE` (Dòng thời gian / Quy trình).
     - **So sánh / Phân tích** (`so sánh`, `khác biệt`, `ưu điểm`, `nhược điểm`, `đối chiếu`...) -> Gợi ý mẫu `COMPARISON_SPLIT` (Bảng so sánh đối chiếu).
     - **Số liệu / Thống kê** (`tỷ lệ`, `biểu đồ`, `thống kê`, `phần trăm`, `tăng trưởng`, `sản lượng`...) -> Gợi ý mẫu `DATA_CHART` (Biểu đồ dữ liệu trực quan).
+    - *(Ghi chú kiến trúc: Đã chủ động loại bỏ gợi ý `STEM_QUIZ` khỏi luồng biên soạn để đảm bảo trải nghiệm video liền mạch chuẩn YouTube Storytelling; component rendering vẫn được giữ ngầm để tương thích ngược dữ liệu CSDL).*
 * **Giao diện & An toàn Schema:**
   - Banner gợi ý thông minh màu tím (`indigo-50/bg`) hiển thị trực tiếp phía trên ô nhập mô tả hình ảnh, giải thích lý do gợi ý kèm nút 1-chạm **"Áp Dụng Mẫu Này"**.
   - **Khởi tạo Default Props hợp lệ theo Backend Schema**: Khi người dùng chấp nhận đổi template, hàm `handleApplySuggestedTemplate` tự động nạp các trường dữ liệu bắt buộc (e.g. `latex, steps` cho `MATH_FORMULA`; `leftTitle, rightTitle` cho `COMPARISON_SPLIT`; `steps` cho `PROCESS_TIMELINE`), ngăn ngừa hoàn toàn lỗi `400 BAD_REQUEST` từ Backend Validator.
@@ -593,6 +602,22 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 
 ---
 
+#### 📌 BE-P0-5: API Gửi Thẩm Định Video & Cho Phép Duyệt Video Trên Web Player Trước Khi Render (Web-First Review Architecture)
+* **Bối cảnh & Vấn đề giải quyết:**
+  - Trước đây: Backend bắt buộc video phải render xong MP4 máy chủ mới set `video_status = IN_QA`, và trong `approveVideo` (`FeedbackService.java`) bắt buộc `clipArtifactService.requireCurrent(...)` phải tồn tại file MP4.
+  - Tuy nhiên, hiện tại Frontend đã tích hợp Remotion Web Player trực tiếp trên trình duyệt. Việc bắt buộc render MP4 trước khi gửi review gây lãng phí tài nguyên CPU/RAM máy chủ và làm chậm vòng lặp phản hồi của người dùng.
+* **Yêu cầu triển khai phía Backend:**
+  1. **Thêm Endpoint:** `POST /api/v1/scripts/{id}/submit-video-review`
+     - Chuyển `project.video_status` từ `NOT_RENDERED` (hoặc `RENDERING`) sang `IN_QA`.
+     - Lưu log lịch sử trạng thái: `StatusHistory` với hành động `SUBMIT_FOR_REVIEW`.
+     - Cho phép Reviewer mở duyệt ngay trên Web Player mà không cần đợi render MP4.
+  2. **Nới lỏng điều kiện trong `approveVideo` (`FeedbackService.java`):**
+     - Không bắt buộc `clipArtifactService.requireCurrent(...)` phải tồn tại trước khi phê duyệt.
+     - Cho phép duyệt trạng thái video (`video_status = APPROVED`).
+     - Tùy chọn: Khi duyệt thành công, Backend có thể tự động đẩy job render MP4 vào BullMQ worker queue nếu chưa có file MP4.
+
+---
+
 ### 9.2. Nhóm Ưu Tiên Trung Bình (P1 - Tương Tác Sư Phạm & Quản Trị Asset)
 
 #### 📌 BE-P1-1: Phân Định Feedback Comments Theo Clip ID (`clip_id` Scoping)
@@ -689,6 +714,7 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 | **BE-P0-2** | Sync Audio & Phụ Đề Whisper | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /scripts/{id}/sync-durations` |
 | **BE-P0-3** | Neural TTS Preview Proxy | ✅ Sẵn sàng | ⏳ Chờ làm | `GET /scripts/{id}/tts-preview` |
 | **BE-P0-4** | Lịch Sử Thẩm Định Review History | ✅ Sẵn sàng | ⏳ Chờ làm | `GET /scripts/{id}/review-history` |
+| **BE-P0-5** | Web-First Review & Video Submission | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /scripts/{id}/submit-video-review` & nới lỏng `approveVideo` |
 | **BE-P1-1** | Comment Scoping theo Clip ID | ✅ Sẵn sàng | ⏳ Chờ làm | `FeedbackComment.clipId` |
 | **BE-P1-2** | Threaded Comments & Resolve | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /qa-comments/{id}/replies` |
 | **BE-P1-3** | AI Asset Recommendation | ✅ Sẵn sàng | ⏳ Chờ làm | `POST /api/v1/ai/assets/recommend` |

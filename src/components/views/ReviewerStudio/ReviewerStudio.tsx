@@ -19,6 +19,7 @@ import {
   RefreshCw,
   ListOrdered,
   X,
+  Loader2,
 } from 'lucide-react';
 import { STEMScript, SceneData, FeedbackComment } from '../../../types/stem';
 import { UserRole, reviewService, QaReport, ReviewQueueItem } from '../../../services';
@@ -44,6 +45,8 @@ interface ReviewerStudioProps {
   onRoleChange: (role: UserRole) => void;
   onOpenPublishModal: () => void;
   onOpenProject?: (projectId: string) => void;
+  onStartRender?: () => Promise<void>;
+  isRendering?: boolean;
   showToast: (message: string, type?: 'success' | 'info' | 'warn') => void;
 }
 
@@ -65,6 +68,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   onRoleChange,
   onOpenPublishModal,
   onOpenProject,
+  onStartRender,
+  isRendering = false,
   showToast,
 }) => {
   const [decisionPending, setDecisionPending] = useState(false);
@@ -159,20 +164,57 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
     }
   }, [reviewerMode, isVideoReadyForReview, setReviewerMode]);
 
-  const decide = async (decision: 'APPROVED' | 'CHANGE_REQUESTED' | 'VIDEO_APPROVED' | 'VIDEO_RETURNED') => {
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<'SCRIPT' | 'VIDEO' | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const handleOpenRejectModal = (target: 'SCRIPT' | 'VIDEO') => {
+    setRejectTarget(target);
+    setRejectReason(reviewNote || '');
+    setRejectModalOpen(true);
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectReason.trim()) {
+      showToast('Vui lòng nhập lý do từ chối để chuyển cho tác giả kịch bản / người dựng clip.', 'warn');
+      return;
+    }
+    const noteToSend = rejectReason.trim();
+    setReviewNote(noteToSend);
+    setRejectModalOpen(false);
+
+    if (rejectTarget === 'SCRIPT') {
+      await decide('CHANGE_REQUESTED', noteToSend);
+    } else if (rejectTarget === 'VIDEO') {
+      await decide('VIDEO_RETURNED', noteToSend);
+    }
+  };
+
+  const decide = async (
+    decision: 'APPROVED' | 'CHANGE_REQUESTED' | 'VIDEO_APPROVED' | 'VIDEO_RETURNED',
+    overrideNote?: string
+  ) => {
     if (decisionPending) return;
+    const noteToSubmit = overrideNote !== undefined ? overrideNote : reviewNote;
     setDecisionPending(true);
     try {
       const updated = decision === 'VIDEO_APPROVED'
         ? await reviewService.approveVideo(script.id)
         : decision === 'VIDEO_RETURNED'
-          ? await reviewService.sendBackVideo(script.id, reviewNote)
-          : await reviewService.submitReviewDecision(script.id, decision, reviewNote);
+          ? await reviewService.sendBackVideo(script.id, noteToSubmit)
+          : await reviewService.submitReviewDecision(script.id, decision, noteToSubmit);
       setScript(updated);
       setActiveSceneId(updated.scenes[0]?.id || '');
       showToast(decision.includes('RETURNED') || decision === 'CHANGE_REQUESTED'
-        ? 'Đã lưu yêu cầu chỉnh sửa.' : 'Đã lưu quyết định phê duyệt.', 'success');
-      if (decision === 'VIDEO_APPROVED') onOpenPublishModal();
+        ? 'Đã lưu yêu cầu chỉnh sửa và chuyển trả thành công.' : 'Đã lưu quyết định phê duyệt.', 'success');
+      if (decision === 'VIDEO_APPROVED') {
+        if (!updated.videoUrl && onStartRender) {
+          showToast('Clip đã được phê duyệt! Bắt đầu kết xuất MP4 tự động...', 'info');
+          void onStartRender();
+        } else {
+          onOpenPublishModal();
+        }
+      }
     } catch (error: any) {
       showToast(error.message || 'Không lưu được quyết định. Trạng thái chưa thay đổi.', 'warn');
     } finally { setDecisionPending(false); }
@@ -275,7 +317,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
             ) : (
               <>
                 <button
-                  onClick={() => void decide('CHANGE_REQUESTED')}
+                  onClick={() => handleOpenRejectModal('SCRIPT')}
                   disabled={decisionPending}
                   className="px-3 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
                 >
@@ -303,28 +345,45 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                 <span>So sánh bản render</span>
               </button>
               <button
-                onClick={() => void decide('VIDEO_RETURNED')}
+                onClick={() => handleOpenRejectModal('VIDEO')}
                 disabled={decisionPending}
-                className="px-3 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-lg font-bold flex items-center space-x-1"
+                className="px-3 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Yêu Cầu Producer Sửa Clip</span>
               </button>
               <button
                 onClick={onOpenPublishModal}
-                className="px-3 py-1.5 bg-blue-50 border border-blue-300 hover:bg-blue-100 text-blue-800 rounded-lg font-bold flex items-center space-x-1.5 shadow-2xs"
-                title="Tải video MP4 Full HD về máy tính"
+                disabled={!script.videoUrl}
+                className={`px-3 py-1.5 rounded-lg font-bold flex items-center space-x-1.5 shadow-2xs ${
+                  !script.videoUrl
+                    ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                    : 'bg-blue-50 border border-blue-300 hover:bg-blue-100 text-blue-800 cursor-pointer'
+                }`}
+                title={script.videoUrl ? 'Tải video MP4 Full HD về máy tính' : 'Chưa có file MP4; cần kết xuất sau khi duyệt'}
               >
                 <Download className="w-3.5 h-3.5 text-blue-600" />
                 <span>Tải Video MP4</span>
               </button>
               <button
                 onClick={() => void decide('VIDEO_APPROVED')}
-                disabled={decisionPending}
-                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs"
+                disabled={decisionPending || isRendering}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer"
               >
-                <CheckCheck className="w-4 h-4" />
-                <span>Duyệt Video ➔ Xuất Bản / Tải Về</span>
+                {decisionPending || isRendering ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCheck className="w-4 h-4" />
+                )}
+                <span>
+                  {script.videoStatus === 'APPROVED'
+                    ? script.videoUrl
+                      ? 'Đã Duyệt ➔ Tải MP4 / Xuất Bản'
+                      : isRendering
+                      ? 'Đang Render MP4...'
+                      : 'Đã Duyệt ➔ Bắt Đầu Render MP4'
+                    : 'Duyệt Video ➔ Kích Hoạt Render MP4'}
+                </span>
               </button>
             </>
           )}
@@ -948,6 +1007,79 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                 className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Xác Nhận Từ Chối & Ghi Lý Do Yêu Cầu Chỉnh Sửa */}
+      {rejectModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-amber-50/60">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
+                  <RotateCcw className="w-4 h-4" />
+                </div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  {rejectTarget === 'SCRIPT' ? 'Yêu Cầu Writer Sửa Lại Kịch Bản' : 'Yêu Cầu Producer Sửa Clip Video'}
+                </h2>
+              </div>
+              <button
+                onClick={() => setRejectModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="text-xs text-slate-600 leading-relaxed bg-amber-50 border border-amber-200/70 p-3 rounded-xl flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  {rejectTarget === 'SCRIPT'
+                    ? 'Vui lòng cung cấp lý do từ chối hoặc hướng dẫn sửa đổi sư phạm. Writer sẽ nhìn thấy thông báo này nổi bật ngay trên đầu kịch bản.'
+                    : 'Vui lòng ghi rõ các lỗi cần sửa đổi (âm thanh, đồ họa, timing phụ đề hoặc bố cục animation) để Producer chỉnh sửa và kết xuất lại.'}
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Lý do từ chối & chỉ dẫn sửa đổi <span className="text-rose-500">*</span>:
+                </label>
+                <textarea
+                  rows={4}
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder={
+                    rejectTarget === 'SCRIPT'
+                      ? 'Ví dụ: Phân cảnh 2 công thức vận tốc bị sai số mũ; Lời thoại phân cảnh 3 quá dài so với thời lượng 5s...'
+                      : 'Ví dụ: Phụ đề chạy từ giây 0:15 bị trễ so với giọng đọc; Animation đồ thị ở cảnh 3 xuất hiện quá nhanh...'
+                  }
+                  className="w-full p-3 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-slate-50 focus:bg-white resize-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-3.5 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRejectModalOpen(false)}
+                disabled={decisionPending}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmReject()}
+                disabled={decisionPending || !rejectReason.trim()}
+                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors"
+              >
+                {decisionPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Gửi Yêu Cầu Chỉnh Sửa</span>
               </button>
             </div>
           </div>

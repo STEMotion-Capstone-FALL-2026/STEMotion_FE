@@ -516,7 +516,7 @@ export default function App() {
           const rendered = await projectService.getProjectById(projectId);
           if (generation !== renderGeneration.current) return;
           setScript(rendered);
-          showToast('Video đã kết xuất và chuyển sang QA.', 'success');
+          showToast('Video đã kết xuất thành công! File MP4 đã sẵn sàng.', 'success');
           return;
         }
         if (Date.now() >= deadline) throw new Error('Hết thời gian theo dõi. Job có thể vẫn chạy trên máy chủ.');
@@ -533,6 +533,17 @@ export default function App() {
       if (generation === renderGeneration.current) setIsRendering(false);
     }
   };
+
+  const handleSubmitVideoForReview = async () => {
+    try {
+      const updated = await reviewService.submitVideoForReview(script.id);
+      setScript(updated);
+      showToast('Đã gửi clip sang cho Reviewer thẩm định chất lượng trên Web Player!', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Không thể gửi video duyệt.', 'warn');
+    }
+  };
+
   // Reviewer add comment dynamically
   const [newCommentInput, setNewCommentInput] = useState('');
 
@@ -996,13 +1007,7 @@ export default function App() {
           renderPercentageText={renderPercentageText}
           startRender={startRender}
           onOpenPublishModal={() => setIsPublishModalOpen(true)}
-          onSubmitForReview={() => {
-            if (script.videoStatus !== 'IN_QA' || !script.videoUrl) {
-              showToast('Video phải kết xuất thành công trên máy chủ trước khi QA.', 'warn');
-              return;
-            }
-            showToast('Video đã nằm trong hàng đợi QA trên máy chủ.', 'info');
-          }}
+          onSubmitForReview={handleSubmitVideoForReview}
           showToast={showToast}
         />
       )}
@@ -1026,6 +1031,8 @@ export default function App() {
           onRoleChange={handleRoleChange}
           onOpenPublishModal={() => setIsPublishModalOpen(true)}
           onOpenProject={openProject}
+          onStartRender={startRender}
+          isRendering={isRendering}
           showToast={showToast}
         />
       )}

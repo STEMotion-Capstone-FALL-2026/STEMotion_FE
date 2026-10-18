@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Download,
   Palette,
+  Clock,
 } from 'lucide-react';
 import { STEMScript, SceneData } from '../../../types/stem';
 import { renderService, RenderHistoryEntry } from '../../../services';
@@ -100,9 +101,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
     ? { label: status === 'PUBLISHED' ? 'Xuất bản lại' : 'Xuất bản (đã duyệt)', run: onOpenPublishModal, disabled: !onOpenPublishModal }
     : status === 'RENDERING'
       ? { label: 'Đang kết xuất…', run: undefined, disabled: true }
-      : status === 'IN_QA'
-        ? { label: 'Chờ Reviewer duyệt clip', run: undefined, disabled: true }
-        : { label: production ? `Kết xuất bản dựng r${production.revision}` : 'Kết xuất MP4', run: startRender, disabled: isRendering };
+      : { label: production ? `Kết xuất bản dựng r${production.revision} (Tùy chọn)` : 'Kết xuất MP4 (Tùy chọn)', run: startRender, disabled: isRendering };
 
   const [activeLegoPieceId, setActiveLegoPieceId] = useState<string | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -236,11 +235,38 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
           {onSubmitForReview && (
             <button
               onClick={onSubmitForReview}
-              className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
-              title="Hoàn tất tạo video và chuyển sang Bước 4 để Reviewer thẩm định chất lượng"
+              disabled={status === 'IN_QA' || status === 'APPROVED' || isRendering}
+              className={`px-4 py-1.5 rounded-lg shadow-xs flex items-center space-x-1.5 transition-colors font-bold ${
+                status === 'IN_QA'
+                  ? 'bg-amber-100 text-amber-800 border border-amber-300 cursor-not-allowed opacity-90'
+                  : status === 'APPROVED'
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-not-allowed opacity-90'
+                  : 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer'
+              }`}
+              title={
+                status === 'IN_QA'
+                  ? 'Clip đã được gửi và đang chờ Reviewer thẩm định trên Web Player'
+                  : status === 'APPROVED'
+                  ? 'Clip đã được Reviewer phê duyệt hoàn tất'
+                  : 'Gửi clip sang cho Reviewer thẩm định chất lượng trên Web Player (không cần chờ render MP4)'
+              }
             >
-              <Send className="w-3.5 h-3.5" />
-              <span>Gửi Reviewer Duyệt Video</span>
+              {status === 'IN_QA' ? (
+                <>
+                  <Clock className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Đang Chờ Reviewer Duyệt Clip</span>
+                </>
+              ) : status === 'APPROVED' ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Clip Đã Được Duyệt</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Gửi Reviewer Duyệt Clip</span>
+                </>
+              )}
             </button>
           )}
           <button
@@ -270,6 +296,19 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Banner Thông Báo Nếu Clip Bị Reviewer Trả Về */}
+      {Boolean((script as any).videoReviewNote || (script as any).reviewNote) && script.videoStatus === 'NOT_RENDERED' && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-start gap-3 text-amber-900 shrink-0 z-10 animate-in fade-in">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <span className="font-bold text-slate-900">Reviewer yêu cầu sửa lại clip: </span>
+            <span className="font-medium text-amber-900 italic">
+              &ldquo;{(script as any).videoReviewNote || (script as any).reviewNote}&rdquo;
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* 3 CỘT ĐỘNG: Cột Trái (Scenes list) - Cột Giữa (Remotion Player Live) - Cột Phải (Live Props Inspector) */}
       <div className="flex-1 min-h-0 flex overflow-hidden">

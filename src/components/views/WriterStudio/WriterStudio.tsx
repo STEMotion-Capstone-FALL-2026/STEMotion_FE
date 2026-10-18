@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   PlusCircle,
   GitCompare,
@@ -79,6 +79,32 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   const [dragOverSceneIdx, setDragOverSceneIdx] = useState<number | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rejectionNote, setRejectionNote] = useState<string | null>(script.reviewNote || null);
+  const [rejectionVersion, setRejectionVersion] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (script.scriptStatus === 'CHANGE_REQUESTED') {
+      if (script.reviewNote) {
+        setRejectionNote(script.reviewNote);
+      }
+      // Query version history to fetch the reviewer note and version number
+      projectService
+        .getVersions(script.id)
+        .then((versions) => {
+          if (Array.isArray(versions) && versions.length > 0) {
+            const verWithNote =
+              versions.find((v: any) => v.status === 'CHANGE_REQUESTED' && v.reviewNote) ||
+              versions.find((v: any) => v.reviewNote) ||
+              versions[0];
+            if (verWithNote?.reviewNote) {
+              setRejectionNote(verWithNote.reviewNote);
+              setRejectionVersion(verWithNote.versionNo);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [script.id, script.scriptStatus, script.reviewNote]);
 
 
   const handlePlayTts = (text: string) => {
@@ -167,24 +193,6 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           xAxisLabel: 'Trục hoành',
           yAxisLabel: 'Trục tung',
           dataPoints: [{ label: 'Nhóm A', value: 80 }, { label: 'Nhóm B', value: 45 }],
-        },
-      };
-    }
-
-    if (
-      currentType !== 'STEM_QUIZ' &&
-      /(câu hỏi|trắc nghiệm|đố vui|hãy chọn|đáp án|kiểm tra nhanh|thử tài)/i.test(lower)
-    ) {
-      return {
-        type: 'STEM_QUIZ' as const,
-        title: 'Trắc Nghiệm Tương Tác STEM',
-        keyword: 'câu hỏi / trắc nghiệm',
-        defaultProps: {
-          question: 'Theo bạn nhận định nào sau đây là chính xác?',
-          options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
-          correctIndex: 0,
-          hint: 'Gợi ý từ định luật khoa học',
-          explanation: 'Giải thích chi tiết đáp án',
         },
       };
     }
@@ -331,6 +339,34 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Banner Cảnh Báo Lý Do Bị Reviewer Yêu Cầu Chỉnh Sửa */}
+      {script.scriptStatus === 'CHANGE_REQUESTED' && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-start gap-3.5 text-amber-900 shrink-0 z-10 animate-in fade-in">
+          <div className="p-1 rounded-lg bg-amber-100 text-amber-700 shrink-0 mt-0.5">
+            <AlertTriangle className="w-4 h-4 text-amber-700" />
+          </div>
+          <div className="flex-1 text-xs space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-900 text-xs">
+                Yêu cầu chỉnh sửa từ Reviewer {rejectionVersion ? `(Bản v${rejectionVersion})` : ''}:
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-amber-200 text-amber-900 uppercase tracking-wider">
+                Cần sửa đổi
+              </span>
+            </div>
+            <div className="bg-white/90 p-2.5 rounded-lg border border-amber-300/60 text-slate-800 font-medium leading-relaxed shadow-2xs">
+              {rejectionNote ? (
+                <span>&ldquo;{rejectionNote}&rdquo;</span>
+              ) : (
+                <span className="text-slate-500 italic">
+                  Reviewer đã trả lại kịch bản yêu cầu chỉnh sửa. Vui lòng rà soát lại các phân cảnh theo góp ý và bấm gửi lại sau khi hoàn thiện.
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Cột 1: Cấu trúc phân cảnh (Cho phép Thêm / Xóa / Đổi thứ tự) */}

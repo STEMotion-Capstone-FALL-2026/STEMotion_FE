@@ -33,7 +33,7 @@ export const TemplateCatalogModal: React.FC<TemplateCatalogModalProps> = ({
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <span>Kho Template Phân Cảnh STEMotion 4.0</span>
                 <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-mono font-bold">
-                  11 Mẫu Phân Cảnh STEM
+                  10 Mẫu Phân Cảnh STEM
                 </span>
               </h3>
               <p className="text-[11px] text-slate-500">
@@ -52,7 +52,7 @@ export const TemplateCatalogModal: React.FC<TemplateCatalogModalProps> = ({
         {/* Filter Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 shrink-0 border-b border-slate-100">
           {[
-            { id: 'ALL', label: 'Tất Cả (11)' },
+            { id: 'ALL', label: 'Tất Cả (10)' },
             { id: 'Math', label: 'Toán Học' },
             { id: 'Physics', label: 'Vật Lý' },
             { id: 'Chemistry', label: 'Hóa Học' },

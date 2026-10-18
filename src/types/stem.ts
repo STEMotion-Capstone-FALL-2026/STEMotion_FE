@@ -324,6 +324,7 @@ export interface STEMScript {
   createdAt?: string;
   reviewComments?: FeedbackComment[];
   version?: string;
+  reviewNote?: string;
   estimatedDurationSeconds?: number;
   targetAudience?: string;
   sceneCount?: number;
