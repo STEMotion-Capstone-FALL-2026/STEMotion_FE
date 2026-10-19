@@ -61,6 +61,81 @@ const ROLE_LABELS: Record<SystemUserRole, { label: string; badge: string }> = {
   WRITER: { label: 'WRITER (Biên soạn)', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
 };
 
+const SCENE_TYPE_OPTIONS = [
+  {
+    value: 'ILLUSTRATED_EXPLAINER',
+    label: 'Minh họa Khái niệm & Trực quan (ILLUSTRATED_EXPLAINER)',
+    category: 'Physics',
+    theme: 'default',
+    recommended: ['Physics', 'Biology'],
+    defaultSchema: '{"sceneType":"ILLUSTRATED_EXPLAINER","stemPillar":"Science"}',
+  },
+  {
+    value: 'MATH_FORMULA',
+    label: 'Công thức & Phương trình Toán học (MATH_FORMULA)',
+    category: 'Math',
+    theme: 'academic',
+    recommended: ['Math', 'Physics'],
+    defaultSchema: '{"sceneType":"MATH_FORMULA","formula":"E = mc^2","stemPillar":"Mathematics"}',
+  },
+  {
+    value: 'CHEMICAL_REACTION',
+    label: 'Phương trình & Phản ứng Hóa học (CHEMICAL_REACTION)',
+    category: 'Chemistry',
+    theme: 'emerald',
+    recommended: ['Chemistry', 'Biology'],
+    defaultSchema: '{"sceneType":"CHEMICAL_REACTION","equation":"2H2 + O2 -> 2H2O","stemPillar":"Science"}',
+  },
+  {
+    value: 'ALGORITHM_WALKTHROUGH',
+    label: 'Thuật toán & Mã nguồn Tin học (ALGORITHM_WALKTHROUGH)',
+    category: 'ComputerScience',
+    theme: 'cyber',
+    recommended: ['ComputerScience', 'Math'],
+    defaultSchema: '{"sceneType":"ALGORITHM_WALKTHROUGH","language":"python","stemPillar":"Technology"}',
+  },
+  {
+    value: 'DIAGRAM_EXPLAINER',
+    label: 'Sơ đồ Quy trình & Cơ chế (DIAGRAM_EXPLAINER)',
+    category: 'Biology',
+    theme: 'emerald',
+    recommended: ['Biology', 'Chemistry'],
+    defaultSchema: '{"sceneType":"DIAGRAM_EXPLAINER","diagramType":"flowchart","stemPillar":"Science"}',
+  },
+  {
+    value: 'DATA_CHART',
+    label: 'Biểu đồ & Đồ thị Số liệu (DATA_CHART)',
+    category: 'Math',
+    theme: 'default',
+    recommended: ['Math', 'Physics'],
+    defaultSchema: '{"sceneType":"DATA_CHART","chartType":"line","stemPillar":"Mathematics"}',
+  },
+  {
+    value: 'GEOMETRY_SPACE',
+    label: 'Hình học Không gian 3D (GEOMETRY_SPACE)',
+    category: 'Math',
+    theme: 'academic',
+    recommended: ['Math'],
+    defaultSchema: '{"sceneType":"GEOMETRY_SPACE","shape":"cube","stemPillar":"Mathematics"}',
+  },
+  {
+    value: 'TITLE_HERO',
+    label: 'Phân cảnh Mở đầu Bài học (TITLE_HERO)',
+    category: 'Physics',
+    theme: 'default',
+    recommended: ['Math', 'Physics', 'Chemistry', 'Biology', 'ComputerScience'],
+    defaultSchema: '{"sceneType":"TITLE_HERO","stemPillar":"Science"}',
+  },
+  {
+    value: 'OUTRO',
+    label: 'Phân cảnh Tổng kết & Ghi nhớ (OUTRO)',
+    category: 'Physics',
+    theme: 'default',
+    recommended: ['Math', 'Physics', 'Chemistry', 'Biology', 'ComputerScience'],
+    defaultSchema: '{"sceneType":"OUTRO","stemPillar":"Science"}',
+  },
+];
+
 /** Initials stand in for an avatar the backend does not store yet. */
 const initialsOf = (name: string): string => {
   if (!name || !name.trim()) return '?';
@@ -1286,20 +1361,61 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                   onSubmit={handleCreateTemplate}
                   className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs"
                 >
+                  {/* Preset Buttons for Non-Technical Users */}
+                  <div className="md:col-span-4 p-3 bg-indigo-50/80 border border-indigo-100 rounded-xl space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <div className="flex items-center gap-1.5 font-bold text-indigo-900 text-[11px]">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span>Mẫu Cấu Hình Nhanh (Dành cho người không biết lập trình):</span>
+                      </div>
+                      <span className="text-[10px] text-indigo-600 font-medium">
+                        Bấm 1 chạm để tự động điền JSON chuẩn
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: '📐 Toán học (Công thức)', opt: SCENE_TYPE_OPTIONS[1], name: 'Công thức & Định lý Toán học' },
+                        { label: '⚛️ Vật Lý (Minh họa)', opt: SCENE_TYPE_OPTIONS[0], name: 'Mô phỏng Hiện tượng Vật Lý' },
+                        { label: '🧪 Hóa Học (Phản ứng)', opt: SCENE_TYPE_OPTIONS[2], name: 'Phản ứng & Phương trình Hóa học' },
+                        { label: '💻 Tin Học (Mã nguồn)', opt: SCENE_TYPE_OPTIONS[3], name: 'Minh họa Thuật toán Tin học' },
+                        { label: '🧬 Sinh Học (Quy trình)', opt: SCENE_TYPE_OPTIONS[4], name: 'Sơ đồ Sinh học & Cơ chế tế bào' },
+                      ].map((preset) => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            setNewTemplate({
+                              ...newTemplate,
+                              name: preset.name,
+                              category: preset.opt.category,
+                              previewUrl: preset.opt.value,
+                              propsSchema: preset.opt.defaultSchema,
+                              defaultVisualTheme: preset.opt.theme,
+                              recommendedSubjects: preset.opt.recommended,
+                            });
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-[11px] font-bold shadow-2xs transition cursor-pointer"
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="md:col-span-2">
                     <label className="font-bold text-slate-700 block mb-1">
                       Tên Mẫu Hoạt Họa (Template Name)
                     </label>
                     <input
                       required
-                      placeholder="VD: ILLUSTRATED_EXPLAINER — Mô phỏng Quang hợp..."
+                      placeholder="VD: Mô phỏng Quang hợp tế bào thực vật..."
                       value={newTemplate.name}
                       onChange={(e) => setNewTemplate({ ...newTemplate, name: e.target.value })}
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white"
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Môn STEM</label>
+                    <label className="font-bold text-slate-700 block mb-1">Môn STEM Chính</label>
                     <select
                       value={newTemplate.category}
                       onChange={(e) =>
@@ -1316,28 +1432,52 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                   </div>
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">
-                      Mã Composition (SceneType)
+                      Loại Phân Cảnh (SceneType)
                     </label>
-                    <input
-                      required
+                    <select
                       value={newTemplate.previewUrl}
-                      onChange={(e) =>
-                        setNewTemplate({ ...newTemplate, previewUrl: e.target.value })
-                      }
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-mono"
-                    />
+                      onChange={(e) => {
+                        const selectedVal = e.target.value;
+                        const matched = SCENE_TYPE_OPTIONS.find((opt) => opt.value === selectedVal);
+                        setNewTemplate({
+                          ...newTemplate,
+                          previewUrl: selectedVal,
+                          propsSchema: matched ? matched.defaultSchema : newTemplate.propsSchema,
+                          category: matched ? matched.category : newTemplate.category,
+                          defaultVisualTheme: matched?.theme || newTemplate.defaultVisualTheme,
+                          recommendedSubjects: matched?.recommended || newTemplate.recommendedSubjects,
+                        });
+                      }}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-semibold"
+                    >
+                      {SCENE_TYPE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="md:col-span-3">
-                    <label className="font-bold text-slate-700 block mb-1">
-                      Props Schema (JSON Metadata)
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700">
+                        Cấu trúc Dữ liệu AI (Props Schema JSON)
+                      </label>
+                      <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Tự động sinh theo phân cảnh
+                      </span>
+                    </div>
                     <input
                       value={newTemplate.propsSchema}
                       onChange={(e) =>
                         setNewTemplate({ ...newTemplate, propsSchema: e.target.value })
                       }
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-mono text-[11px]"
+                      title="Nếu không rành lập trình, bạn chỉ cần giữ nguyên giá trị tự sinh này."
                     />
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      💡 <b>Dành cho người không biết code:</b> Hệ thống đã tự động điền cấu trúc chuẩn. Bạn không cần chỉnh sửa gì thêm!
+                    </p>
                   </div>
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">Theme Mặc Định</label>
@@ -1462,12 +1602,39 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                       </div>
 
                       <div>
-                        <label className="font-bold text-slate-700 block mb-1">Mã Composition</label>
-                        <input
-                          required
+                        <label className="font-bold text-slate-700 block mb-1">Loại Phân Cảnh (SceneType)</label>
+                        <select
                           value={editingTemplate.previewUrl || ''}
-                          onChange={(e) => setEditingTemplate({ ...editingTemplate, previewUrl: e.target.value })}
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-mono"
+                          onChange={(e) => {
+                            const selectedVal = e.target.value;
+                            const matched = SCENE_TYPE_OPTIONS.find((opt) => opt.value === selectedVal);
+                            setEditingTemplate({
+                              ...editingTemplate,
+                              previewUrl: selectedVal,
+                              propsSchema: matched ? matched.defaultSchema : editingTemplate.propsSchema,
+                              category: matched ? matched.category : editingTemplate.category,
+                              defaultVisualTheme: matched?.theme || editingTemplate.defaultVisualTheme,
+                            });
+                          }}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-semibold"
+                        >
+                          {SCENE_TYPE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="font-bold text-slate-700">Props Schema (JSON Metadata)</label>
+                          <span className="text-[10px] text-slate-400">Tùy biến tham số AI sinh</span>
+                        </div>
+                        <input
+                          value={editingTemplate.propsSchema || ''}
+                          onChange={(e) => setEditingTemplate({ ...editingTemplate, propsSchema: e.target.value })}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white font-mono text-[11px]"
                         />
                       </div>
 
