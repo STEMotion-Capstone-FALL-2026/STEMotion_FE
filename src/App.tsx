@@ -292,6 +292,8 @@ export default function App() {
   const [composition, setComposition] = useState<Composition | null>(null);
   const [isSavingComposition, setIsSavingComposition] = useState(false);
   const compositionSaver = React.useRef<CompositionSaver | null>(null);
+  const syncDurationsPending = React.useRef(false);
+  const [isSyncingDurations, setIsSyncingDurations] = useState(false);
 
   const loadComposition = useCallback(async (projectId: string) => {
     compositionSaver.current?.dispose();
@@ -307,6 +309,7 @@ export default function App() {
         },
         onError: (error: any) => {
           setIsSavingComposition(false);
+          if (syncDurationsPending.current) return;
           showToast(error?.status === 409
             ? 'Bản dựng vừa được lưu ở nơi khác; đã tải lại bản mới nhất.'
             : error?.message || 'Không lưu được bản dựng.', 'warn');
@@ -314,9 +317,11 @@ export default function App() {
         },
       });
       setComposition(draft);
+      return true;
     } catch (error: any) {
       setComposition(null);
       showToast('Không mở được bản dựng: ' + (error?.message || 'lỗi máy chủ'), 'warn');
+      return false;
     }
   }, []);
 
@@ -340,6 +345,7 @@ export default function App() {
   } : script;
 
   const handleUpdateTheme = (theme: VisualTheme) => {
+    if (syncDurationsPending.current) return;
     if (inProduction && composition) {
       setComposition((prev) => (prev ? { ...prev, visualTheme: theme } : prev));
       compositionSaver.current?.schedule(composition.scenes, theme);
@@ -348,9 +354,17 @@ export default function App() {
   };
 
   const handleProducerSyncDurations = async () => {
+    if (syncDurationsPending.current) return;
+    if (!composition?.editable || !compositionSaver.current) {
+      showToast(composition?.lockedReason || 'Bản dựng chưa sẵn sàng để đồng bộ. Vui lòng mở lại project rồi thử lại.', 'warn');
+      return;
+    }
+    syncDurationsPending.current = true;
+    setIsSyncingDurations(true);
+    const saver = compositionSaver.current;
     try {
-      showToast('Đang đồng bộ thời lượng phân cảnh theo giọng đọc AI...', 'info');
-      const res = await narrationService.syncDurations(script.id, composition?.revision ?? undefined);
+      const res = await narrationService.syncCompositionDurations(script.id, saver);
+      if (compositionSaver.current !== saver) return;
       if (res && Array.isArray(res.scenes) && res.scenes.length > 0) {
         const durationMap = new Map(res.scenes.map((s) => [s.id, s.durationInFrames]));
         setScript((prev) => {
@@ -369,11 +383,21 @@ export default function App() {
         });
       }
       if (inProduction) {
-        await loadComposition(script.id);
+        if (!await loadComposition(script.id)) return;
       }
       showToast('Đã đồng bộ thời lượng các phân cảnh theo giọng đọc AI thành công!', 'success');
     } catch (err: any) {
-      showToast(err?.message || 'Không thể đồng bộ thời lượng từ máy chủ.', 'warn');
+      if (compositionSaver.current !== saver) return;
+      if (err?.status === 409) {
+        if (await loadComposition(script.id)) {
+          showToast('Bản dựng đã thay đổi. Đã tải bản mới nhất; hãy kiểm tra rồi đồng bộ lại.', 'warn');
+        }
+      } else {
+        showToast(err?.message || 'Không thể đồng bộ thời lượng từ máy chủ. Vui lòng thử lại.', 'warn');
+      }
+    } finally {
+      syncDurationsPending.current = false;
+      setIsSyncingDurations(false);
     }
   };
 
@@ -392,6 +416,7 @@ export default function App() {
 
   /** Producer edits: per-scene properties of the draft; scenes and templates stay as approved. */
   const editComposition = (change: (scenes: SceneData[]) => SceneData[]) => {
+    if (syncDurationsPending.current) return;
     if (!composition) {
       if (['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '')) {
         const now = Date.now();
@@ -583,7 +608,7 @@ export default function App() {
   useEffect(() => { setIsRendering(false); return () => { renderGeneration.current++; }; }, [script.id]);
 
   const startRender = async () => {
-    if (isRendering || !script.id) return;
+    if (isRendering || syncDurationsPending.current || !script.id) return;
     const generation = ++renderGeneration.current;
     const projectId = script.id;
     setIsRendering(true);
@@ -637,6 +662,7 @@ export default function App() {
   };
 
   const handleSubmitVideoForReview = async () => {
+    if (syncDurationsPending.current) return;
     try {
       const updated = await reviewService.submitVideoForReview(script.id);
       setScript(updated);
@@ -1112,6 +1138,7 @@ export default function App() {
           onSubmitForReview={handleSubmitVideoForReview}
           onUpdateTheme={handleUpdateTheme}
           onSyncDurations={handleProducerSyncDurations}
+          isSyncingDurations={isSyncingDurations}
           showToast={showToast}
         />
       )}

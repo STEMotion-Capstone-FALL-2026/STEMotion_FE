@@ -41,7 +41,7 @@ export interface CompositionSaver {
   /** For continuous edits: only the latest scenes and theme are sent, once edits pause. */
   schedule(scenes: SceneData[], visualTheme?: string | null): void;
   /** Sends a pending edit now and waits for every save, e.g. before a render. */
-  flush(): Promise<void>;
+  flush(): Promise<number>;
   dispose(): void;
 }
 
@@ -62,8 +62,9 @@ export function createCompositionSaver(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let chain: Promise<void> = Promise.resolve();
   let disposed = false;
+  let saveError: unknown;
 
-  const flush = (): Promise<void> => {
+  const flush = (): Promise<number> => {
     if (timer) clearTimeout(timer);
     timer = undefined;
     const current = pending;
@@ -76,13 +77,19 @@ export function createCompositionSaver(
             ? await save(projectId, revision, current.scenes, current.visualTheme)
             : await save(projectId, revision, current.scenes);
           revision = saved.revision;
+          saveError = undefined;
           if (!disposed) handlers.onSaved(saved);
         } catch (error) {
+          saveError = error;
           if (!disposed) handlers.onError(error);
         }
       });
     }
-    return chain;
+    return chain.then(() => {
+      if (saveError) throw saveError;
+      if (disposed) throw new Error('Bản dựng đã thay đổi. Vui lòng thử lại trên bản mới nhất.');
+      return revision;
+    });
   };
 
   return {
@@ -90,7 +97,7 @@ export function createCompositionSaver(
       if (disposed) return;
       pending = { scenes, visualTheme };
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => void flush(), delayMs);
+      timer = setTimeout(() => { void flush().catch(() => {}); }, delayMs);
     },
     flush,
     dispose() {

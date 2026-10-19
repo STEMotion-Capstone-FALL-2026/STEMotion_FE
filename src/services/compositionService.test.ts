@@ -15,7 +15,7 @@ describe('createCompositionSaver', () => {
 
     saver.schedule(scenes('a'));
     saver.schedule(scenes('ab'));
-    await saver.flush();
+    await expect(saver.flush()).resolves.toBe(1);
     saver.schedule(scenes('abc'));
     await saver.flush();
 
@@ -32,12 +32,12 @@ describe('createCompositionSaver', () => {
     const saver = createCompositionSaver('p', 2, { onSaved: vi.fn(), onError }, { delayMs: 10_000, save });
 
     saver.schedule(scenes('a'));
-    await saver.flush();
+    await expect(saver.flush()).rejects.toBe(conflict);
     expect(onError).toHaveBeenCalledWith(conflict);
 
     saver.dispose();
     saver.schedule(scenes('b'));
-    await saver.flush();
+    await expect(saver.flush()).rejects.toBe(conflict);
     expect(save).toHaveBeenCalledTimes(1);
   });
 

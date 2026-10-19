@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient';
+import type { CompositionSaver } from './compositionService';
 
 export interface SyncDurationsResponse {
   target: 'SCRIPT' | 'COMPOSITION';
@@ -13,6 +14,10 @@ export interface SyncDurationsResponse {
 }
 
 export const narrationService = {
+  async syncCompositionDurations(projectId: string, saver: CompositionSaver): Promise<SyncDurationsResponse> {
+    const revision = await saver.flush();
+    return narrationService.syncDurations(projectId, revision);
+  },
   /**
    * Fetches synthesized TTS audio stream from BE proxy.
    * Uses Authorization header with JWT and returns a playable Blob Object URL.

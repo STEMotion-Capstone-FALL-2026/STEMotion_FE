@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Columns2,
   FileText,
@@ -269,6 +269,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   showToast,
 }) => {
   const [decisionPending, setDecisionPending] = useState(false);
+  const decisionPendingRef = useRef(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [reviewNote, setReviewNote] = useState('');
   const [qaReport, setQaReport] = useState<QaReport | null>(null);
@@ -280,23 +281,32 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
 
   const [composition, setComposition] = useState<Composition | null>(null);
   const [loadingComposition, setLoadingComposition] = useState(false);
+  const [compositionError, setCompositionError] = useState<string | null>(null);
+  const compositionRequest = useRef(0);
   const [videoPlayerSource, setVideoPlayerSource] = useState<'mp4' | 'web'>('web');
 
   useEffect(() => {
-    if (script.videoUrl) {
-      setVideoPlayerSource('mp4');
-    }
-  }, [script.videoUrl]);
+    setVideoPlayerSource(script.videoUrl ? 'mp4' : 'web');
+  }, [script.id, script.videoUrl]);
 
   const fetchComposition = useCallback(async () => {
+    const request = ++compositionRequest.current;
     setLoadingComposition(true);
+    setComposition(null);
+    setCompositionError(null);
     try {
       const comp = await compositionService.get(script.id);
+      if (request !== compositionRequest.current) return;
+      if (comp.projectId !== script.id || !comp.scenes?.length) {
+        throw new Error('Composition unavailable');
+      }
       setComposition(comp);
     } catch {
+      if (request !== compositionRequest.current) return;
       setComposition(null);
+      setCompositionError('Không tải được bản dựng Producer. Vui lòng thử lại trước khi duyệt video.');
     } finally {
-      setLoadingComposition(false);
+      if (request === compositionRequest.current) setLoadingComposition(false);
     }
   }, [script.id]);
 
@@ -304,10 +314,11 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
     if (reviewerMode === 'video') {
       void fetchComposition();
     }
+    return () => { compositionRequest.current++; };
   }, [reviewerMode, fetchComposition]);
 
-  const reviewScript = useMemo<STEMScript>(() => {
-    if (composition && composition.scenes && composition.scenes.length > 0) {
+  const reviewScript = useMemo<STEMScript | null>(() => {
+    if (composition?.projectId === script.id && composition.scenes?.length > 0) {
       return {
         ...script,
         scenes: composition.scenes,
@@ -317,8 +328,9 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
         ),
       };
     }
-    return script;
+    return null;
   }, [script, composition]);
+  const videoApprovalBlocked = loadingComposition || !reviewScript;
 
   const [bgRenderStatus, setBgRenderStatus] = useState<string | null>(null);
 
@@ -521,8 +533,13 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
     decision: 'APPROVED' | 'CHANGE_REQUESTED' | 'VIDEO_APPROVED' | 'VIDEO_RETURNED',
     overrideNote?: string
   ) => {
-    if (decisionPending) return;
+    if (decisionPendingRef.current) return;
+    if (decision === 'VIDEO_APPROVED' && videoApprovalBlocked) {
+      showToast('Cần tải bản dựng Producer thành công trước khi duyệt video.', 'warn');
+      return;
+    }
     const noteToSubmit = overrideNote !== undefined ? overrideNote : reviewNote;
+    decisionPendingRef.current = true;
     setDecisionPending(true);
     try {
       if (decision === 'VIDEO_APPROVED') {
@@ -547,7 +564,10 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       }
     } catch (error: any) {
       showToast(error.message || 'Không lưu được quyết định. Trạng thái chưa thay đổi.', 'warn');
-    } finally { setDecisionPending(false); }
+    } finally {
+      decisionPendingRef.current = false;
+      setDecisionPending(false);
+    }
   };
   return (
     <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -718,7 +738,9 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                   </button>
                   <button
                     onClick={() => void decide('VIDEO_APPROVED')}
-                    disabled={decisionPending || isRendering}
+                    disabled={decisionPending || isRendering || videoApprovalBlocked}
+                    title={videoApprovalBlocked ? 'Cần tải bản dựng Producer thành công trước khi duyệt.' : undefined}
+                    aria-busy={decisionPending}
                     className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer"
                   >
                     {decisionPending || isRendering ? (
@@ -726,7 +748,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                     ) : (
                       <CheckCheck className="w-4 h-4" />
                     )}
-                    <span>Duyệt Video ➔ Kích Hoạt Render MP4</span>
+                    <span>{decisionPending ? 'Đang lưu quyết định…' : 'Duyệt Video ➔ Kích Hoạt Render MP4'}</span>
                   </button>
                 </>
               )}
@@ -1256,6 +1278,15 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                 </div>
               )}
 
+              {compositionError && (
+                <div role="alert" className="rounded-xl border border-amber-600 bg-amber-950/40 p-4 text-sm text-amber-100 space-y-3">
+                  <p>{compositionError}</p>
+                  <button type="button" onClick={() => void fetchComposition()} disabled={loadingComposition}
+                    className="rounded-lg border border-amber-500 px-3 py-1.5 disabled:opacity-50">
+                    Tải lại bản dựng
+                  </button>
+                </div>
+              )}
               {loadingComposition ? (
                 <div className="aspect-video bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 gap-2 border border-slate-700">
                   <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
@@ -1270,13 +1301,15 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                     className="w-full h-full object-contain"
                   />
                 </div>
-              ) : (
+              ) : reviewScript ? (
                 <RemotionPlayerWrapper
                   script={reviewScript}
                   seekTimestampSec={seekTimestampSec}
                   onFrameUpdate={(_f, s) => setCurrentSec(s)}
                 />
-              )}
+              ) : !compositionError ? (
+                <p role="status" className="text-sm text-slate-400">Đang chuẩn bị bản dựng Producer…</p>
+              ) : null}
             </div>
           </main>
 

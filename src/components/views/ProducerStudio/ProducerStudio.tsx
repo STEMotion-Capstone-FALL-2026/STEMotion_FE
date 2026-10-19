@@ -68,6 +68,7 @@ interface ProducerStudioProps {
   onSubmitForReview?: () => void;
   onUpdateTheme?: (theme: VisualTheme) => void;
   onSyncDurations?: () => Promise<void>;
+  isSyncingDurations?: boolean;
   showToast?: (message: string, type?: 'success' | 'info' | 'warn') => void;
 }
 
@@ -96,18 +97,22 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   onSubmitForReview,
   onUpdateTheme,
   onSyncDurations,
+  isSyncingDurations = false,
   showToast,
 }) => {
   // Driven by the clip's state, not by whether an old video URL exists: a clip
   // sent back to production keeps its old URL but must be rendered again.
   const status = script.videoStatus;
   const isLocked = Boolean(
+    isSyncingDurations ||
     (production && !production.editable) ||
     status === 'IN_QA' ||
     status === 'APPROVED' ||
     status === 'PUBLISHED'
   );
-  const lockReason = production?.lockedReason || (
+  const lockReason = isSyncingDurations
+    ? 'Đang đồng bộ thời lượng. Vui lòng chờ trước khi chỉnh sửa hoặc gửi duyệt.'
+    : production?.lockedReason || (
     status === 'IN_QA'
       ? 'Clip đang trong quá trình chờ Reviewer thẩm định chất lượng trên Web Player. Bản dựng tạm thời được khóa để bảo đảm tính nhất quán.'
       : status === 'APPROVED' || status === 'PUBLISHED'
@@ -262,6 +267,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
 
           <button
             disabled={isLocked}
+            aria-busy={isSyncingDurations}
             onClick={() => {
               if (isLocked) {
                 showToast?.(lockReason, 'warn');
@@ -291,16 +297,17 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
             title={
               isLocked
                 ? lockReason
-                : 'Tự động căn chỉnh độ dài (frames) của toàn bộ phân cảnh cho khớp với lời thoại đọc mẫu (~2.3 từ/giây)'
+                : 'Đồng bộ thời lượng các phân cảnh theo giọng đọc trên máy chủ'
             }
           >
-            <Sparkles className={`w-3.5 h-3.5 ${isLocked ? 'text-slate-400' : 'text-amber-600'}`} />
-            <span>⚡ Tự Khớp Giọng Đọc</span>
+            {isSyncingDurations ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Sparkles className={`w-3.5 h-3.5 ${isLocked ? 'text-slate-400' : 'text-amber-600'}`} />}
+            <span>{isSyncingDurations ? 'Đang đồng bộ…' : '⚡ Tự Khớp Giọng Đọc'}</span>
           </button>
           {onSubmitForReview && (
             <button
               onClick={onSubmitForReview}
-              disabled={status === 'IN_QA' || status === 'APPROVED' || isRendering}
+              disabled={isLocked || isRendering}
               className={`px-4 py-1.5 rounded-lg shadow-xs flex items-center space-x-1.5 transition-colors font-bold ${
                 status === 'IN_QA'
                   ? 'bg-amber-100 text-amber-800 border border-amber-300 cursor-not-allowed opacity-90'
@@ -344,7 +351,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
           </button>
           <button
             onClick={action.run}
-            disabled={action.disabled}
+            disabled={action.disabled || isSyncingDurations}
             className={`px-3.5 py-1.5 font-bold rounded-lg border flex items-center space-x-1.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer ${
               status === 'APPROVED' || status === 'PUBLISHED'
                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs border-emerald-500'
