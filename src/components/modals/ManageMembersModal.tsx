@@ -292,7 +292,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
             <div className="min-w-0">
               <div className="flex items-center flex-wrap gap-2">
                 <h3 className="font-extrabold text-sm text-slate-900 shrink-0">
-                  Quản Lý Thành Viên:
+                  {isCurrentUserAdminOrLeader ? 'Quản Lý Thành Viên:' : 'Thành Viên Nhóm:'}
                 </h3>
                 {workspaceList.length > 0 ? (
                   <div className="relative inline-flex items-center">
@@ -331,7 +331,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
               <p className="text-[11px] text-slate-500 mt-0.5">
                 {isCurrentUserAdminOrLeader
                   ? 'Chuyển đổi không gian làm việc để quản lý thành viên, phân công vai trò và chỉ định Trưởng nhóm.'
-                  : 'Danh sách thành viên hiện tại trong nhóm.'}
+                  : 'Danh sách các thành viên cùng tham gia trong không gian làm việc này.'}
               </p>
             </div>
           </div>

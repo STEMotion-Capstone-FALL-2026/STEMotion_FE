@@ -123,12 +123,12 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
 
-          {/* Quản lý Thành Viên (Admin hoặc Trưởng nhóm) */}
-          {canManageMembers && onOpenManageMembersModal && (
+          {/* Xem / Quản lý Thành Viên (Mọi thành viên đều được xem danh sách nhóm mình) */}
+          {onOpenManageMembersModal && (
             <button
               onClick={onOpenManageMembersModal}
-              title="Quản lý thành viên trong nhóm này"
-              className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-brand-500 hover:bg-blue-50 text-xs font-bold text-slate-700 flex items-center space-x-1.5 transition-all shadow-xs"
+              title={canManageMembers ? 'Quản lý thành viên trong nhóm này' : 'Xem danh sách thành viên trong nhóm này'}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-brand-500 hover:bg-blue-50 text-xs font-bold text-slate-700 flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer"
             >
               <Users className="w-3.5 h-3.5 text-brand-600" />
               <span>Thành viên</span>
@@ -187,16 +187,16 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                     <span>+ Tạo Dự Án Kịch Bản Mới</span>
                   </button>
                 )}
-                {canManageMembers && onOpenManageMembersModal && (
+                {onOpenManageMembersModal && (
                   <button
                     onClick={() => {
                       setIsGroupDropdownOpen(false);
                       onOpenManageMembersModal();
                     }}
-                    className="w-full p-2 rounded-lg hover:bg-slate-50 text-left flex items-center space-x-2 text-slate-700 font-medium"
+                    className="w-full p-2 rounded-lg hover:bg-slate-50 text-left flex items-center space-x-2 text-slate-700 font-medium cursor-pointer"
                   >
                     <Users className="w-4 h-4 text-slate-500" />
-                    <span>Quản lý thành viên nhóm...</span>
+                    <span>{canManageMembers ? 'Quản lý thành viên nhóm...' : 'Xem thành viên nhóm...'}</span>
                   </button>
                 )}
               </div>
