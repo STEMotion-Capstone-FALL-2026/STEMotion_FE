@@ -241,7 +241,7 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
     });
   }, [roleAccessibleScripts, searchTerm, selectedSubject, selectedStage]);
 
-  const canCreate = currentRole === 'writer' || currentRole === 'admin';
+  const canCreate = currentRole === 'writer';
 
   return (
     <div className="flex-1 bg-slate-50/70 overflow-y-auto min-h-0 flex flex-col font-sans">

@@ -175,16 +175,18 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                     <span>+ Tạo Không Gian Làm Việc Mới</span>
                   </button>
                 )}
-                <button
-                  onClick={() => {
-                    setIsGroupDropdownOpen(false);
-                    onOpenCreateProjectModal();
-                  }}
-                  className="w-full p-2 rounded-lg hover:bg-blue-50 text-left flex items-center space-x-2 text-brand-600 font-bold"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span>+ Tạo Dự Án Kịch Bản Mới</span>
-                </button>
+                {currentRole === 'writer' && (
+                  <button
+                    onClick={() => {
+                      setIsGroupDropdownOpen(false);
+                      onOpenCreateProjectModal();
+                    }}
+                    className="w-full p-2 rounded-lg hover:bg-blue-50 text-left flex items-center space-x-2 text-brand-600 font-bold cursor-pointer"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>+ Tạo Dự Án Kịch Bản Mới</span>
+                  </button>
+                )}
                 {canManageMembers && onOpenManageMembersModal && (
                   <button
                     onClick={() => {
