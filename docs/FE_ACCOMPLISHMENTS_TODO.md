@@ -756,6 +756,23 @@ Tài liệu này tổng hợp toàn bộ các yêu cầu phát triển phía Bac
 - [ ] **Nhãn trạng thái sai trên dashboard:** project "định luật ôm" có `videoStatus = APPROVED` nhưng card Producer hiện "Chờ duyệt video"; project `CHANGE_REQUESTED` hiện nhãn "Bản nháp" ở dashboard Writer.
 - [ ] **Sau khi duyệt trên web player:** project giữ `APPROVED` và có job render chạy nền; nên hiện tiến độ render (poll `GET /render/projects/{id}/jobs`) và chỉ bật "Xuất bản" khi job `COMPLETED`.
 
+### 9.6. Phân trang & tốc độ tải (BE, 20/10/2026)
 
+BE đã giảm số query cho mỗi màn hình (xem `STEMotion_BE/docs/DB_PERFORMANCE_PLAN_2026-10-19.md`) và thêm **phân trang tuỳ chọn**. FE hiện tại **không phải sửa gì**: không gửi `page`/`size` thì API trả cả mảng như cũ.
 
+**Contract:** thêm `?page=0&size=20` (page đếm từ 0, size 1–100, mặc định 20). Body vẫn là **mảng JSON** của trang đó; tổng số nằm ở header (đã mở CORS để trình duyệt đọc được): `X-Total-Count`, `X-Total-Pages`, `X-Page`, `X-Size`. Sai tham số → 400.
+
+| Endpoint | Ghi chú |
+|---|---|
+| `GET /workspaces/{id}/scripts`, `GET /scripts/mine`, `GET /scripts/review-queue` | mới nhất trước |
+| `GET /scripts/{id}/versions` | version mới nhất trước |
+| `GET /render/projects/{id}/jobs` | job mới nhất trước |
+| `GET /users` (admin) | theo tên A→Z khi có phân trang |
+| `GET /library/clips` | có lọc môn/khối vẫn phân trang đúng |
+| `GET /scripts/{id}/review-history` | quyết định mới nhất trước |
+| `GET /scripts/{id}/qa-comments` | trang đếm theo **note gốc**; mỗi note kèm đủ reply (`parentId`) |
+
+- [ ] Dùng phân trang ở dashboard project, thư viện, lịch sử render, danh sách user khi dữ liệu nhiều (đọc `X-Total-Count` để vẽ phân trang / "tải thêm").
+- [ ] Màn khởi động: gọi song song profile, workspaces, projects (hiện đang tuần tự nên độ trễ cộng dồn).
+- [ ] Thư viện: gọi `/library/filters` một lần, không gọi lại mỗi lần đổi bộ lọc.
 
