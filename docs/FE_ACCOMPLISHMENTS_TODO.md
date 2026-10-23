@@ -776,3 +776,20 @@ BE đã giảm số query cho mỗi màn hình (xem `STEMotion_BE/docs/DB_PERFOR
 - [ ] Màn khởi động: gọi song song profile, workspaces, projects (hiện đang tuần tự nên độ trễ cộng dồn).
 - [ ] Thư viện: gọi `/library/filters` một lần, không gọi lại mỗi lần đổi bộ lọc.
 
+**Cập nhật 23/10/2026 — BE đã xong phần query còn lại (commit `9572169`):** comments phân trang note gốc ngay trong SQL (reply lấy theo lô); thư viện có lọc môn/khối giờ cũng phân trang trong SQL và `X-Total-Count` không còn tính publication không có clip; `/library/filters` đọc bằng `DISTINCT`. Contract **không đổi**.
+
+**Trạng thái tích hợp phân trang ở FE (23/10/2026):**
+
+| Màn / API | Trạng thái |
+|---|---|
+| Admin → AI Usage | ✅ Gửi `page/size`, có nút trước/sau và tổng số trang |
+| Project dashboard / My Scripts | ❌ Chưa gửi `page/size` |
+| Review queue | ❌ Chưa gửi `page/size` |
+| Library | ❌ Mới gửi `subject/grade`, chưa phân trang |
+| Comments / Review history / Versions | ❌ Chưa gửi tham số phân trang |
+| Render history | ❌ Chưa gửi tham số phân trang |
+| Admin → Users | ❌ Vẫn gọi `/users` lấy toàn bộ |
+
+- [ ] `apiClient`: thêm hàm đọc header `X-Total-Count`, `X-Total-Pages`, `X-Page`, `X-Size` cùng body mảng.
+- [ ] Từng màn ở bảng trên: truyền `page/size`, thêm điều khiển chuyển trang (hoặc "tải thêm"), đọc tổng từ header.
+
