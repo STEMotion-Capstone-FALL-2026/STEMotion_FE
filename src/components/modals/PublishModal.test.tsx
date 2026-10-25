@@ -18,7 +18,8 @@ describe('existing video export', () => {
     fireEvent.click(screen.getByRole('button',{name:/Xuất bản vào thư viện/}));
     view.rerender(<PublishModal isOpen canPublish onClose={() => {}} script={{...script,id:'other',videoStatus:'APPROVED'}} onNotify={notify} />);
     resolve({id:'publication',projectId:'project',lmsEmbedCode:'old embed',youtubeUrl:null,publishedAt:'2026-10-10'});
-    await waitFor(() => expect(notify).toHaveBeenCalledWith('Đã xuất bản video vào thư viện nội bộ.','success'));
+    await waitFor(() => expect(screen.getByRole('button',{name:/Xuất bản vào thư viện/}).hasAttribute('disabled')).toBe(false));
+    expect(notify).not.toHaveBeenCalled();
     expect(screen.queryByLabelText('Mã nhúng LMS')).toBeNull();
   });
   it('publishes through BE and only displays returned embed after success', async () => {

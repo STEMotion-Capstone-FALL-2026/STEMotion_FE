@@ -1,3 +1,4 @@
+import { useDialog } from '../../hooks/useDialog';
 import React, { useState } from 'react';
 import { Library, X, Plus } from 'lucide-react';
 import { SceneData } from '../../types/stem';
@@ -18,11 +19,13 @@ export const TemplateCatalogModal: React.FC<TemplateCatalogModalProps> = ({
     'ALL' | 'Math' | 'Physics' | 'Chemistry' | 'Biology' | 'ComputerScience'
   >('ALL');
 
+  const dialog = useDialog(isOpen, 'Kho mẫu phân cảnh', onClose, false);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs max-h-[90vh] flex flex-col">
+      <div ref={dialog} className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center border-b border-slate-100 pb-3 shrink-0">
           <div className="flex items-center space-x-2.5">

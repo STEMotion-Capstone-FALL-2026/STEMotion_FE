@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useDialog } from '../../hooks/useDialog';
+import React, { useRef, useState } from 'react';
 import { PlusCircle, X, Sparkles, Loader2, Route } from 'lucide-react';
 import { STEMSubject } from '../../types/stem';
 import { LessonApproach, describeApproach, scriptService } from '../../services/scriptService';
@@ -29,12 +30,16 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   const [useAi, setUseAi] = useState(false);
   const [targetDurationSec, setTargetDurationSec] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
+  const submitting = useRef(false);
+  const [createError, setCreateError] = useState('');
   // 'auto': the AI invents an approach; 'own': the writer's idea; a number: one of the suggestions.
   const [approachChoice, setApproachChoice] = useState<'auto' | 'own' | number>('auto');
   const [ownApproach, setOwnApproach] = useState('');
   const [suggestions, setSuggestions] = useState<LessonApproach[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestError, setSuggestError] = useState('');
+
+  const dialog = useDialog(isOpen, 'Tạo dự án', onClose, isLoading);
 
   if (!isOpen) return null;
 
@@ -62,7 +67,9 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProjTitle.trim()) return;
+    if (!newProjTitle.trim() || submitting.current || isSuggesting) return;
+    submitting.current = true;
+    setCreateError('');
     setIsLoading(true);
     try {
       await onCreate(newProjTitle.trim(), newProjSubject, newProjGrade, useAi, targetDurationSec, useAi ? chosenApproach : undefined);
@@ -71,28 +78,33 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
       setApproachChoice('auto');
       setOwnApproach('');
       onClose();
+    } catch (error: any) {
+      setCreateError(error?.message || 'Chưa tạo được dự án. Nội dung vẫn được giữ để thử lại.');
     } finally {
+      submitting.current = false;
       setIsLoading(false);
     }
   };
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
+      <div role="dialog" aria-modal="true" aria-labelledby="create-project-heading" aria-busy={isLoading} ref={dialog} className="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-1.5">
+          <h3 id="create-project-heading" className="text-sm font-bold text-slate-900 flex items-center space-x-1.5">
             <PlusCircle className="w-4 h-4 text-brand-600" />
             <span>Tạo Dự Án Kịch Bản Video Mới</span>
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button onClick={onClose} disabled={isLoading} aria-label="Đóng tạo dự án" className="text-slate-400 hover:text-slate-600 disabled:opacity-50">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
+          <fieldset disabled={isLoading} className="space-y-3">
           <div>
-            <label className="font-bold text-slate-700 block mb-1">Chủ đề bài học STEM:</label>
+            <label htmlFor="project-title" className="font-bold text-slate-700 block mb-1">Chủ đề bài học STEM:</label>
             <input
+              id="project-title"
               type="text"
               required
               value={newProjTitle}
@@ -226,6 +238,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
             </label>
           </div>
 
+          {createError && <p role="alert" className="text-xs text-rose-700">{createError}</p>}
           <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
             <button
               type="button"
@@ -237,7 +250,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isSuggesting}
               className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold shadow-xs flex items-center space-x-1.5 disabled:opacity-75"
             >
               {isLoading ? (
@@ -253,6 +266,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
               )}
             </button>
           </div>
+          </fieldset>
         </form>
       </div>
     </div>

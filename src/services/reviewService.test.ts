@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './apiClient';
 import { reviewService } from './reviewService';
+import { createCompositionSaver, type Composition } from './compositionService';
 
 describe('server-confirmed review workflow', () => {
   beforeEach(() => vi.restoreAllMocks());
@@ -43,5 +44,36 @@ describe('server-confirmed review workflow', () => {
     expect(post).toHaveBeenCalledWith('/scripts/project/qa-comments', {
       timestampSec: null, sceneId: 'scene', content: 'Fix this',
     });
+  });
+
+  it('saves pending composition edits before submitting them for review', async () => {
+    let finish!: (saved: Composition) => void;
+    const save = vi.fn(() => new Promise<Composition>(resolve => { finish = resolve; }));
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ id: 'p', videoStatus: 'IN_QA' });
+    const saver = createCompositionSaver('p', 1, { onSaved: vi.fn(), onError: vi.fn() }, { save, delayMs: 10000 });
+    saver.schedule([{ id: 's', title: 'Last edit' }] as any);
+    const submitted = reviewService.submitSavedVideoForReview('p', saver, () => true);
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(post).not.toHaveBeenCalled();
+    finish({ projectId: 'p', revision: 2 } as Composition);
+    await expect(submitted).resolves.toMatchObject({ videoStatus: 'IN_QA' });
+    expect(post).toHaveBeenCalledWith('/scripts/p/submit-video-review', {});
+    saver.dispose();
+  });
+
+  it('preserves the resolver identity and timestamp returned by the server', async () => {
+    vi.spyOn(apiClient, 'put').mockResolvedValue({ id: 'c', role: 'WRITER', status: 'RESOLVED',
+      resolvedByName: 'Nguyen An', resolvedAt: '2026-10-23T10:00:00Z' });
+    await expect(reviewService.resolveComment('p', 'c')).resolves.toMatchObject({ id: 'c', status: 'RESOLVED',
+      resolvedByName: 'Nguyen An', resolvedAt: '2026-10-23T10:00:00Z' });
+  });
+
+  it('does not submit after a save failure or after changing projects while saving', async () => {
+    const post = vi.spyOn(apiClient, 'post');
+    const failed = { flush: vi.fn().mockRejectedValue(new Error('Save failed')), schedule: vi.fn(), dispose: vi.fn() };
+    await expect(reviewService.submitSavedVideoForReview('p', failed, () => true)).rejects.toThrow('Save failed');
+    const old = { ...failed, flush: vi.fn().mockResolvedValue(2) };
+    await expect(reviewService.submitSavedVideoForReview('p', old, () => false)).resolves.toBeNull();
+    expect(post).not.toHaveBeenCalled();
   });
 });

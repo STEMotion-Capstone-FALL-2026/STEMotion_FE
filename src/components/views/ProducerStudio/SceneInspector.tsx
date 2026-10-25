@@ -21,12 +21,6 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
   onSelectLegoPiece,
   disabled = false,
 }) => {
-  const [isVoiceSaved, setIsVoiceSaved] = useState(false);
-
-  const handleSaveVoice = () => {
-    setIsVoiceSaved(true);
-    setTimeout(() => setIsVoiceSaved(false), 2200);
-  };
   return (
     <aside className="w-80 bg-white border-l border-slate-200 p-4 overflow-y-auto custom-scrollbar text-xs h-full min-h-0 shrink-0">
       <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
@@ -1214,55 +1208,12 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
           </div>
         )}
 
-        {/* Chọn Giọng Đọc FPT.AI */}
-        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-          <span className="font-bold text-slate-800 block text-[11px] flex items-center space-x-1">
-            <Mic className="w-3.5 h-3.5 text-brand-600" />
-            <span>Giọng Đọc TTS Engine:</span>
-          </span>
-          <select 
-            value={(selectedScene as any).voiceId || 'banmai'}
-            onChange={(e) => updateSceneProperty((s) => ({ ...s, voiceId: e.target.value }))}
-            className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700 font-medium"
-          >
-            <option value="banmai">FPT.AI - Ban Mai (Nữ miền Bắc chuẩn)</option>
-            <option value="namminh">FPT.AI - Nam Minh (Nam miền Bắc)</option>
-            <option value="myan">FPT.AI - Mỹ An (Nữ miền Trung)</option>
-            <option value="giahuy">FPT.AI - Gia Huy (Nam miền Nam)</option>
-            <option value="elevenlabs">ElevenLabs Multilingual v2</option>
-          </select>
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600">
+          Chưa hỗ trợ chọn giọng đọc riêng cho từng cảnh. Thay đổi nội dung lời dẫn được lưu tự động.
         </div>
       </fieldset>
 
-      <div className="pt-3 border-t border-slate-100 shrink-0 mt-4 space-y-2">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={handleSaveVoice}
-          className={`w-full py-2.5 font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-xs transition-all ${
-            disabled
-              ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-              : isVoiceSaved
-              ? 'bg-emerald-600 text-white shadow-emerald-500/20'
-              : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20 cursor-pointer'
-          }`}
-        >
-          {isVoiceSaved ? (
-            <>
-              <Check className="w-4 h-4" />
-              <span>Đã Lưu Cấu Hình Giọng Đọc!</span>
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4" />
-              <span>Lưu Cấu Hình Giọng Đọc (TTS)</span>
-            </>
-          )}
-        </button>
-        <p className="text-[10px] text-slate-400 text-center leading-tight">
-          * Nhấn nút <b>"Kết Xuất Toàn Bộ Video"</b> ở góc trên để chạy render MP4.
-        </p>
-      </div>
+      <p className="pt-3 text-xs text-slate-500">Theo dõi trạng thái lưu ở phía trên trước khi gửi duyệt hoặc kết xuất MP4.</p>
     </aside>
   );
 };

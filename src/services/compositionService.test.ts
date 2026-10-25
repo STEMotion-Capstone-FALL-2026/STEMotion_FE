@@ -6,6 +6,20 @@ const saved = (revision: number): Composition =>
   ({ projectId: 'p', scriptVersionNo: 1, revision, editable: true, scenes: [] }) as Composition;
 
 describe('createCompositionSaver', () => {
+  it('keeps the latest theme when a subsequent scene edit is coalesced, and tracks dirty state', async () => {
+    const save = vi.fn().mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce(saved(1));
+    const saver = createCompositionSaver('p', 0, { onSaved: vi.fn(), onError: vi.fn() }, { delayMs: 10000, save });
+    saver.schedule(scenes('theme'), 'cyber');
+    saver.schedule(scenes('latest scene'));
+    expect(saver.isDirty?.()).toBe(true);
+    await expect(saver.flush()).rejects.toThrow('Offline');
+    expect(saver.isDirty?.()).toBe(true);
+    saver.schedule(scenes('retry scene'));
+    await saver.flush();
+    expect(save).toHaveBeenLastCalledWith('p', 0, scenes('retry scene'), 'cyber');
+    expect(saver.isDirty?.()).toBe(false);
+    saver.dispose();
+  });
   it('coalesces edits and chains revisions, so a second save starts from the first one', async () => {
     const save = vi.fn()
       .mockResolvedValueOnce(saved(1))

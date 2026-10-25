@@ -1,56 +1,55 @@
-import React from 'react';
-import { GitCompare, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
+import { projectService } from '../../services/projectService';
+import { useDialog } from '../../hooks/useDialog';
 
-interface VersionDiffModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-export const VersionDiffModal: React.FC<VersionDiffModalProps> = ({
-  isOpen,
-  onClose,
-}) => {
+export const VersionDiffModal: React.FC<{ isOpen: boolean; onClose: () => void; projectId: string }> = ({ isOpen, onClose, projectId }) => {
+  const dialog = useDialog(isOpen, 'So sánh lịch sử phiên bản', onClose);
+  const [versions, setVersions] = useState<any[]>([]);
+  const [loadedFor, setLoadedFor] = useState('');
+  const [left, setLeft] = useState('');
+  const [right, setRight] = useState('');
+  const [diff, setDiff] = useState<any>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    if (!isOpen || !projectId) return;
+    let active = true;
+    setVersions([]); setDiff(null); setError(''); setLoading(true); setLeft(''); setRight('');
+    projectService.getVersions(projectId).then(rows => {
+      if (!active) return;
+      setVersions(rows);
+      setLoadedFor(projectId);
+      if (rows.length >= 2) { setLeft(rows[1].id); setRight(rows[0].id); }
+    }).catch(err => { if (active) setError(err.message || 'Không tải được lịch sử phiên bản.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [isOpen, projectId, retry]);
+  useEffect(() => {
+    if (!isOpen || loadedFor !== projectId || !left || !right) return;
+    let active = true;
+    setLoading(true); setError(''); setDiff(null);
+    projectService.diffVersions(projectId, left, right).then(data => { if (active) setDiff(data); })
+      .catch(err => { if (active) setError(err.message || 'Không tải được nội dung so sánh.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [isOpen, projectId, loadedFor, left, right]);
   if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
-        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-            <GitCompare className="w-4 h-4 text-brand-600" />
-            <span>So Sánh Lịch Sử Phiên Bản (Diff v1.1 vs v1.2)</span>
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3 p-2.5 bg-slate-50 rounded-lg font-bold text-slate-700 border">
-            <div>BẢN KHỞI TẠO (v1.1)</div>
-            <div>BẢN ĐÃ CẬP NHẬT (v1.2)</div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 p-3 bg-white rounded-lg border text-xs leading-relaxed">
-            <div className="text-slate-500">
-              <span className="badge-diff-del px-1 rounded">Khi đó tổng hai nghiệm x1 + x2 bằng trừ b trên a</span>
-            </div>
-            <div className="text-slate-800">
-              <span className="badge-diff-add px-1 rounded font-semibold">
-                Điều kiện tiên quyết là biệt thức delta phải lớn hơn hoặc bằng không để phương trình có nghiệm.
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end pt-2 border-t border-slate-100">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-slate-800 text-white rounded-lg font-bold"
-          >
-            Đóng
-          </button>
-        </div>
-      </div>
+  return <div className="fixed inset-0 z-50 bg-slate-900/50 p-4 flex items-center justify-center">
+    <div ref={dialog} className="bg-white rounded-2xl p-5 w-full max-w-4xl max-h-[90vh] overflow-y-auto space-y-4">
+      <div className="flex justify-between items-center"><h2 className="font-bold">So sánh lịch sử phiên bản</h2><button aria-label="Đóng lịch sử phiên bản" onClick={onClose}><X /></button></div>
+      {loading && <p role="status">Đang tải phiên bản…</p>}
+      {error && <div role="alert"><p>{error}</p><button className="underline" onClick={() => setRetry(n => n + 1)}>Thử tải lại</button></div>}
+      {!loading && !error && versions.length < 2 && <p>Cần ít nhất hai phiên bản đã lưu để so sánh.</p>}
+      {versions.length >= 2 && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {(['left', 'right'] as const).map(side => <div key={side} className="space-y-2"><label>{side === 'left' ? 'Phiên bản trước' : 'Phiên bản đối chiếu'}
+          <select aria-label={side === 'left' ? 'Phiên bản trước' : 'Phiên bản đối chiếu'} className="block w-full border p-2 rounded" value={side === 'left' ? left : right} onChange={e => (side === 'left' ? setLeft : setRight)(e.target.value)}>
+            {versions.map(v => <option key={v.id} value={v.id}>v{v.versionNo} · {v.title}</option>)}
+          </select></label>
+          {diff && <ol className="space-y-3">{(side === 'left' ? diff.leftScenes : diff.rightScenes)?.map((scene: any, i: number) => <li key={scene.id} className="border p-3 rounded text-sm whitespace-pre-wrap"><b>{i + 1}. {scene.title}</b><p>{scene.narration || 'Chưa có lời dẫn.'}</p></li>)}</ol>}
+        </div>)}
+      </div>}
     </div>
-  );
+  </div>;
 };

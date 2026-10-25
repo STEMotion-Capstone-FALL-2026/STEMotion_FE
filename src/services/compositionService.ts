@@ -42,6 +42,7 @@ export interface CompositionSaver {
   schedule(scenes: SceneData[], visualTheme?: string | null): void;
   /** Sends a pending edit now and waits for every save, e.g. before a render. */
   flush(): Promise<number>;
+  isDirty?(): boolean;
   dispose(): void;
 }
 
@@ -58,7 +59,10 @@ export function createCompositionSaver(
   const delayMs = options.delayMs ?? SAVE_DEBOUNCE_MS;
   const save = options.save ?? compositionService.save;
   let revision = startRevision;
-  let pending: { scenes: SceneData[]; visualTheme?: string | null } | null = null;
+  let pending: { scenes: SceneData[]; visualTheme?: string | null; generation: number } | null = null;
+  let generation = 0;
+  let savedGeneration = 0;
+  let latestTheme: string | null | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let chain: Promise<void> = Promise.resolve();
   let disposed = false;
@@ -77,6 +81,7 @@ export function createCompositionSaver(
             ? await save(projectId, revision, current.scenes, current.visualTheme)
             : await save(projectId, revision, current.scenes);
           revision = saved.revision;
+          savedGeneration = current.generation;
           saveError = undefined;
           if (!disposed) handlers.onSaved(saved);
         } catch (error) {
@@ -95,11 +100,13 @@ export function createCompositionSaver(
   return {
     schedule(scenes, visualTheme) {
       if (disposed) return;
-      pending = { scenes, visualTheme };
+      if (visualTheme !== undefined) latestTheme = visualTheme;
+      pending = { scenes, visualTheme: latestTheme, generation: ++generation };
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => { void flush().catch(() => {}); }, delayMs);
     },
     flush,
+    isDirty: () => generation !== savedGeneration,
     dispose() {
       disposed = true;
       if (timer) clearTimeout(timer);

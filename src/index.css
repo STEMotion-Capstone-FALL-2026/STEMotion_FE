@@ -52,3 +52,12 @@
   border: 1px solid #fecaca;
   text-decoration: line-through;
 }
+
+/* Studios remain usable on narrow screens without compressing the video canvas or hiding actions. */
+@media (max-width: 1023px) {
+  .studio-toolbar { flex-wrap: wrap; gap: .5rem; padding: .75rem; }
+  .studio-toolbar > div { flex-wrap: wrap; gap: .5rem; min-width: 0; }
+  .studio-columns { flex-direction: column; overflow-y: auto; }
+  .studio-columns > aside { width: 100%; height: auto; max-height: 320px; flex-shrink: 0; }
+  .studio-columns > main { min-height: 420px; flex: none; width: 100%; padding: 1rem; }
+}

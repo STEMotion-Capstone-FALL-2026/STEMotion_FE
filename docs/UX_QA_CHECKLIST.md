@@ -58,3 +58,92 @@ reload trang và đổi project khi request chưa xong. Kiểm tra desktop và m
 - Người xử lý và kết quả retest:
 
 Các ô trên là checklist để chạy thủ công, không phải tuyên bố đã pass.
+
+## Triển khai theo backlog — 23/10/2026
+
+Thứ tự đã chốt: xử lý technical debt → audit UI/UX tổng quát theo checklist này →
+sửa các điểm còn thiếu của checklist → nhận bug main flow do LeTran test và sửa trực tiếp.
+Không coi test tự động là nghiệm thu toàn bộ UX trên browser hoặc production.
+
+### Đợt 1A: đã có code và regression tests local, chờ browser retest
+
+| Backlog | Thay đổi | Bằng chứng tự động | Manual cần chạy |
+|---|---|---|---|
+| UX-01 | Tạo project lỗi giữ form/input, inline error, chỉ reset/close khi thành công; khóa submit và đóng khi request đang chạy | `CreateProjectModal.test.tsx`: lỗi/retry, repeated submit | Writer tạo thường/AI: slow, 503, Enter nhiều lần; kiểm tra form không mất |
+| UX-02 (phần gửi duyệt) | Producer flush pending saves trước submit, không submit nếu save fail hoặc đổi saver/project, khóa chỉnh sửa/sync/render khi gửi, nhãn “Đang lưu và gửi duyệt…” | `reviewService.test.ts`: save-before-submit, failed save, stale saver | Sửa scene/theme rồi gửi ngay; quan sát PUT trước POST; save 409/network fail giữ đúng bản; đổi project khi chờ |
+| UX-03 | Library phân biệt lỗi/rỗng, retry, giữ dữ liệu cũ khi refresh fail; bỏ request filters không dùng; ignore response subject cũ | `MediaLibraryView.test.tsx`: fail/retry, failed refresh, stale response | Đổi subject nhanh, mạng chậm, offline/online, clipboard denied |
+| UX-04 (phần Reviewer) | Resolve/reopen/delete khóa theo comment; scene comment/reply có synchronous guard | `ReviewerStudio.test.tsx`: resolve double-click | Retest từng nút + reply, delete thất bại, đổi project; Writer/Admin/Publish còn cần audit riêng |
+| UX-05 | Resolve/reopen dùng response server; bỏ tên “Reviewer” và giờ client tự đặt | `reviewService.test.ts`, `ReviewerStudio.test.tsx` | Kiểm tra đúng tên người giải quyết và thời gian |
+| UX-06 | Poll sau mỗi response, không overlap, backoff lỗi mạng, dừng terminal, ignore project cũ; UI QUEUED/PROCESSING/FAILED có thông báo | `useRenderProgress.test.ts`: slow response, retry delay, completion, stale project | Worker down/restart, queue chậm, failed job, completed job, thử lại; không phát sinh request dồn |
+
+Các mục partial chưa được đóng toàn bộ. UX-07/08/09, pagination, bundle, render reliability,
+TTS và các acceptance tests liên quan vẫn theo backlog tổng trong workspace
+`docs/TECH_DEBT_UX_BACKLOG_2026-10-23.md`. Đợt này chưa deploy, chưa tick các ô manual ở trên.
+
+Kết quả local đợt 1A: **162 tests / 28 files pass**, TypeScript và production build pass.
+Bundle chính còn 1,724.16 kB / gzip 478.06 kB; tối ưu bundle chưa thuộc đợt sửa này.
+
+## Kết quả triển khai FE — 26/10/2026
+
+Phần dưới thay thế trạng thái triển khai đợt 1A ở trên. Các ô đầu tài liệu vẫn dành cho
+nghiệm thu thủ công đầy đủ; không tự tick từ unit tests hoặc từ API giả.
+
+### Đã triển khai
+
+- Tạo project/AI draft: khóa submit đồng bộ; giữ form khi callback App thất bại;
+  lỗi inline và retry; chỉ đóng/reset khi thành công.
+- Writer: gửi duyệt chờ lưu scene; khóa thao tác xung đột; thất bại giữ nội dung.
+  Kịch bản đã gửi duyệt có lý do chỉ đọc và khóa điều khiển chỉnh sửa.
+  Sync thất bại giữ thời lượng cũ; TTS hủy kết quả cũ khi đổi scene/project, dọn audio URL.
+  AI analysis có pending state/guard; gợi ý cũ không ghi đè project mới.
+- Reviewer: player dùng composition; load fail khóa duyệt và có tải lại.
+  Approve/reject, comment/reply/resolve/reopen/delete có guard; reject fail giữ lý do.
+  Resolve dùng metadata server; lỗi QA report và hàng đợi có thông báo riêng.
+  Approve video không gọi thêm một yêu cầu render phía FE khi BE đã tự enqueue.
+- Producer: flush autosave trước sync/gửi duyệt/render; sync dùng revision vừa lưu.
+  Lỗi lưu giữ draft; retry rõ ràng; 409 sync tải bản mới và không tự lặp POST.
+  Reload composition fail không báo sync thành công. Lịch sử/render fail có trạng thái cố định;
+  mất kết nối yêu cầu kiểm tra lịch sử trước khi tạo job mới.
+- Library: error/empty/loading tách biệt, retry, giữ kết quả cũ khi refresh fail,
+  bỏ response cũ khi đổi bộ lọc. Không gọi API filters không dùng.
+- Admin/members/forms/publish: guard đồng bộ và busy state; khóa thao tác xung đột,
+  giữ input khi lỗi; thành viên và AI usage không bị response cũ ghi đè.
+  Lỗi tải Admin có retry, không bịa CPU/latency; refresh không báo success trước response.
+- UX chung: trạng thái autosave saving/failed, chặn rời màn hình khi lưu thất bại,
+  cảnh báo đóng tab khi còn draft chưa lưu; modal có dialog/focus trap/Escape/focus return;
+  toast có live region/đóng, warning App giữ đến khi đóng; responsive studios/header/player.
+  Version Diff dùng API thật. Các nút xử lý theo quy tắc/số từ được ghi đúng tên,
+  không báo đã chạy AI hoặc đo TTS.
+
+### Đối chiếu 12 tình huống hồi quy đầu checklist
+
+| # | Tình huống | Test tự động | Browser local với fixture |
+|---|---|---|---|
+| 1 | Video chưa có MP4 dùng composition | ReviewerStudio | Đã thấy tiêu đề bản dựng khác kịch bản gốc |
+| 2 | Composition lỗi khóa duyệt | ReviewerStudio | Đã thử 503, không có player gốc, có tải lại |
+| 3 | Tải lại phục hồi | ReviewerStudio | Đã bỏ lỗi và thấy player/nút duyệt mở lại |
+| 4 | Response A chậm không thay B | ReviewerStudio | Chưa chạy thủ công |
+| 5 | Duyệt liên tiếp chỉ một request | ReviewerStudio | Đã thấy nút pending/disabled; double-click được kiểm ở test tự động |
+| 6 | Duyệt thất bại mở khóa | ReviewerStudio | Đã thử 503, nút mở lại, không success |
+| 7 | PUT trước sync, revision mới | App.ux, compositionService | PUT composition trước POST sync, cách nhau 1.22s với delay fixture 1.2s |
+| 8 | Autosave lỗi chặn POST sync | App.ux | Chưa chạy thủ công |
+| 9 | Khóa scene/theme/gửi duyệt/render khi sync | App.ux + view state | Đã quan sát pending/disabled trên trình duyệt |
+| 10 | Sync 409 không lặp POST | App.ux | Chưa chạy thủ công |
+| 11 | Sync 503 giữ draft/mở khóa | App.ux | Đã sửa title rồi thử 503, nội dung giữ nguyên |
+| 12 | Sync xong, reload lỗi không success | App.ux | Chưa chạy thủ công |
+
+### Kiểm chứng và giới hạn
+
+- Full regression suite local: **181 tests / 35 files pass**; TypeScript và production build pass.
+- Browser local: Writer create fail giữ form (25/10); Producer sync/save order/503;
+  Reviewer composition fail/retry/approve fail; Admin error và layout mobile.
+  Producer/Admin ở 390×844 không tràn ngang document; header/modal đã kiểm tra thêm bằng keyboard tests.
+  Modal thành viên: đã xác nhận Escape đóng và focus trở về nút Thành viên trên browser local.
+- Môi trường browser chỉ dùng API fixture trong `.audit/ux-fixture.mjs` ở workspace cha,
+  không truy cập DB, AI, worker hoặc tài khoản production.
+- Chưa nghiệm thu âm thanh/video thật, AI service, worker restart/render artifact,
+  quyền/idempotency BE, thao tác đa người dùng hoặc toàn bộ ma trận offline/reload cho từng nút.
+  Các việc này vẫn là acceptance tests cần môi trường tích hợp, không phải đã pass.
+- Không commit/push/deploy. Pagination, bundle, BE/worker reliability, storage/hosting,
+  voice contract và các debt ngoài checklist UX vẫn theo backlog tổng; không được đánh dấu hoàn tất.
+  Build hiện tại: main JS 1,736.51 kB / gzip 482.18 kB, còn cảnh báo chunk lớn.

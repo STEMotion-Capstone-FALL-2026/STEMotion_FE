@@ -1,4 +1,5 @@
 import React from 'react';
+import { useDialog } from '../../hooks/useDialog';
 import { Building2, Crown } from 'lucide-react';
 import type { WorkspaceSummary } from '../../services/workspaceService';
 import type { UserRole } from '../../types/stem';
@@ -17,9 +18,11 @@ const ROLE_LABELS: Partial<Record<UserRole, string>> = {
 export const WorkspacePickerModal: React.FC<{
   workspaces: WorkspaceSummary[];
   onPick: (workspaceId: string) => void;
-}> = ({ workspaces, onPick }) => (
+}> = ({ workspaces, onPick }) => {
+  const dialog = useDialog(true, 'Chọn tổ chuyên môn để làm việc');
+  return (
   <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-    <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
+    <div ref={dialog} className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
       <div>
         <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
           <Building2 className="w-4 h-4 text-brand-600" />
@@ -60,4 +63,5 @@ export const WorkspacePickerModal: React.FC<{
       </div>
     </div>
   </div>
-);
+  );
+};

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { sceneSaveQueue } from './services/sceneSaveQueue';
 import { renderService, type RenderJobStatus } from './services/renderService';
 import { compositionService, createCompositionSaver, type Composition, type CompositionSaver } from './services/compositionService';
@@ -72,9 +72,10 @@ export default function App() {
   // Set when the user belongs to several workspaces and has not picked one on this device.
   const [workspaceChoices, setWorkspaceChoices] = useState<WorkspaceSummary[] | null>(null);
 
-  const handleRoleChange = (role: UserRole) => {
+  const handleRoleChange = async (role: UserRole) => {
     // Only admins switch freely; everyone else works in the role of the active workspace.
     if (currentUser.role !== 'admin' && role !== workspaceRole && role !== 'library') return;
+    if (!await saveBeforeLeave()) return;
     setCurrentRole(role);
   };
 
@@ -88,8 +89,13 @@ export default function App() {
   // Starts empty: everything on screen comes from the backend, so an empty
   // workspace shows an empty studio rather than somebody else's lesson.
   const [script, setScript] = useState<STEMScript>(EMPTY_SCRIPT);
+  const activeProjectId = React.useRef(script.id);
+  activeProjectId.current = script.id;
+  const [saveError, setSaveError] = useState('');
+  const [writerSaving, setWriterSaving] = useState(false);
   const [projectsList, setProjectsList] = useState<STEMScript[]>([]);
   const [isInStudio, setIsInStudio] = useState<boolean>(false);
+  const openProjectRequest = React.useRef(0);
   const [isFetchingProjects, setIsFetchingProjects] = useState<boolean>(false);
   const [activeSceneId, setActiveSceneId] = useState<string>('');
   const [comments, setComments] = useState<FeedbackComment[]>([]);
@@ -115,6 +121,7 @@ export default function App() {
   const [isRendering, setIsRendering] = useState<boolean>(false);
   const [renderProgress, setRenderProgress] = useState<number>(0);
   const [renderStageText, setRenderStageText] = useState<string>('Khởi động BullMQ Worker...');
+  const [renderError, setRenderError] = useState('');
   const [renderPercentageText, setRenderPercentageText] = useState<string>('0%');
 
   // Modals state
@@ -138,8 +145,8 @@ export default function App() {
     // Date.now() alone collided when two toasts fired in the same millisecond,
     // which React reported as duplicate keys.
     const id = Date.now() * 1000 + (toastSeq.current++ % 1000);
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
+    setToasts((prev) => prev.some(t => t.message === message && t.type === type) ? prev : [...prev, { id, message, type }]);
+    if (type !== 'warn') setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3200);
   };
@@ -150,9 +157,12 @@ export default function App() {
   useEffect(() => sceneSaveQueue.subscribe(event => {
     if (event.scriptId !== script.id) return;
     if (event.error) {
-      showToast((event.error as any)?.message || 'Chưa lưu được phân cảnh. Hãy thử lại trước khi gửi duyệt.', 'warn');
+      setWriterSaving(false);
+      setSaveError((event.error as any)?.message || 'Chưa lưu được phân cảnh. Hãy thử lại trước khi gửi duyệt.');
       return;
     }
+    setWriterSaving(Boolean(event.saving));
+    if (!event.saving) setSaveError('');
     // Reconcile identity only: a slow save must not replace newer local text.
     setScript(prev => prev.id !== event.scriptId ? prev : {
       ...prev, scenes: prev.scenes.map(scene => ({ ...scene, id: sceneSaveQueue.resolveId(prev.id, scene.id) })),
@@ -221,7 +231,7 @@ export default function App() {
         const list = await projectService.getProjects();
         setProjectsList(list);
         if (list.length > 0) {
-          showToast(`Đã tải ${list.length} kịch bản từ máy chủ`, 'success');
+          // A routine refresh does not need a success toast.
         } else {
           setScript(EMPTY_SCRIPT);
           setComments([]);
@@ -294,31 +304,40 @@ export default function App() {
   const compositionSaver = React.useRef<CompositionSaver | null>(null);
   const syncDurationsPending = React.useRef(false);
   const [isSyncingDurations, setIsSyncingDurations] = useState(false);
+  const producerSubmissionPending = React.useRef(false);
+  const [isSubmittingVideo, setIsSubmittingVideo] = useState(false);
+  const compositionLoad = React.useRef(0);
+  const [saveConflict, setSaveConflict] = useState(false);
 
   const loadComposition = useCallback(async (projectId: string) => {
+    const request = ++compositionLoad.current;
     compositionSaver.current?.dispose();
     compositionSaver.current = null;
     try {
       const draft = await compositionService.get(projectId);
+      if (request !== compositionLoad.current || activeProjectId.current !== projectId) return false;
+      setSaveError('');
+      setSaveConflict(false);
       compositionSaver.current = createCompositionSaver(projectId, draft.revision, {
         onSaved: (saved) => {
-          setIsSavingComposition(false);
+          setIsSavingComposition(Boolean(compositionSaver.current?.isDirty?.()));
+          setSaveError('');
           setComposition((prev) => (prev && prev.projectId === saved.projectId
             ? { ...prev, revision: saved.revision, updatedAt: saved.updatedAt, updatedByName: saved.updatedByName }
             : prev));
         },
         onError: (error: any) => {
           setIsSavingComposition(false);
-          if (syncDurationsPending.current) return;
-          showToast(error?.status === 409
-            ? 'Bản dựng vừa được lưu ở nơi khác; đã tải lại bản mới nhất.'
-            : error?.message || 'Không lưu được bản dựng.', 'warn');
-          void loadComposition(projectId);
+          setSaveConflict(error?.status === 409);
+          setSaveError(error?.status === 409
+            ? 'Bản dựng đã được sửa ở nơi khác. Nội dung đang chỉnh vẫn được giữ; tải bản mới để đối chiếu trước khi tiếp tục.'
+            : error?.message || 'Không lưu được bản dựng. Nội dung đang chỉnh vẫn được giữ.');
         },
       });
       setComposition(draft);
       return true;
     } catch (error: any) {
+      if (request !== compositionLoad.current || activeProjectId.current !== projectId) return false;
       setComposition(null);
       showToast('Không mở được bản dựng: ' + (error?.message || 'lỗi máy chủ'), 'warn');
       return false;
@@ -327,6 +346,7 @@ export default function App() {
 
   useEffect(() => {
     if (!inProduction) {
+      compositionLoad.current++;
       compositionSaver.current?.dispose();
       compositionSaver.current = null;
       setComposition(null);
@@ -334,6 +354,7 @@ export default function App() {
     }
     // Reloaded when the clip changes state: rendering, in review and approved lock the draft.
     void loadComposition(script.id);
+    return () => { compositionLoad.current++; };
   }, [inProduction, script.id, script.videoStatus, loadComposition]);
   useEffect(() => () => compositionSaver.current?.dispose(), []);
 
@@ -344,17 +365,54 @@ export default function App() {
     visualTheme: (composition.visualTheme as VisualTheme) || script.visualTheme,
   } : script;
 
+  const saveBeforeLeave = async () => {
+    if (producerSubmissionPending.current || syncDurationsPending.current) {
+      showToast('Vui lòng chờ thao tác đang chạy hoàn tất.', 'info');
+      return false;
+    }
+    try {
+      if (inProduction) await compositionSaver.current?.flush();
+      else if (script.id) await sceneSaveQueue.flush(script.id);
+      return true;
+    } catch {
+      showToast('Chưa lưu được thay đổi. Hãy thử lưu lại trước khi rời màn hình.', 'warn');
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    const warnBeforeClose = (event: BeforeUnloadEvent) => {
+      if (!compositionSaver.current?.isDirty?.() && !sceneSaveQueue.isDirty(activeProjectId.current)) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeClose);
+    return () => window.removeEventListener('beforeunload', warnBeforeClose);
+  }, []);
+
+  const retrySave = async () => {
+    try {
+      if (inProduction && composition && !saveConflict) {
+        setIsSavingComposition(true);
+        compositionSaver.current?.schedule(composition.scenes, composition.visualTheme);
+        await compositionSaver.current?.flush();
+      } else if (!inProduction) await sceneSaveQueue.saveNow(script.id, script.scenes);
+    } catch (error: any) { setSaveError(error?.message || 'Chưa lưu được thay đổi.'); }
+    finally { setIsSavingComposition(false); }
+  };
+
   const handleUpdateTheme = (theme: VisualTheme) => {
-    if (syncDurationsPending.current) return;
+    if (syncDurationsPending.current || producerSubmissionPending.current || saveConflict) return;
     if (inProduction && composition) {
       setComposition((prev) => (prev ? { ...prev, visualTheme: theme } : prev));
       compositionSaver.current?.schedule(composition.scenes, theme);
+      setIsSavingComposition(true);
     }
     setScript((prev) => ({ ...prev, visualTheme: theme }));
   };
 
   const handleProducerSyncDurations = async () => {
-    if (syncDurationsPending.current) return;
+    if (syncDurationsPending.current || producerSubmissionPending.current) return;
     if (!composition?.editable || !compositionSaver.current) {
       showToast(composition?.lockedReason || 'Bản dựng chưa sẵn sàng để đồng bộ. Vui lòng mở lại project rồi thử lại.', 'warn');
       return;
@@ -416,7 +474,7 @@ export default function App() {
 
   /** Producer edits: per-scene properties of the draft; scenes and templates stay as approved. */
   const editComposition = (change: (scenes: SceneData[]) => SceneData[]) => {
-    if (syncDurationsPending.current) return;
+    if (syncDurationsPending.current || producerSubmissionPending.current || saveConflict) return;
     if (!composition) {
       if (['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '')) {
         const now = Date.now();
@@ -605,13 +663,16 @@ export default function App() {
   };
 
   const renderGeneration = React.useRef(0);
-  useEffect(() => { setIsRendering(false); return () => { renderGeneration.current++; }; }, [script.id]);
+  const renderingProjects = React.useRef(new Set<string>());
+  useEffect(() => { setIsRendering(false); setRenderError(''); return () => { renderGeneration.current++; }; }, [script.id]);
 
   const startRender = async () => {
-    if (isRendering || syncDurationsPending.current || !script.id) return;
+    if (isRendering || renderingProjects.current.has(script.id) || syncDurationsPending.current || producerSubmissionPending.current || !script.id) return;
     const generation = ++renderGeneration.current;
     const projectId = script.id;
+    renderingProjects.current.add(projectId);
     setIsRendering(true);
+    setRenderError('');
     setRenderProgress(0);
     setRenderPercentageText('0%');
     setRenderStageText('Đang gửi yêu cầu kết xuất…');
@@ -654,30 +715,50 @@ export default function App() {
     } catch (error: any) {
       if (generation === renderGeneration.current) {
         setRenderStageText('Chưa hoàn tất kết xuất');
+        setRenderError(error.message || 'Không kết nối được dịch vụ kết xuất.');
         showToast(error.message || 'Không kết nối được dịch vụ kết xuất.', 'warn');
       }
     } finally {
+      renderingProjects.current.delete(projectId);
       if (generation === renderGeneration.current) setIsRendering(false);
     }
   };
 
   const handleSubmitVideoForReview = async () => {
-    if (syncDurationsPending.current) return;
+    if (syncDurationsPending.current || producerSubmissionPending.current) return;
+    const saver = compositionSaver.current;
+    if (!composition?.editable || composition.projectId !== script.id || !saver) {
+      showToast('Bản dựng chưa sẵn sàng để gửi duyệt. Vui lòng tải lại rồi thử lại.', 'warn');
+      return;
+    }
+    producerSubmissionPending.current = true;
+    setIsSubmittingVideo(true);
     try {
-      const updated = await reviewService.submitVideoForReview(script.id);
-      setScript(updated);
+      const updated = await reviewService.submitSavedVideoForReview(script.id, saver,
+        () => compositionSaver.current === saver);
+      if (!updated || compositionSaver.current !== saver) return;
+      setScript(prev => prev.id === updated.id ? updated : prev);
       showToast('Đã gửi clip sang cho Reviewer thẩm định chất lượng trên Web Player!', 'success');
     } catch (err: any) {
+      if (compositionSaver.current !== saver) return;
       showToast(err.message || 'Không thể gửi video duyệt.', 'warn');
+    } finally {
+      producerSubmissionPending.current = false;
+      setIsSubmittingVideo(false);
     }
   };
 
   // Reviewer add comment dynamically
   const [newCommentInput, setNewCommentInput] = useState('');
+  const commentPending = React.useRef(false);
+  const [isAddingComment, setIsAddingComment] = useState(false);
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCommentInput.trim()) return;
+    if (!newCommentInput.trim() || commentPending.current) return;
+    commentPending.current = true;
+    setIsAddingComment(true);
+    const projectId = script.id;
     try {
     const newC = await reviewService.addComment(script.id, {
       author: currentUser.name,
@@ -689,6 +770,7 @@ export default function App() {
       status: 'OPEN',
       createdAt: 'Vừa xong',
     });
+    if (activeProjectId.current !== projectId) return;
     setComments((prev) => [...prev, newC]);
     setNewCommentInput('');
     showToast(
@@ -697,6 +779,9 @@ export default function App() {
     );
     } catch (error: any) {
       showToast(error.message || 'Chưa lưu được nhận xét. Nội dung vẫn được giữ để thử lại.', 'warn');
+    } finally {
+      commentPending.current = false;
+      setIsAddingComment(false);
     }
   };
 
@@ -738,8 +823,12 @@ export default function App() {
 
   /** Opens another project of the workspace, e.g. from the dashboard or pipeline board. */
   const openProject = async (projectId: string) => {
+    if (!await saveBeforeLeave()) return;
+    const request = ++openProjectRequest.current;
     try {
       const full = await projectService.getProjectById(projectId);
+      const loadedComments = await reviewService.getComments(full.id);
+      if (request !== openProjectRequest.current) return;
       const stage = pipelineStage(full);
 
       // Guard: Producer chỉ mở khi kịch bản đã được duyệt
@@ -765,7 +854,7 @@ export default function App() {
 
       setScript(full);
       setActiveSceneId(full.scenes?.[0]?.id || '');
-      setComments(await reviewService.getComments(full.id));
+      setComments(loadedComments);
       setIsInStudio(true);
     } catch (err: any) {
       showToast('Không mở được dự án: ' + (err?.message || 'lỗi máy chủ'), 'warn');
@@ -794,7 +883,8 @@ export default function App() {
       openNewProject(newScript);
       showToast(`Đã dùng bản nháp AI (${newScript.scenes.length} cảnh). Hãy chỉnh lại trước khi gửi duyệt.`, 'success');
     } catch (err: any) {
-      showToast('Không tạo được dự án: ' + (err?.message || 'lỗi máy chủ'), 'warn');
+      // The modal owns the error state and must retain the user's draft on failure.
+      throw err;
     }
   };
 
@@ -824,6 +914,7 @@ export default function App() {
     approach?: string
   ) => {
     try {
+      if (!await saveBeforeLeave()) throw new Error('Chưa lưu được dự án đang mở. Hãy lưu lại trước khi tạo dự án khác.');
       if (useAi) {
         showToast(`AI đang soạn bản nháp gợi ý cho "${title}"...`, 'info');
         const aiDraft = await scriptService.generateScriptWithAI(title, subject, grade, targetDurationSec, approach);
@@ -854,16 +945,23 @@ export default function App() {
       // No local fallback: a project that only exists in the browser would be
       // lost on reload and hide the real failure.
       console.error('Error creating project:', err);
-      showToast('Không tạo được dự án: ' + (err?.message || 'lỗi máy chủ'), 'warn');
+      throw err;
     }
   };
 
   // AI Script Action Trigger in Writer Studio
   // Guards against a second click while a call is in flight.
   const [isAiRunning, setIsAiRunning] = useState(false);
+  useEffect(() => {
+    setAiAnalysisResult({ type: null, title: 'AI Script Intelligence', details: ['Chọn một tác vụ AI để phân tích kịch bản này.'] });
+  }, [script.id]);
+  const aiPending = useRef(false);
+  const aiDecisionPending = useRef(false);
 
   const handleTriggerAiAction = async (action: 'resegment' | 'grade' | 'extract' | 'terms') => {
-    if (isAiRunning) return;
+    if (aiPending.current) return;
+    aiPending.current = true;
+    const projectId = script.id;
     setIsAiRunning(true);
 
     const rawScript = script.scenes
@@ -874,6 +972,7 @@ export default function App() {
 
     try {
       const res = await scriptService.runAiAction(action, rawScript, script.subject, script.gradeLevel);
+        if (activeProjectId.current !== projectId) return;
       // runAiAction returns {action, result, model, elapsedMs}; the analysis
       // payload itself sits under `result`.
       const response = res.result;
@@ -974,6 +1073,7 @@ export default function App() {
             : err?.message || 'Khong goi duoc dich vu AI.';
       showToast('Loi AI: ' + message, 'warn');
     } finally {
+      aiPending.current = false;
       setIsAiRunning(false);
     }
   };
@@ -1001,7 +1101,14 @@ export default function App() {
         </div>
       )}
       {/* Toast Notifications */}
-      <ToastContainer toasts={toasts} />
+      <ToastContainer toasts={toasts} onDismiss={id => setToasts(items => items.filter(item => item.id !== id))} />
+      {(saveError || writerSaving || isSavingComposition) && <div className="bg-amber-50 text-amber-950 p-3 text-sm flex flex-wrap gap-3 items-center" role={saveError ? 'alert' : 'status'}>
+        <span>{saveError || 'Đang lưu thay đổi…'}</span>
+        {saveError && !saveConflict && <button disabled={writerSaving || isSavingComposition} onClick={() => void retrySave()} className="underline font-semibold">Thử lưu lại</button>}
+        {saveConflict && <button className="underline font-semibold" onClick={() => {
+          if (window.confirm('Tải bản mới sẽ thay thế phần đang chỉnh trên màn hình. Bạn đã sao lưu nội dung cần giữ chưa?')) void loadComposition(script.id);
+        }}>Tải bản dựng mới nhất</button>}
+      </div>}
 
       {/* Top Header Navigation */}
       <HeaderNav
@@ -1010,7 +1117,8 @@ export default function App() {
         isLeader={isLeader}
         userName={currentUser.name}
         userEmail={currentUser.email}
-        onLogout={() => {
+        onLogout={async () => {
+          if (!await saveBeforeLeave()) return;
           authService.logout();
           setIsAuthenticated(false);
           setIsChangePasswordModalOpen(false);
@@ -1019,8 +1127,10 @@ export default function App() {
         onRoleChange={handleRoleChange}
         activeGroup={activeGroup}
         groups={workspaces}
-        onSelectGroup={(workspaceId) => {
+        onSelectGroup={async (workspaceId) => {
           if (!workspaces.some((workspace) => workspace.id === workspaceId) || isBootstrapping) return;
+          if (!await saveBeforeLeave()) return;
+          openProjectRequest.current++;
           workspaceService.setActiveWorkspaceId(workspaceId);
           setScript(EMPTY_SCRIPT);
           setComments([]);
@@ -1028,10 +1138,10 @@ export default function App() {
           setIsInStudio(false);
           void bootstrapFromApi();
         }}
-        onOpenManageMembersModal={() => setIsManageMembersModalOpen(true)}
+        onOpenManageMembersModal={async () => { if (await saveBeforeLeave()) setIsManageMembersModalOpen(true); }}
         onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
-        onCreateWorkspace={() => setIsCreateWorkspaceModalOpen(true)}
-        onNavigateToDashboard={() => setIsInStudio(false)}
+        onCreateWorkspace={async () => { if (await saveBeforeLeave()) setIsCreateWorkspaceModalOpen(true); }}
+        onNavigateToDashboard={async () => { if (await saveBeforeLeave()) setIsInStudio(false); }}
         isInStudio={isInStudio}
       />
 
@@ -1088,7 +1198,7 @@ export default function App() {
             </p>
             <div className="flex items-center justify-center gap-2 pt-2">
               <button
-                onClick={() => setIsInStudio(false)}
+                onClick={async () => { if (await saveBeforeLeave()) setIsInStudio(false); }}
                 className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
               >
                 ← Về kho kịch bản
@@ -1112,7 +1222,7 @@ export default function App() {
           production={inProduction && composition ? {
             revision: composition.revision,
             scriptVersionNo: composition.scriptVersionNo,
-            editable: composition.editable,
+            editable: composition.editable && !saveConflict,
             lockedReason: composition.lockedReason,
             saving: isSavingComposition,
           } : undefined}
@@ -1132,6 +1242,7 @@ export default function App() {
           isRendering={isRendering}
           renderProgress={renderProgress}
           renderStageText={renderStageText}
+          renderError={renderError}
           renderPercentageText={renderPercentageText}
           startRender={startRender}
           onOpenPublishModal={() => setIsPublishModalOpen(true)}
@@ -1139,6 +1250,7 @@ export default function App() {
           onUpdateTheme={handleUpdateTheme}
           onSyncDurations={handleProducerSyncDurations}
           isSyncingDurations={isSyncingDurations}
+          isSubmittingForReview={isSubmittingVideo}
           showToast={showToast}
         />
       )}
@@ -1159,6 +1271,7 @@ export default function App() {
           newCommentInput={newCommentInput}
           setNewCommentInput={setNewCommentInput}
           handleAddComment={handleAddComment}
+          isAddingComment={isAddingComment}
           onRoleChange={handleRoleChange}
           onOpenPublishModal={() => setIsPublishModalOpen(true)}
           onOpenProject={openProject}
@@ -1185,13 +1298,16 @@ export default function App() {
           onRoleChange={handleRoleChange}
           onSetReviewerMode={setReviewerMode}
           aiAnalysisResult={aiAnalysisResult}
+          isAiRunning={isAiRunning}
           onAiDecision={async (decision) => {
-            if (!aiAnalysisResult.requestId) return;
+            if (!aiAnalysisResult.requestId || aiDecisionPending.current) return;
+            aiDecisionPending.current = true;
             try {
               await scriptService.decideAiRequest(aiAnalysisResult.requestId, decision);
               setAiAnalysisResult(previous => previous.requestId === aiAnalysisResult.requestId ? ({...previous, decision}) : previous);
               showToast('Đã lưu quyết định AI; nội dung kịch bản chưa thay đổi.', 'success');
             } catch (error: any) { showToast(error.message || 'Không lưu được quyết định AI', 'warn'); }
+            finally { aiDecisionPending.current = false; }
           }}
           handleTriggerAiAction={handleTriggerAiAction}
           showToast={showToast}
@@ -1310,6 +1426,7 @@ export default function App() {
       />
 
       <VersionDiffModal
+        projectId={script.id}
         isOpen={isVersionDiffModalOpen}
         onClose={() => setIsVersionDiffModalOpen(false)}
       />

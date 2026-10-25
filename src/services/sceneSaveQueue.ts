@@ -16,7 +16,10 @@ export const SAVE_DEBOUNCE_MS = 600;
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const pending = new Map<string, SceneData[]>();
 const identities = new Map<string, Map<string, string>>();
-type SaveEvent = { scriptId: string; error?: unknown };
+type SaveEvent = { scriptId: string; error?: unknown; saving?: boolean };
+const unsaved = new Set<string>();
+const lastErrors = new Map<string, unknown>();
+const generations = new Map<string, number>();
 const listeners = new Set<(event: SaveEvent) => void>();
 const resolveId = (scriptId: string, id: string): string => identities.get(scriptId)?.get(id) ?? id;
 const notify = (event: SaveEvent) => listeners.forEach(listener => listener(event));
@@ -25,6 +28,10 @@ const chains = new Map<string, Promise<unknown>>();
 
 /** Runs the PUT after every earlier save for the same script has settled. */
 const enqueue = (scriptId: string, scenes: SceneData[]): Promise<STEMScript> => {
+  const generation = (generations.get(scriptId) ?? 0) + 1;
+  generations.set(scriptId, generation);
+  unsaved.add(scriptId);
+  notify({ scriptId, saving: true });
   const previous = chains.get(scriptId) ?? Promise.resolve();
   const next = previous
     .catch(() => undefined)
@@ -40,9 +47,16 @@ const enqueue = (scriptId: string, scenes: SceneData[]): Promise<STEMScript> => 
         });
         identities.set(scriptId, aliases);
       }
-      notify({ scriptId });
+      if (generations.get(scriptId) === generation && !pending.has(scriptId)) {
+        unsaved.delete(scriptId);
+        lastErrors.delete(scriptId);
+      }
+      notify({ scriptId, saving: unsaved.has(scriptId) });
       return saved;
-    }).catch(error => { notify({ scriptId, error }); throw error; });
+    }).catch(error => {
+      if (generations.get(scriptId) === generation) lastErrors.set(scriptId, error);
+      notify({ scriptId, error }); throw error;
+    });
   chains.set(scriptId, next);
   return next;
 };
@@ -55,6 +69,13 @@ const cancelPending = (scriptId: string) => {
 };
 
 export const sceneSaveQueue = {
+  isDirty: (scriptId: string) => unsaved.has(scriptId) || pending.has(scriptId),
+  async flush(scriptId: string): Promise<void> {
+    const latest = pending.get(scriptId);
+    if (latest) { cancelPending(scriptId); await enqueue(scriptId, latest); }
+    else await chains.get(scriptId);
+    if (lastErrors.has(scriptId)) throw lastErrors.get(scriptId);
+  },
   resolveId,
   subscribe(listener: (event: SaveEvent) => void): () => void {
     listeners.add(listener);
@@ -65,6 +86,8 @@ export const sceneSaveQueue = {
    * pause for SAVE_DEBOUNCE_MS. Failures are logged; the local edit stays.
    */
   schedule(scriptId: string, scenes: SceneData[]): void {
+    unsaved.add(scriptId);
+    notify({ scriptId, saving: true });
     const timer = timers.get(scriptId);
     if (timer) clearTimeout(timer);
     pending.set(scriptId, scenes);

@@ -1,6 +1,7 @@
 import { apiClient } from './apiClient';
 import { FeedbackComment, STEMScript } from '../types/stem';
 import { projectService } from './projectService';
+import type { CompositionSaver } from './compositionService';
 
 function toComment(c: any): FeedbackComment {
   return {
@@ -121,6 +122,14 @@ export const reviewService = {
     return updated;
   },
 
+  /** Freeze only the draft whose pending edits have finished saving. */
+  async submitSavedVideoForReview(projectId: string, saver: CompositionSaver,
+      isCurrent: () => boolean): Promise<STEMScript | null> {
+    await saver.flush();
+    if (!isCurrent()) return null;
+    return this.submitVideoForReview(projectId);
+  },
+
   async approveVideo(projectId: string): Promise<STEMScript> {
     await apiClient.post(`/scripts/${projectId}/approve-video`, {});
     return projectService.getProjectById(projectId);
@@ -149,14 +158,12 @@ export const reviewService = {
     return toComment(saved);
   },
 
-  async resolveComment(_projectId: string, commentId: string): Promise<boolean> {
-    await apiClient.put(`/qa-comments/${commentId}/resolve`, {});
-    return true;
+  async resolveComment(_projectId: string, commentId: string): Promise<FeedbackComment> {
+    return toComment(await apiClient.put(`/qa-comments/${commentId}/resolve`, {}));
   },
 
-  async reopenComment(commentId: string): Promise<boolean> {
-    await apiClient.put(`/qa-comments/${commentId}/reopen`, {});
-    return true;
+  async reopenComment(commentId: string): Promise<FeedbackComment> {
+    return toComment(await apiClient.put(`/qa-comments/${commentId}/reopen`, {}));
   },
 
   async deleteComment(commentId: string): Promise<boolean> {

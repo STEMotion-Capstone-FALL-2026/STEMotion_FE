@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 export interface ToastItem {
   id: number;
@@ -9,14 +9,17 @@ export interface ToastItem {
 
 interface ToastContainerProps {
   toasts: ToastItem[];
+  onDismiss?: (id: number) => void;
 }
 
-export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts }) => {
+export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismiss }) => {
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none">
+    <div className="fixed bottom-5 right-5 z-[70] max-w-[calc(100vw-2.5rem)] flex flex-col space-y-2 pointer-events-none">
       {toasts.map((t) => (
         <div
           key={t.id}
+          role={t.type === 'warn' ? 'alert' : 'status'}
+          aria-atomic="true"
           className={`px-4 py-2.5 rounded-xl shadow-xl border text-xs font-semibold flex items-center space-x-2 animate-slide-up pointer-events-auto ${
             t.type === 'warn'
               ? 'bg-amber-50 text-amber-800 border-amber-200'
@@ -33,6 +36,7 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts }) => {
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           )}
           <span>{t.message}</span>
+          {onDismiss && <button onClick={() => onDismiss(t.id)} aria-label="Đóng thông báo" className="p-1 shrink-0 rounded hover:bg-black/5"><X className="w-4 h-4" /></button>}
         </div>
       ))}
     </div>

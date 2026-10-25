@@ -76,8 +76,8 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   const canManageMembers = accountRole === 'admin' || isLeader;
 
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-6 py-2.5 flex items-center justify-between shadow-xs">
-      <div className="flex items-center space-x-4">
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-40 px-3 sm:px-6 py-2.5 flex flex-wrap gap-2 items-center justify-between shadow-xs">
+      <div className="flex flex-wrap items-center gap-2 min-w-0">
         <div
           onClick={() => {
             if (onNavigateToDashboard) {
@@ -87,6 +87,9 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
             }
           }}
           className="flex items-center space-x-2.5 cursor-pointer"
+          role="button"
+          tabIndex={0}
+          onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNavigateToDashboard?.(); } }}
           title="Về danh sách kịch bản & dự án"
         >
           <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm">

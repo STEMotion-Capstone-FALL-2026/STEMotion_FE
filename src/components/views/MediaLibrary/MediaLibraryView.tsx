@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Code,
   Download,
@@ -28,33 +28,36 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
   showToast,
 }) => {
   const [clips, setClips] = useState<LibraryItem[]>([]);
-  const [availableSubjects, setAvailableSubjects] = useState<STEMSubject[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<STEMSubject | ''>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const requestId = useRef(0);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedClipEmbed, setSelectedClipEmbed] = useState<LibraryItem | null>(null);
 
-  const fetchLibraryData = async () => {
+  const fetchLibraryData = useCallback(async () => {
+    const request = ++requestId.current;
     setLoading(true);
+    setLoadError('');
     try {
-      const [filterData, clipList] = await Promise.all([
-        libraryService.getFilters().catch(() => ({ subjects: [], gradeLevels: [] })),
-        libraryService.getPublishedClips(selectedSubject).catch(() => []),
-      ]);
-
-      setAvailableSubjects(filterData.subjects || []);
+      // The subject selector already contains the supported subjects; it needs no filters fetch.
+      const clipList = await libraryService.getPublishedClips(selectedSubject);
+      if (request !== requestId.current) return;
       setClips(clipList);
     } catch (err: any) {
-      showToast?.(err.message || 'Lỗi khi tải kho học liệu số.', 'warn');
+      if (request !== requestId.current) return;
+      setLoadError(err.message || 'Không tải được kho học liệu. Vui lòng thử lại.');
     } finally {
-      setLoading(false);
+      if (request === requestId.current) setLoading(false);
     }
-  };
+  }, [selectedSubject]);
 
   useEffect(() => {
+    setClips([]);
     void fetchLibraryData();
-  }, [selectedSubject]);
+    return () => { requestId.current++; };
+  }, [fetchLibraryData]);
 
   const handleCopyEmbed = (clip: LibraryItem) => {
     const code = clip.embedCode || `<iframe src="${clip.videoUrl}" width="100%" height="450" frameborder="0" allowfullscreen></iframe>`;
@@ -62,7 +65,7 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
       setCopiedId(clip.id);
       showToast?.('Đã sao chép mã nhúng LMS vào bộ nhớ tạm!', 'success');
       setTimeout(() => setCopiedId(null), 2500);
-    });
+    }).catch(() => showToast?.('Chưa sao chép được mã nhúng. Hãy mở mã nhúng và sao chép thủ công.', 'warn'));
   };
 
   // Filter in-memory by search query
@@ -163,7 +166,14 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
         </div>
 
         {/* Video Clips Grid */}
-        {loading ? (
+        {loadError && (
+          <div role="alert" className="p-4 rounded-xl border border-amber-200 bg-amber-50 text-sm text-amber-900 space-y-2">
+            <p>{loadError}</p>
+            {clips.length > 0 && <p>Đang hiển thị dữ liệu đã tải trước đó.</p>}
+            <button disabled={loading} onClick={() => void fetchLibraryData()} className="font-semibold underline disabled:opacity-50">Thử tải lại</button>
+          </div>
+        )}
+        {loading && clips.length === 0 ? (
           <div className="py-20 text-center space-y-3">
             <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin mx-auto" />
             <p className="text-xs font-semibold text-slate-500">Đang tải kho học liệu số từ máy chủ...</p>
@@ -254,7 +264,7 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
               );
             })}
           </div>
-        ) : (
+        ) : loadError ? null : (
           /* Empty State */
           <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center space-y-4 shadow-xs">
             <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto">

@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useActionGuard } from '../../../hooks/useActionGuard';
+import { useDialog } from '../../../hooks/useDialog';
 import { workspaceService, WorkspaceMemberDto, WorkspaceSummary } from '../../../services/workspaceService';
 import {
   adminService,
@@ -146,6 +148,10 @@ const initialsOf = (name: string): string => {
 };
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersModal, onWorkspaceCreated }) => {
+  const actions = useActionGuard();
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
+  const loadSequence = useRef<Record<string, number>>({});
+  const reportLoad = (area: string, message = '') => setLoadErrors(old => ({ ...old, [area]: message }));
   const [activeTab, setActiveTab] = useState<AdminTab>('MONITORING');
 
   // FE-17 state
@@ -185,6 +191,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   });
   const [editingTemplate, setEditingTemplate] = useState<AdminTemplateDto | null>(null);
 
+  const editDialog = useDialog(Boolean(editingTemplate), 'Chỉnh sửa mẫu hoạt họa', () => setEditingTemplate(null), actions.pending);
+
   // AI Usage Drill-down state (GET /api/v1/admin/ai-usage)
   const [aiUsagePage, setAiUsagePage] = useState<AiUsagePage | null>(null);
   const [loadingAiUsage, setLoadingAiUsage] = useState(false);
@@ -198,12 +206,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   });
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
   const notify = (msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3500);
+    toastTimer.current = setTimeout(() => setToastMsg(null), 6000);
   };
 
   const loadAiUsage = useCallback(async () => {
+    const request = (loadSequence.current.aiUsage ?? 0) + 1;
+    loadSequence.current.aiUsage = request;
     setLoadingAiUsage(true);
     try {
       const data = await adminService.getAiUsageHistory({
@@ -214,11 +227,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
         page: aiUsageFilter.page,
         size: aiUsageFilter.size,
       });
-      setAiUsagePage(data);
+      if (request !== loadSequence.current.aiUsage) return;
+      setAiUsagePage(data); reportLoad('aiUsage');
     } catch (err: any) {
-      console.warn('Could not load AI usage history:', err);
+      if (request === loadSequence.current.aiUsage) reportLoad('aiUsage', err.message || 'Không tải được lịch sử AI.');
     } finally {
-      setLoadingAiUsage(false);
+      if (request === loadSequence.current.aiUsage) setLoadingAiUsage(false);
     }
   }, [aiUsageFilter]);
 
@@ -226,74 +240,46 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     setLoadingOverview(true);
     try {
       const data = await adminService.getDashboardOverview();
-      setOverview(data);
-    } catch {
-      try {
-        const metrics = await adminService.getSystemMetrics();
-        setOverview({
-          metrics,
-          aiUsage: {
-            totalProjects: 0,
-            totalScriptVersions: 0,
-            totalScenesGenerated: 0,
-            estimatedAiCalls: 0,
-            avgLatencyMs: 4200,
-            estimatedTokensUsed: 0,
-            estimatedCostUsd: 0,
-            monthlyBudgetUsd: 20,
-            modelName: 'gemini-2.5-flash',
-            ttsProvider: 'Google Vietnamese TTS (unified_vi_v3)',
-          },
-          recentRenderJobs: [],
-          projectsBySubject: {},
-        });
-      } catch {
-        // ignore
-      }
-    } finally {
-      setLoadingOverview(false);
-    }
+      setOverview(data); reportLoad('overview');
+    } catch (error: any) { reportLoad('overview', error.message || 'Không tải được số liệu tổng quan.'); }
+    finally { setLoadingOverview(false); }
   }, []);
 
   const loadUsersAndMembers = useCallback(async () => {
+    const request = (loadSequence.current.users ?? 0) + 1;
+    loadSequence.current.users = request;
     setLoadingUsers(true);
     try {
       const [allUsers, wsList, activeId] = await Promise.all([
-        adminService.getAllUsers().catch(() => []),
-        workspaceService.getAllWorkspaces().catch(() => workspaceService.getMyWorkspaces(true).catch(() => [])),
-        workspaceService.resolveActiveWorkspaceId().catch(() => ''),
+        adminService.getAllUsers(), workspaceService.getAllWorkspaces(), workspaceService.resolveActiveWorkspaceId(),
       ]);
-      setUsers(allUsers);
-      setWorkspaceList(wsList);
-      const chosenId =
-        activeId && wsList.some((w) => w.id === activeId)
-          ? activeId
-          : wsList.length > 0
-          ? wsList[0].id
-          : '';
+      if (request !== loadSequence.current.users) return;
+      setUsers(allUsers); setWorkspaceList(wsList);
+      const chosenId = activeId && wsList.some(w => w.id === activeId) ? activeId : wsList[0]?.id || '';
       setCurrentWorkspaceId(chosenId);
-      if (chosenId) {
-        const wsMembers = await workspaceService.getMembers(chosenId).catch(() => []);
-        setMembers(wsMembers);
-      } else {
-        setMembers([]);
-      }
-    } finally {
-      setLoadingUsers(false);
-    }
+      const loadedMembers = chosenId ? await workspaceService.getMembers(chosenId) : [];
+      if (request !== loadSequence.current.users) return;
+      setMembers(loadedMembers); reportLoad('users');
+    } catch (error: any) { if (request === loadSequence.current.users) reportLoad('users', error.message || 'Không tải được tài khoản/thành viên.'); }
+    finally { if (request === loadSequence.current.users) setLoadingUsers(false); }
   }, []);
 
   const handleSwitchWorkspace = async (newWsId: string) => {
+    const request = (loadSequence.current.users ?? 0) + 1;
+    loadSequence.current.users = request;
     setCurrentWorkspaceId(newWsId);
+    setMembers([]);
     workspaceService.setActiveWorkspaceId(newWsId);
     try {
       const wsMembers = await workspaceService.getMembers(newWsId);
+      if (request !== loadSequence.current.users) return;
       setMembers(wsMembers);
+      reportLoad('members');
       window.dispatchEvent(
         new CustomEvent('stemotion:workspace-changed', { detail: { workspaceId: newWsId } })
       );
     } catch {
-      setMembers([]);
+      if (request === loadSequence.current.users) reportLoad('members', 'Không tải được thành viên của không gian làm việc.');
     }
   };
 
@@ -301,9 +287,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     setLoadingTemplates(true);
     try {
       const list = await adminService.getAdminTemplates(false);
-      setTemplates(list);
-    } catch {
-      setTemplates([]);
+      setTemplates(list); reportLoad('templates');
+    } catch (error: any) {
+      reportLoad('templates', error.message || 'Không tải được mẫu hoạt họa.');
     } finally {
       setLoadingTemplates(false);
     }
@@ -313,8 +299,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     void loadOverview();
     void loadUsersAndMembers();
     void loadTemplates();
+  }, [loadOverview, loadUsersAndMembers, loadTemplates]);
+
+  useEffect(() => {
     void loadAiUsage();
-  }, [loadOverview, loadUsersAndMembers, loadTemplates, loadAiUsage]);
+    return () => { loadSequence.current.aiUsage = (loadSequence.current.aiUsage ?? 0) + 1; };
+  }, [loadAiUsage]);
 
   useEffect(() => {
     const onMembersUpdated = () => {
@@ -329,7 +319,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   }, [loadUsersAndMembers]);
 
   // Handlers for FE-15 (Users & Roles)
-  const handleRoleChange = async (user: AdminUserDto, newRole: SystemUserRole) => {
+  const handleRoleChange = actions.wrap(async (user: AdminUserDto, newRole: SystemUserRole) => {
     try {
       const updated = await adminService.updateUser(user.id, { role: newRole });
       setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
@@ -337,9 +327,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     } catch (err: any) {
       notify(err?.message || 'Không thể đổi vai trò người dùng.');
     }
-  };
+  });
 
-  const handleQuickAddToWorkspace = async (user: AdminUserDto) => {
+  const handleQuickAddToWorkspace = actions.wrap(async (user: AdminUserDto) => {
     try {
       const workspaceId = currentWorkspaceId || (await workspaceService.resolveActiveWorkspaceId());
       if (!workspaceId) return;
@@ -349,9 +339,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     } catch (err: any) {
       notify(err?.message || 'Không thể thêm thành viên vào Không gian làm việc.');
     }
-  };
+  });
 
-  const handleDeleteWorkspace = async () => {
+  const handleDeleteWorkspace = actions.wrap(async () => {
     const curWs = workspaceList.find((w) => w.id === currentWorkspaceId);
     if (!curWs) return;
     if (!window.confirm(`Xác nhận xóa Không gian làm việc "${curWs.name}"? Mọi dữ liệu liên quan sẽ bị xóa vĩnh viễn.`)) return;
@@ -362,9 +352,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     } catch (err: any) {
       notify(err?.message || 'Không thể xóa Không gian làm việc.');
     }
-  };
+  });
 
-  const handleRemoveWorkspaceMember = async (member: WorkspaceMemberDto) => {
+  const handleRemoveWorkspaceMember = actions.wrap(async (member: WorkspaceMemberDto) => {
     if (!window.confirm(`Xóa ${member.name} (${member.email}) khỏi Không gian làm việc hiện tại?`)) return;
     try {
       const workspaceId = currentWorkspaceId || (await workspaceService.resolveActiveWorkspaceId());
@@ -375,9 +365,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     } catch (err: any) {
       notify(err?.message || 'Không thể xóa thành viên khỏi Không gian làm việc.');
     }
-  };
+  });
 
-  const handleStatusToggle = async (user: AdminUserDto) => {
+  const handleStatusToggle = actions.wrap(async (user: AdminUserDto) => {
     const nextStatus: SystemUserStatus = user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     try {
       const updated = await adminService.updateUser(user.id, { status: nextStatus });
@@ -386,9 +376,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     } catch (err: any) {
       notify(err?.message || 'Không thể cập nhật trạng thái tài khoản.');
     }
-  };
+  });
 
-  const handleDeleteUser = async (user: AdminUserDto) => {
+  const handleDeleteUser = actions.wrap(async (user: AdminUserDto) => {
     if (!window.confirm(`Xác nhận xóa tài khoản ${user.fullName} (${user.email})?`)) return;
     try {
       await adminService.deleteUser(user.id);
@@ -397,10 +387,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     } catch (err: any) {
       notify(err?.message || 'Không thể xóa tài khoản đang có dữ liệu liên kết.');
     }
-  };
+  });
 
   // Handlers for FE-16 (Templates)
-  const handleToggleTemplateActive = async (tpl: AdminTemplateDto) => {
+  const handleToggleTemplateActive = actions.wrap(async (tpl: AdminTemplateDto) => {
     try {
       const updated = await adminService.updateTemplate(tpl.id, {
         name: tpl.name,
@@ -414,9 +404,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     } catch (err: any) {
       notify(err?.message || 'Không thể cập nhật trạng thái mẫu hoạt họa.');
     }
-  };
+  });
 
-  const handleCreateTemplate = async (e: React.FormEvent) => {
+  const handleCreateTemplate = actions.wrap(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTemplate.name.trim()) return;
     try {
@@ -439,9 +429,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     } catch (err: any) {
       notify(err?.message || 'Không thể tạo mẫu hoạt họa mới.');
     }
-  };
+  });
 
-  const handleUpdateTemplateSubmit = async (e: React.FormEvent) => {
+  const handleUpdateTemplateSubmit = actions.wrap(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTemplate || !editingTemplate.name.trim()) return;
     try {
@@ -460,9 +450,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     } catch (err: any) {
       notify(err?.message || 'Không thể cập nhật mẫu hoạt họa.');
     }
-  };
+  });
 
-  const handleDeleteTemplate = async (tpl: AdminTemplateDto) => {
+  const handleDeleteTemplate = actions.wrap(async (tpl: AdminTemplateDto) => {
     if (!window.confirm(`Xác nhận xóa mẫu "${tpl.name}" khỏi thư viện?`)) return;
     try {
       await adminService.deleteTemplate(tpl.id);
@@ -471,7 +461,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     } catch (err: any) {
       notify(err?.message || 'Không thể xóa mẫu hoạt họa.');
     }
-  };
+  });
 
   const filteredUsers = users.filter((u) => {
     const matchRole = roleFilter === 'ALL' || u.role === roleFilter;
@@ -494,11 +484,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
 
   return (
     <main className="flex-1 bg-slate-50 p-6 overflow-y-auto">
+      {actions.pending && <p role="status" className="sticky top-0 z-50 bg-indigo-50 p-3 text-sm text-indigo-900">Đang lưu thay đổi. Vui lòng chờ…</p>}
+      {Object.entries(loadErrors).filter(([, value]) => value).map(([key, value]) => <div key={key} role="alert" className="bg-amber-50 border border-amber-200 p-3 rounded text-sm"><p>{value}</p><button className="underline" onClick={() => { void loadOverview(); void loadUsersAndMembers(); void loadTemplates(); void loadAiUsage(); }}>Thử tải lại dữ liệu</button></div>)}
+      <fieldset disabled={actions.pending} aria-busy={actions.pending} className="min-w-0">
       <div className="max-w-7xl w-full mx-auto space-y-6 pb-10">
         {toastMsg && (
-          <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-3 rounded-xl shadow-lg border border-slate-700 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <div role="status" className="fixed bottom-5 right-5 max-w-[calc(100vw-2.5rem)] z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-3 rounded-xl shadow-lg border border-slate-700 flex items-center gap-2">
+            <span aria-hidden="true">ℹ</span>
             <span>{toastMsg}</span>
+            <button type="button" aria-label="Đóng thông báo Admin" onClick={() => setToastMsg(null)}>×</button>
           </div>
         )}
 
@@ -523,17 +517,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
 
           <div className="flex items-center gap-2.5">
             <button
+              disabled={loadingOverview || loadingUsers || loadingTemplates || loadingAiUsage}
               onClick={() => {
                 void loadOverview();
                 void loadUsersAndMembers();
                 void loadTemplates();
                 void loadAiUsage();
-                notify('Đã làm mới toàn bộ số liệu hệ thống!');
               }}
               className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Làm mới số liệu</span>
+              <span>{loadingOverview || loadingUsers || loadingTemplates || loadingAiUsage ? 'Đang tải số liệu…' : 'Làm mới số liệu'}</span>
             </button>
             <button
               onClick={onOpenManageMembersModal}
@@ -598,16 +592,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                 </div>
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="text-2xl font-extrabold text-slate-900">
-                    {metrics && metrics.cpuUsage >= 0 ? `${metrics.cpuUsage}%` : '14.2%'}
+                    {metrics && metrics.cpuUsage >= 0 ? `${metrics.cpuUsage}%` : 'Chưa có số liệu'}
                   </span>
                   <span className="text-xs text-slate-500">
-                    CPU • RAM {metrics?.memoryUsage ?? 42}%
+                    CPU • RAM {metrics?.memoryUsage != null && metrics.memoryUsage >= 0 ? `${metrics.memoryUsage}%` : '—'}
                   </span>
                 </div>
                 <div className="mt-3 w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                   <div
                     className="bg-indigo-600 h-full rounded-full transition-all"
-                    style={{ width: `${Math.min(100, Math.max(8, metrics?.memoryUsage ?? 40))}%` }}
+                    style={{ width: `${Math.min(100, Math.max(0, metrics?.memoryUsage ?? 0))}%` }}
                   />
                 </div>
               </div>
@@ -656,16 +650,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                 </div>
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="text-2xl font-extrabold text-slate-900">
-                    ${aiUsage?.estimatedCostUsd?.toFixed(3) ?? '0.000'}
+                    {aiUsage?.estimatedCostUsd != null ? `$${aiUsage.estimatedCostUsd.toFixed(3)}` : '—'}
                   </span>
                   <span className="text-xs text-slate-400">
-                    / ${aiUsage?.monthlyBudgetUsd?.toFixed(2) ?? '20.00'}
+                    / {aiUsage?.monthlyBudgetUsd != null ? `$${aiUsage.monthlyBudgetUsd.toFixed(2)}` : 'Chưa cấu hình hạn mức'}
                   </span>
                 </div>
                 <div className="mt-3 w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                   <div
                     className="bg-emerald-500 h-full rounded-full transition-all"
-                    style={{ width: `${Math.max(4, budgetPercent)}%` }}
+                    style={{ width: `${budgetPercent}%` }}
                   />
                 </div>
               </div>
@@ -712,7 +706,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                     <div className="text-[11px] text-slate-500">Độ Trễ AI TB (SLA &lt; 15s)</div>
                     <div className="text-lg font-extrabold text-emerald-600 mt-0.5 flex items-center gap-1">
                       <Clock className="w-4 h-4" />
-                      <span>{((aiUsage?.avgLatencyMs ?? 4250) / 1000).toFixed(1)}s</span>
+                      <span>{aiUsage?.avgLatencyMs != null && aiUsage.avgLatencyMs >= 0 ? `${(aiUsage.avgLatencyMs / 1000).toFixed(1)}s` : '—'}</span>
                     </div>
                   </div>
                 </div>
@@ -1543,7 +1537,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
               {/* Modal chỉnh sửa template (Edit Template Modal) */}
               {editingTemplate && (
                 <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-                  <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                  <div ref={editDialog} className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
                     <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                       <div className="flex items-center gap-2">
                         <Edit3 className="w-4 h-4 text-indigo-600" />
@@ -1786,6 +1780,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
           </div>
         )}
       </div>
+      </fieldset>
     </main>
   );
 };

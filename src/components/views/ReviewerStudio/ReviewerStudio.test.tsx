@@ -32,6 +32,37 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('reviewing the producer composition', () => {
+  it('retains the rejection reason when saving fails and guards repeated confirmation', async () => {
+    vi.spyOn(compositionService, 'get').mockResolvedValue(composition());
+    let fail!: (error: Error) => void;
+    const send = vi.spyOn(reviewService, 'sendBackVideo').mockImplementation(() => new Promise((_, reject) => { fail = reject; }));
+    render(<ReviewerStudio {...props()} />);
+    await screen.findByTestId('review-player');
+    fireEvent.click(screen.getByRole('button', { name: 'Yêu Cầu Producer Sửa Clip' }));
+    fireEvent.change(screen.getByPlaceholderText(/Phụ đề chạy/), { target: { value: 'Giữ lý do khi mất mạng' } });
+    const confirm = screen.getByRole('button', { name: 'Gửi Yêu Cầu Chỉnh Sửa' });
+    act(() => { fireEvent.click(confirm); fireEvent.click(confirm); });
+    expect(send).toHaveBeenCalledTimes(1);
+    await act(async () => fail(new Error('Offline')));
+    expect(screen.getByDisplayValue('Giữ lý do khi mất mạng')).toBeTruthy();
+    expect(confirm.hasAttribute('disabled')).toBe(false);
+  });
+  it('locks a comment action while saving and displays the server resolver', async () => {
+    vi.spyOn(compositionService, 'get').mockResolvedValue(composition());
+    let finish!: (value: any) => void;
+    const resolve = vi.spyOn(reviewService, 'resolveComment').mockImplementation(() => new Promise(done => { finish = done; }));
+    const input = props();
+    input.comments = [{ id: 'c', content: 'Fix scene', author: 'Reviewer', status: 'OPEN', timestampSec: 0 } as any];
+    render(<ReviewerStudio {...input} />);
+    await screen.findByTestId('review-player');
+    const button = screen.getByRole('button', { name: /Đánh dấu đã sửa/ });
+    act(() => { fireEvent.click(button); fireEvent.click(button); });
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(button.hasAttribute('disabled')).toBe(true);
+    await act(async () => finish({ ...input.comments[0], status: 'RESOLVED', resolvedByName: 'Nguyen An', resolvedAt: '2026-10-23T10:00:00Z' }));
+    expect(screen.getByText('Đã sửa bởi Nguyen An')).toBeTruthy();
+  });
+
   it('blocks approval on a failed load, never shows the original script, and allows retry', async () => {
     vi.spyOn(compositionService, 'get').mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce(composition());
     const approve = vi.spyOn(reviewService, 'approveVideo');

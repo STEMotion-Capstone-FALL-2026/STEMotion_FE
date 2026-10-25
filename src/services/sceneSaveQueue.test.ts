@@ -101,4 +101,15 @@ describe('sceneSaveQueue', () => {
     expect(listener).toHaveBeenCalledWith({ scriptId: 'feedback-script', error: failure });
     unsubscribe();
   });
+
+  it('flushes a pending edit before navigation and keeps failed saves dirty until explicit retry', async () => {
+    put.mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce({ id: 'nav-script', scenes: scenes('retry') });
+    sceneSaveQueue.schedule('nav-script', scenes('pending'));
+    expect(sceneSaveQueue.isDirty('nav-script')).toBe(true);
+    await expect(sceneSaveQueue.flush('nav-script')).rejects.toThrow('Offline');
+    expect(sceneSaveQueue.isDirty('nav-script')).toBe(true);
+    await sceneSaveQueue.saveNow('nav-script', scenes('retry'));
+    await sceneSaveQueue.flush('nav-script');
+    expect(sceneSaveQueue.isDirty('nav-script')).toBe(false);
+  });
 });

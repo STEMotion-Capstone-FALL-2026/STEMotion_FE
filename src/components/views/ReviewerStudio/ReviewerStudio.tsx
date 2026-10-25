@@ -37,6 +37,8 @@ import {
 import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
 import { renderLatexToString } from '../../../utils/latex';
 import { ClipCompareModal } from '../../modals/ClipCompareModal';
+import { useRenderProgress } from '../../../hooks/useRenderProgress';
+import { useDialog } from '../../../hooks/useDialog';
 
 interface ReviewerStudioProps {
   script: STEMScript;
@@ -53,6 +55,7 @@ interface ReviewerStudioProps {
   newCommentInput: string;
   setNewCommentInput: (val: string) => void;
   handleAddComment: (e: React.FormEvent) => void;
+  isAddingComment?: boolean;
   onRoleChange: (role: UserRole) => void;
   onOpenPublishModal: () => void;
   onOpenProject?: (projectId: string) => void;
@@ -88,6 +91,15 @@ function CommentCard({
   setReplyInput,
   submittingReply,
 }: CommentCardProps) {
+  const actionInFlight = useRef(false);
+  const [actionPending, setActionPending] = useState(false);
+  const runAction = async (action: () => Promise<void>) => {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setActionPending(true);
+    try { await action(); }
+    finally { actionInFlight.current = false; setActionPending(false); }
+  };
   const isResolved = comment.status === 'RESOLVED';
   const hasReplies = Boolean(comment.replies && comment.replies.length > 0);
   const isReplying = replyingToId === comment.id;
@@ -141,6 +153,7 @@ function CommentCard({
 
       {/* Action buttons for ROOT comment */}
       <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+        {actionPending && <span role="status" className="text-xs text-slate-500">Đang cập nhật…</span>}
         <button
           type="button"
           onClick={() => {
@@ -159,7 +172,8 @@ function CommentCard({
         {isResolved ? (
           <button
             type="button"
-            onClick={() => void onReopen(comment.id)}
+            disabled={actionPending}
+            onClick={() => void runAction(() => onReopen(comment.id))}
             className="text-[10px] text-amber-700 hover:text-amber-800 font-semibold cursor-pointer"
           >
             Mở lại
@@ -167,7 +181,8 @@ function CommentCard({
         ) : (
           <button
             type="button"
-            onClick={() => void onResolve(comment.id)}
+            disabled={actionPending}
+            onClick={() => void runAction(() => onResolve(comment.id))}
             className="text-[10px] text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-0.5 cursor-pointer"
           >
             <Check className="w-3 h-3" /> Đánh dấu đã sửa
@@ -176,7 +191,8 @@ function CommentCard({
 
         <button
           type="button"
-          onClick={() => void onDelete(comment.id)}
+          disabled={actionPending}
+          onClick={() => void runAction(() => onDelete(comment.id))}
           className="text-[10px] text-rose-600 hover:text-rose-700 p-0.5 rounded hover:bg-rose-50 cursor-pointer"
           title="Xóa nhận xét"
         >
@@ -195,7 +211,8 @@ function CommentCard({
                 </span>
                 <button
                   type="button"
-                  onClick={() => void onDelete(reply.id)}
+                  disabled={actionPending}
+                  onClick={() => void runAction(() => onDelete(reply.id))}
                   className="text-rose-600 hover:text-rose-700 p-0.5 rounded cursor-pointer"
                   title="Xóa phản hồi"
                 >
@@ -261,6 +278,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   newCommentInput,
   setNewCommentInput,
   handleAddComment,
+  isAddingComment = false,
   onRoleChange,
   onOpenPublishModal,
   onOpenProject,
@@ -273,11 +291,17 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   const [compareOpen, setCompareOpen] = useState(false);
   const [reviewNote, setReviewNote] = useState('');
   const [qaReport, setQaReport] = useState<QaReport | null>(null);
+  const [qaError, setQaError] = useState('');
   const [loadingQa, setLoadingQa] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
+  const queueDialog = useDialog(showQueueModal, 'Hàng đợi kiểm định', () => setShowQueueModal(false));
   const [queueItems, setQueueItems] = useState<ReviewQueueItem[]>([]);
   const [loadingQueue, setLoadingQueue] = useState(false);
+  const [queueError, setQueueError] = useState('');
+  const queueRequest = useRef(0);
   const [localComments, setLocalComments] = useState<FeedbackComment[]>(comments);
+  const activeProject = useRef(script.id);
+  activeProject.current = script.id;
 
   const [composition, setComposition] = useState<Composition | null>(null);
   const [loadingComposition, setLoadingComposition] = useState(false);
@@ -332,34 +356,12 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   }, [script, composition]);
   const videoApprovalBlocked = loadingComposition || !reviewScript;
 
-  const [bgRenderStatus, setBgRenderStatus] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (script.videoStatus !== 'APPROVED' || script.videoUrl) return;
-    let active = true;
-    const poll = async () => {
-      try {
-        const jobs = await renderService.getHistory(script.id);
-        if (!active) return;
-        const latestJob = jobs[0];
-        if (latestJob) {
-          setBgRenderStatus(latestJob.status);
-          if (latestJob.status === 'COMPLETED' && latestJob.videoUrl) {
-            setScript((prev) => ({ ...prev, videoUrl: latestJob.videoUrl }));
-            showToast('Kết xuất MP4 nền đã hoàn tất! Video đã sẵn sàng để xuất bản.', 'success');
-          }
-        }
-      } catch {
-        // ignore polling errors
-      }
-    };
-    void poll();
-    const interval = setInterval(poll, 4000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [script.id, script.videoStatus, script.videoUrl, setScript, showToast]);
+  const { status: bgRenderStatus, error: bgRenderError, retry: retryRenderProgress } = useRenderProgress(
+    script.id, script.videoStatus === 'APPROVED' && !script.videoUrl,
+    videoUrl => {
+      setScript(prev => prev.id === script.id ? { ...prev, videoUrl } : prev);
+      showToast('Kết xuất MP4 nền đã hoàn tất! Video đã sẵn sàng để xuất bản.', 'success');
+    });
 
   const groupedComments = useMemo(() => {
     return groupCommentsWithReplies(localComments);
@@ -375,10 +377,13 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
 
   const [sceneCommentInput, setSceneCommentInput] = useState('');
   const [submittingSceneComment, setSubmittingSceneComment] = useState(false);
+  const sceneCommentPending = useRef(false);
 
   const handleAddSceneComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sceneCommentInput.trim()) return;
+    if (!sceneCommentInput.trim() || sceneCommentPending.current) return;
+    sceneCommentPending.current = true;
+    const projectId = script.id;
     setSubmittingSceneComment(true);
     try {
       const added = await reviewService.addComment(script.id, {
@@ -391,12 +396,14 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
         role: 'Reviewer',
         createdAt: 'Vừa xong',
       });
+      if (activeProject.current !== projectId) return;
       setLocalComments((prev) => [...prev, added]);
       setSceneCommentInput('');
       showToast('Đã thêm nhận xét cho phân cảnh.', 'success');
     } catch (err: any) {
-      showToast(err?.message || 'Không gửi được nhận xét phân cảnh.', 'warn');
+      if (activeProject.current === projectId) showToast(err?.message || 'Không gửi được nhận xét phân cảnh.', 'warn');
     } finally {
+      sceneCommentPending.current = false;
       setSubmittingSceneComment(false);
     }
   };
@@ -404,19 +411,24 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyInput, setReplyInput] = useState('');
   const [submittingReply, setSubmittingReply] = useState(false);
+  const replyPending = useRef(false);
 
   const handleSendReply = async (commentId: string) => {
-    if (!replyInput.trim()) return;
+    if (!replyInput.trim() || replyPending.current) return;
+    replyPending.current = true;
+    const projectId = script.id;
     setSubmittingReply(true);
     try {
       const replied = await reviewService.replyComment(commentId, replyInput.trim());
+      if (activeProject.current !== projectId) return;
       setLocalComments((prev) => [...prev, replied]);
       setReplyInput('');
       setReplyingToId(null);
       showToast('Đã gửi phản hồi nhận xét.', 'success');
     } catch (err: any) {
-      showToast(err?.message || 'Không gửi được phản hồi.', 'warn');
+      if (activeProject.current === projectId) showToast(err?.message || 'Không gửi được phản hồi.', 'warn');
     } finally {
+      replyPending.current = false;
       setSubmittingReply(false);
     }
   };
@@ -426,40 +438,50 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   }, [comments]);
 
   const fetchQaReport = async () => {
+    const projectId = script.id;
     setLoadingQa(true);
     try {
       const rep = await reviewService.getQaReport(script.id);
+      if (activeProject.current !== projectId) return;
       setQaReport(rep);
-    } catch {
-      setQaReport(null);
+      setQaError('');
+    } catch (error: any) {
+      if (activeProject.current === projectId) { setQaReport(null); setQaError(error.message || 'Không tải được kết quả kiểm định. Hãy bấm Quét lại.'); }
     } finally {
-      setLoadingQa(false);
+      if (activeProject.current === projectId) setLoadingQa(false);
     }
   };
 
   useEffect(() => {
+    setQaReport(null);
+    setQaError('');
     void fetchQaReport();
   }, [script.id]);
 
   const handleOpenQueue = async () => {
+    const request = ++queueRequest.current;
     setShowQueueModal(true);
     setLoadingQueue(true);
     try {
       const items = await reviewService.getReviewQueue();
+      if (request !== queueRequest.current) return;
       setQueueItems(items);
+      setQueueError('');
     } catch (err: any) {
-      showToast(err.message || 'Lỗi khi tải hàng đợi kiểm định.', 'warn');
+      if (request === queueRequest.current) setQueueError(err.message || 'Lỗi khi tải hàng đợi kiểm định.');
     } finally {
-      setLoadingQueue(false);
+      if (request === queueRequest.current) setLoadingQueue(false);
     }
   };
 
   const handleResolveComment = async (commentId: string) => {
+    const projectId = script.id;
     try {
-      await reviewService.resolveComment(script.id, commentId);
+      const saved = await reviewService.resolveComment(script.id, commentId);
+      if (activeProject.current !== projectId) return;
       showToast('Đã đánh dấu đã giải quyết góp ý.', 'success');
       setLocalComments((prev) =>
-        prev.map((c) => (c.id === commentId ? { ...c, status: 'RESOLVED', resolvedByName: 'Reviewer', resolvedAt: new Date().toISOString() } : c))
+        prev.map((c) => (c.id === commentId ? { ...c, ...saved } : c))
       );
     } catch (err: any) {
       showToast(err.message || 'Lỗi khi giải quyết góp ý.', 'warn');
@@ -467,11 +489,13 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   };
 
   const handleReopenComment = async (commentId: string) => {
+    const projectId = script.id;
     try {
-      await reviewService.reopenComment(commentId);
+      const saved = await reviewService.reopenComment(commentId);
+      if (activeProject.current !== projectId) return;
       showToast('Đã mở lại nhận xét.', 'info');
       setLocalComments((prev) =>
-        prev.map((c) => (c.id === commentId ? { ...c, status: 'OPEN', resolvedByName: undefined, resolvedAt: undefined } : c))
+        prev.map((c) => (c.id === commentId ? { ...c, ...saved } : c))
       );
     } catch (err: any) {
       showToast(err.message || 'Lỗi khi mở lại nhận xét.', 'warn');
@@ -479,8 +503,10 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   };
 
   const handleDeleteComment = async (commentId: string) => {
+    const projectId = script.id;
     try {
       await reviewService.deleteComment(commentId);
+      if (activeProject.current !== projectId) return;
       showToast('Đã xóa nhận xét.', 'info');
       setLocalComments((prev) => prev.filter((c) => c.id !== commentId));
     } catch (err: any) {
@@ -504,6 +530,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   }, [reviewerMode, isVideoReadyForReview, setReviewerMode]);
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const rejectDialog = useDialog(rejectModalOpen, 'Lý do yêu cầu chỉnh sửa', () => setRejectModalOpen(false), decisionPending);
   const [rejectTarget, setRejectTarget] = useState<'SCRIPT' | 'VIDEO' | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
@@ -520,13 +547,13 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
     }
     const noteToSend = rejectReason.trim();
     setReviewNote(noteToSend);
-    setRejectModalOpen(false);
-
+    let saved = false;
     if (rejectTarget === 'SCRIPT') {
-      await decide('CHANGE_REQUESTED', noteToSend);
+      saved = Boolean(await decide('CHANGE_REQUESTED', noteToSend));
     } else if (rejectTarget === 'VIDEO') {
-      await decide('VIDEO_RETURNED', noteToSend);
+      saved = Boolean(await decide('VIDEO_RETURNED', noteToSend));
     }
+    if (saved) setRejectModalOpen(false);
   };
 
   const decide = async (
@@ -539,6 +566,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       return;
     }
     const noteToSubmit = overrideNote !== undefined ? overrideNote : reviewNote;
+    const projectId = script.id;
     decisionPendingRef.current = true;
     setDecisionPending(true);
     try {
@@ -550,29 +578,29 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
         await reviewService.submitReviewDecision(script.id, decision, noteToSubmit);
       }
       const updated = await projectService.getProjectById(script.id);
+      if (activeProject.current !== projectId) return false;
       setScript(updated);
       setActiveSceneId(updated.scenes[0]?.id || '');
       showToast(decision.includes('RETURNED') || decision === 'CHANGE_REQUESTED'
         ? 'Đã lưu yêu cầu chỉnh sửa và chuyển trả thành công.' : 'Đã lưu quyết định phê duyệt.', 'success');
       if (decision === 'VIDEO_APPROVED') {
-        if (!updated.videoUrl && onStartRender) {
-          showToast('Clip đã được phê duyệt! Bắt đầu kết xuất MP4 tự động...', 'info');
-          void onStartRender();
-        } else if (updated.videoUrl) {
+        if (updated.videoUrl) {
           onOpenPublishModal();
         }
       }
+      return true;
     } catch (error: any) {
-      showToast(error.message || 'Không lưu được quyết định. Trạng thái chưa thay đổi.', 'warn');
+      showToast(error.message || 'Chưa xác nhận được quyết định. Hãy tải lại trạng thái trước khi thử lại.', 'warn');
+      return false;
     } finally {
       decisionPendingRef.current = false;
       setDecisionPending(false);
     }
   };
   return (
-    <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <section className="studio-workspace flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Top Bar Reviewer với Bộ Chuyển Chế Độ Duyệt */}
-      <div className="bg-white border-b px-6 py-2.5 flex justify-between items-center text-xs shrink-0 z-10 shadow-2xs">
+      <div className="studio-toolbar bg-white border-b px-6 py-2.5 flex justify-between items-center text-xs shrink-0 z-10 shadow-2xs">
         <div className="flex items-center space-x-3">
           <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-bold border border-amber-200">
             REVIEWER QA WORKSPACE
@@ -680,7 +708,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                   className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer"
                 >
                   <CheckCheck className="w-4 h-4" />
-                  <span>Duyệt Kịch Bản ➔ Chuyển Producer</span>
+                  {decisionPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{decisionPending ? 'Đang lưu quyết định…' : 'Duyệt Kịch Bản ➔ Chuyển Producer'}</span>
                 </button>
               </>
             )
@@ -692,12 +721,16 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Video đã được duyệt</span>
                   </span>
-                  {(bgRenderStatus === 'RENDERING' || isRendering) && (
+                  {(['QUEUED', 'PROCESSING', 'RENDERING'].includes(bgRenderStatus || '') || isRendering) && (
                     <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-xs flex items-center gap-1.5 animate-pulse">
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Đang render MP4 ngầm...</span>
+                      <span>{bgRenderStatus === 'QUEUED' ? 'Đang chờ kết xuất MP4…' : 'Đang render MP4 ngầm…'}</span>
                     </span>
                   )}
+                  {bgRenderError && <div role="alert" className="text-xs text-amber-800 max-w-sm">
+                    <p>{bgRenderError}</p>
+                    <button onClick={retryRenderProgress} className="underline font-semibold">Kiểm tra lại tiến độ</button>
+                  </div>}
                   {script.videoUrl ? (
                     <button
                       onClick={onOpenPublishModal}
@@ -762,7 +795,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
         /* ========================================================================= */
         /* CHẾ ĐỘ 1: THẨM ĐỊNH KỊCH BẢN VĂN BẢN (SCRIPT REVIEW) */
         /* ========================================================================= */
-        <div className="flex-1 min-h-0 flex overflow-hidden">
+        <div className="studio-columns flex-1 min-h-0 flex overflow-hidden">
           {/* Cột 1: Cấu trúc kịch bản */}
           <aside className="w-72 bg-white border-r border-slate-200 p-4 flex flex-col h-full min-h-0 overflow-hidden shrink-0">
             <span className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-3">
@@ -1149,6 +1182,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                   </button>
                 </div>
 
+                {qaError && <p role="alert" className="text-rose-700">{qaError}</p>}
                 {loadingQa ? (
                   <p className="text-slate-500 italic text-[11px]">Đang phân tích kiểm định kịch bản...</p>
                 ) : qaReport ? (
@@ -1230,7 +1264,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-xs"
               >
                 <CheckCheck className="w-4 h-4" />
-                <span>Phê Duyệt Kịch Bản (Chuyển Bước 3)</span>
+                {decisionPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{decisionPending ? 'Đang lưu quyết định…' : 'Phê Duyệt Kịch Bản (Chuyển Bước 3)'}</span>
               </button>
             </div>
           </aside>
@@ -1239,7 +1274,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
         /* ========================================================================= */
         /* CHẾ ĐỘ 2: THẨM ĐỊNH VIDEO THÀNH PHẨM (VIDEO QA) */
         /* ========================================================================= */
-        <div className="flex-1 min-h-0 flex overflow-hidden">
+        <div className="studio-columns flex-1 min-h-0 flex overflow-hidden">
           {/* Cột Trái: Remotion Player trực tiếp để Reviewer thẩm định từng frame hoặc video MP4 */}
           <main className="flex-1 min-h-0 bg-slate-900 p-4 md:p-6 flex flex-col justify-start overflow-y-auto custom-scrollbar">
             <div className="w-full max-w-3xl mx-auto space-y-4 pb-8">
@@ -1367,16 +1402,19 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                 <textarea
                   rows={2}
                   value={newCommentInput}
+                  disabled={isAddingComment}
                   onChange={(e) => setNewCommentInput(e.target.value)}
                   placeholder="Nhập góp ý sư phạm hoặc đồ họa..."
                   className="w-full p-2 border border-purple-300 rounded-lg text-xs bg-white focus:outline-none"
                 />
                 <button
                   type="submit"
+                  disabled={isAddingComment || !newCommentInput.trim()}
+                  aria-busy={isAddingComment}
                   className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-xs flex items-center justify-center space-x-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Ghim Vào Clip</span>
+                  <span>{isAddingComment ? 'Đang gửi nhận xét…' : 'Ghim Vào Clip'}</span>
                 </button>
               </form>
             </div>
@@ -1388,7 +1426,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       {/* Modal Hàng Đợi Kiểm Định (Review Queue) */}
       {showQueueModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div ref={queueDialog} className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <ListOrdered className="w-5 h-5 text-amber-600" />
@@ -1403,12 +1441,13 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
             </div>
 
             <div className="p-6 overflow-y-auto flex-1">
+              {queueError && <div role="alert" className="mb-3 text-rose-700">{queueError} <button onClick={() => void handleOpenQueue()} disabled={loadingQueue} className="underline">Tải lại hàng đợi</button></div>}
               {loadingQueue ? (
                 <div className="py-12 text-center text-slate-500">
                   <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-amber-600" />
                   Đang tải danh sách chờ duyệt...
                 </div>
-              ) : queueItems.length === 0 ? (
+              ) : queueItems.length === 0 && !queueError ? (
                 <div className="py-12 text-center text-slate-500">
                   Không có dự án nào đang chờ kiểm định vào lúc này.
                 </div>
@@ -1474,7 +1513,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       {/* Modal Xác Nhận Từ Chối & Ghi Lý Do Yêu Cầu Chỉnh Sửa */}
       {rejectModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div ref={rejectDialog} className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-amber-50/60">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
@@ -1486,6 +1525,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
               </div>
               <button
                 onClick={() => setRejectModalOpen(false)}
+                disabled={decisionPending}
+                aria-label="Đóng yêu cầu chỉnh sửa"
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -1509,6 +1550,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                 <textarea
                   rows={4}
                   value={rejectReason}
+                  disabled={decisionPending}
                   onChange={(e) => setRejectReason(e.target.value)}
                   placeholder={
                     rejectTarget === 'SCRIPT'

@@ -1,3 +1,5 @@
+import { useDialog } from '../../hooks/useDialog';
+import { useActionGuard } from '../../hooks/useActionGuard';
 import React, { useState } from 'react';
 import { KeyRound, LogOut, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { authService } from '../../services';
@@ -19,11 +21,14 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const actions = useActionGuard();
   const [error, setError] = useState('');
+
+  const dialog = useDialog(isOpen, 'Đổi mật khẩu', undefined, busy);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = actions.wrap(async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -51,11 +56,11 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     } finally {
       setBusy(false);
     }
-  };
+  });
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 text-xs animate-fade-in border border-slate-100">
+      <div ref={dialog} className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 text-xs animate-fade-in border border-slate-100">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200">
             <KeyRound className="w-5 h-5" />
@@ -69,6 +74,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <fieldset disabled={busy} className="contents">
           <label className="block">
             <span className="font-semibold text-slate-700">Mật khẩu hiện tại (được cấp)</span>
             <input
@@ -135,6 +141,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
               <span>{busy ? 'Đang lưu…' : 'Xác nhận đổi mật khẩu'}</span>
             </button>
           </div>
+          </fieldset>
         </form>
       </div>
     </div>

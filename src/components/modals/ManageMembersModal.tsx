@@ -1,4 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useActionGuard } from '../../hooks/useActionGuard';
+import { useDialog } from '../../hooks/useDialog';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Users,
   X,
@@ -59,8 +61,11 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   const [candidates, setCandidates] = useState<CandidateUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
+  const actions = useActionGuard();
+  const dialog = useDialog(isOpen, 'Thành viên không gian làm việc', onClose, actionBusy);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const loadRequest = useRef(0);
 
   // Add Member Form state
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -127,14 +132,17 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
 
   const loadData = useCallback(async (targetWsId: string) => {
     if (!targetWsId) return;
+    const request = ++loadRequest.current;
     setIsLoading(true);
     setError(null);
     try {
       const memberList = await workspaceService.getMembers(targetWsId);
+      if (request !== loadRequest.current) return;
       setMembers(memberList);
 
       if (isCurrentUserAdminOrLeader) {
         const candidateList = await workspaceService.getCandidates(targetWsId);
+        if (request !== loadRequest.current) return;
         setCandidates(candidateList);
         if (candidateList.length > 0) {
           setSelectedUserId((prev) => (candidateList.some((c) => c.id === prev) ? prev : candidateList[0].id));
@@ -143,24 +151,27 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
         }
       }
     } catch (err: any) {
-      setError(err?.message || 'Không thể tải danh sách thành viên.');
+      if (request === loadRequest.current) setError(err?.message || 'Không thể tải danh sách thành viên.');
     } finally {
-      setIsLoading(false);
+      if (request === loadRequest.current) setIsLoading(false);
     }
   }, [isCurrentUserAdminOrLeader]);
 
   useEffect(() => {
     if (isOpen && activeWorkspaceId) {
+      setMembers([]);
+      setCandidates([]);
       void loadData(activeWorkspaceId);
       setError(null);
       setSuccessMsg(null);
     }
+    return () => { loadRequest.current++; };
   }, [isOpen, activeWorkspaceId, loadData]);
 
   if (!isOpen) return null;
 
   const handleSwitchWorkspace = (newWsId: string) => {
-    if (newWsId === activeWorkspaceId) return;
+    if (newWsId === activeWorkspaceId || actionBusy) return;
     setActiveWorkspaceId(newWsId);
     workspaceService.setActiveWorkspaceId(newWsId);
     setError(null);
@@ -169,7 +180,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     onMembersUpdated?.();
   };
 
-  const handleAddMember = async (e: React.FormEvent) => {
+  const handleAddMember = actions.wrap(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUserId || !activeWorkspaceId) return;
     setActionBusy(true);
@@ -191,9 +202,9 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     } finally {
       setActionBusy(false);
     }
-  };
+  });
 
-  const handleUpdateRole = async (member: WorkspaceMemberDto, newRole: string) => {
+  const handleUpdateRole = actions.wrap(async (member: WorkspaceMemberDto, newRole: string) => {
     if (!activeWorkspaceId) return;
     setActionBusy(true);
     setError(null);
@@ -210,9 +221,9 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     } finally {
       setActionBusy(false);
     }
-  };
+  });
 
-  const handleToggleLeader = async (member: WorkspaceMemberDto) => {
+  const handleToggleLeader = actions.wrap(async (member: WorkspaceMemberDto) => {
     if (!activeWorkspaceId) return;
     setActionBusy(true);
     setError(null);
@@ -233,9 +244,9 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     } finally {
       setActionBusy(false);
     }
-  };
+  });
 
-  const handleToggleStatus = async (member: WorkspaceMemberDto) => {
+  const handleToggleStatus = actions.wrap(async (member: WorkspaceMemberDto) => {
     if (!activeWorkspaceId) return;
     setActionBusy(true);
     setError(null);
@@ -253,14 +264,14 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     } finally {
       setActionBusy(false);
     }
-  };
+  });
 
   const currentWsObj = workspaceList.find((w) => w.id === activeWorkspaceId);
   const currentWsDisplayName =
     currentWsObj?.name ||
     (activeWorkspaceId === workspaceId && workspaceName !== 'Chưa có nhóm' ? workspaceName : 'Không gian làm việc');
 
-  const handleRemoveMember = async (member: WorkspaceMemberDto) => {
+  const handleRemoveMember = actions.wrap(async (member: WorkspaceMemberDto) => {
     if (!activeWorkspaceId) return;
     if (!window.confirm(`Bạn có chắc chắn muốn xóa "${member.name}" khỏi nhóm ${currentWsDisplayName}?`)) {
       return;
@@ -278,11 +289,12 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     } finally {
       setActionBusy(false);
     }
-  };
+  });
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 text-xs animate-fade-in max-h-[90vh] flex flex-col">
+      <div ref={dialog} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 text-xs animate-fade-in max-h-[90vh] flex flex-col">
+        {actionBusy && <p role="status">Đang cập nhật thành viên…</p>}
         {/* Header */}
         <div className="flex justify-between items-center pb-3 border-b border-slate-100">
           <div className="flex items-center space-x-2.5 min-w-0">
@@ -298,7 +310,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                   <div className="relative inline-flex items-center">
                     <Building className="w-3.5 h-3.5 text-brand-600 absolute left-2.5 pointer-events-none" />
                     <select
-                      value={activeWorkspaceId}
+                      value={activeWorkspaceId} disabled={actionBusy}
                       onChange={(e) => handleSwitchWorkspace(e.target.value)}
                       className="font-bold text-xs text-brand-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg pl-8 pr-7 py-1 focus:ring-2 focus:ring-brand-500 focus:outline-hidden cursor-pointer transition-colors shadow-2xs appearance-none max-w-xs truncate"
                       title="Chuyển đổi Không gian làm việc để quản lý"
@@ -320,7 +332,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                       className="font-bold text-xs text-brand-800 bg-blue-50 border border-blue-200 rounded-lg pl-8 pr-7 py-1 appearance-none max-w-xs truncate cursor-default"
                       title="Không gian làm việc hiện tại"
                     >
-                      <option value={activeWorkspaceId}>
+                      <option value={activeWorkspaceId} disabled={actionBusy}>
                         {currentWsDisplayName}
                       </option>
                     </select>
@@ -337,7 +349,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={onClose} disabled={actionBusy} aria-label="Đóng danh sách thành viên"
             className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
@@ -552,7 +564,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
         <div className="pt-3 border-t border-slate-100 flex justify-end">
           <button
             type="button"
-            onClick={onClose}
+            onClick={onClose} disabled={actionBusy} aria-label="Đóng danh sách thành viên"
             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors"
           >
             Đóng

@@ -1,3 +1,5 @@
+import { useActionGuard } from '../../hooks/useActionGuard';
+import { useDialog } from '../../hooks/useDialog';
 import React, { useEffect, useRef, useState } from 'react';
 import { Download, X, Youtube, Code } from 'lucide-react';
 import { STEMScript } from '../../types/stem';
@@ -16,15 +18,18 @@ interface PublishModalProps {
 
 /** Download the existing server artifact. Rendering is requested in Producer. */
 export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, script, onNotify, canPublish = false, onPublished }) => {
+  const actions = useActionGuard();
   const [busy, setBusy] = useState(false);
   const [embedCode, setEmbedCode] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
   const activeProject = useRef(script.id);
   activeProject.current = script.id;
   useEffect(() => { setEmbedCode(null); setPublished(false); }, [script.id]);
+  const dialog = useDialog(isOpen, 'Xuất bản video', onClose, busy);
+
   if (!isOpen) return null;
 
-  const publish = async () => {
+  const publish = actions.wrap(async () => {
     if (busy || published) return;
     const projectId = script.id;
     setBusy(true);
@@ -34,15 +39,16 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
         setEmbedCode(result.lmsEmbedCode);
         setPublished(true);
       }
+      if (activeProject.current !== projectId) return;
       onNotify('Đã xuất bản video vào thư viện nội bộ.', 'success');
       try { await onPublished?.(); }
       catch { onNotify('Đã xuất bản; hãy tải lại trang để cập nhật trạng thái.', 'info'); }
     } catch (error: any) {
       onNotify(error.message || 'Không xuất bản được video.', 'warn');
     } finally { setBusy(false); }
-  };
+  });
 
-  const download = async () => {
+  const download = actions.wrap(async () => {
     if (busy) return;
     setBusy(true);
     try {
@@ -63,14 +69,14 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
     } catch (error: any) {
       onNotify(error.message || 'Không tải được video.', 'warn');
     } finally { setBusy(false); }
-  };
+  });
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-xl w-full p-6 space-y-5">
+      <div ref={dialog} className="bg-white rounded-2xl shadow-xl max-w-xl w-full p-6 space-y-5">
         <div className="flex items-center justify-between">
           <h2 className="font-bold text-xl">Video: {script.title}</h2>
-          <button onClick={onClose} aria-label="Đóng"><X size={20} /></button>
+          <button onClick={onClose} disabled={busy} aria-label="Đóng"><X size={20} /></button>
         </div>
         <p className="text-sm text-slate-600">Trạng thái: {script.videoStatus}. File tải xuống là video đã kết xuất trên máy chủ.</p>
         <button disabled={busy || !script.videoUrl} onClick={download}

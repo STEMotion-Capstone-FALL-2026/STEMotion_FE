@@ -1,3 +1,4 @@
+import { useDialog } from '../../hooks/useDialog';
 import React, { useEffect, useRef, useState } from 'react';
 import { Columns2, Loader2, Pause, Play, X } from 'lucide-react';
 import { RenderHistoryEntry, renderService } from '../../services/renderService';
@@ -13,6 +14,7 @@ const describe = (job: RenderHistoryEntry, index: number) =>
  * button and one timeline, so the reviewer sees the same moment in each.
  */
 export const ClipCompareModal: React.FC<{ projectId: string; onClose: () => void }> = ({ projectId, onClose }) => {
+  const dialog = useDialog(true, 'So sánh các bản render', onClose);
   const [renders, setRenders] = useState<RenderHistoryEntry[] | null>(null);
   const [error, setError] = useState('');
   const [left, setLeft] = useState(1);
@@ -24,17 +26,27 @@ export const ClipCompareModal: React.FC<{ projectId: string; onClose: () => void
   const b = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
+    let active = true;
+    setError('');
+    setRenders(null);
     renderService
       .getHistory(projectId)
-      .then((jobs) => setRenders(jobs.filter((j) => j.status === 'COMPLETED' && j.videoUrl)))
-      .catch((err: any) => setError(err?.message || 'Không tải được lịch sử render.'));
+      .then((jobs) => { if (active) setRenders(jobs.filter((j) => j.status === 'COMPLETED' && j.videoUrl)); })
+      .catch((err: any) => { if (active) setError(err?.message || 'Không tải được lịch sử render.'); });
+    return () => { active = false; };
   }, [projectId]);
 
   const both = (fn: (v: HTMLVideoElement) => void) => [a.current, b.current].forEach((v) => v && fn(v));
-  const toggle = () => {
-    if (playing) both((v) => v.pause());
-    else both((v) => void v.play());
-    setPlaying(!playing);
+  const toggle = async () => {
+    if (playing) { both((v) => v.pause()); setPlaying(false); return; }
+    try {
+      await Promise.all([a.current, b.current].filter(Boolean).map(v => v!.play()));
+      setPlaying(true);
+      setError('');
+    } catch {
+      both(v => v.pause()); setPlaying(false);
+      setError('Không phát được video. Kiểm tra kết nối hoặc chọn lại bản render.');
+    }
   };
   const seek = (t: number) => {
     both((v) => (v.currentTime = Math.min(t, v.duration || t)));
@@ -45,7 +57,7 @@ export const ClipCompareModal: React.FC<{ projectId: string; onClose: () => void
 
   return (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-6xl shadow-2xl border border-slate-200 text-xs">
+      <div ref={dialog} className="bg-white rounded-2xl w-full max-w-6xl shadow-2xl border border-slate-200 text-xs">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
             <Columns2 className="w-4 h-4 text-purple-600" /> So sánh hai bản render
@@ -56,7 +68,7 @@ export const ClipCompareModal: React.FC<{ projectId: string; onClose: () => void
         </div>
 
         <div className="p-4 space-y-3">
-          {error && <p className="text-rose-600">{error}</p>}
+          {error && <p role="alert" className="text-rose-600">{error}</p>}
           {!renders && !error && (
             <p className="text-slate-500 flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" /> Đang tải lịch sử render...
@@ -67,7 +79,7 @@ export const ClipCompareModal: React.FC<{ projectId: string; onClose: () => void
           )}
           {enough && (
             <>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
                   { ref: a, value: left, set: setLeft },
                   { ref: b, value: right, set: setRight },
@@ -96,7 +108,8 @@ export const ClipCompareModal: React.FC<{ projectId: string; onClose: () => void
                       muted={k === 1}
                       onLoadedMetadata={(e) => setDuration((d) => Math.max(d, e.currentTarget.duration || 0))}
                       onTimeUpdate={k === 0 ? (e) => setTime(e.currentTarget.currentTime) : undefined}
-                      onEnded={() => setPlaying(false)}
+                      onEnded={() => { both(v => v.pause()); setPlaying(false); }}
+                      onError={() => { both(v => v.pause()); setPlaying(false); setError('Video không tải được. Kiểm tra kết nối hoặc chọn lại bản render.'); }}
                     />
                   </div>
                 ))}

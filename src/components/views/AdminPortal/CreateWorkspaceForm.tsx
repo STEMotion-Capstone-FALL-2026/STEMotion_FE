@@ -1,3 +1,4 @@
+import { useActionGuard } from '../../../hooks/useActionGuard';
 import React, { useEffect, useState } from 'react';
 import { Building2, CheckCircle2, AlertCircle, PlusCircle } from 'lucide-react';
 import { adminService, AdminUserDto } from '../../../services/adminService';
@@ -5,9 +6,10 @@ import { workspaceService, WorkspaceSummary } from '../../../services/workspaceS
 
 interface CreateWorkspaceFormProps {
   onWorkspaceCreated?: (workspace: WorkspaceSummary) => void;
+  onBusyChange?: (busy: boolean) => void;
 }
 
-export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWorkspaceCreated }) => {
+export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWorkspaceCreated, onBusyChange }) => {
   const [name, setName] = useState('');
   const [department, setDepartment] = useState('');
   const [leaderUserId, setLeaderUserId] = useState('');
@@ -16,8 +18,10 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
   const [users, setUsers] = useState<AdminUserDto[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [busy, setBusy] = useState(false);
+  const actions = useActionGuard();
   const [error, setError] = useState('');
   const [createdName, setCreatedName] = useState('');
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +47,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
     };
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = actions.wrap(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !leaderUserId) return;
     setBusy(true);
@@ -66,10 +70,11 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
     } finally {
       setBusy(false);
     }
-  };
+  });
 
   return (
     <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xs text-xs">
+      <fieldset disabled={busy} className="contents">
       <div className="flex items-center space-x-2.5">
         <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
           <Building2 className="w-4 h-4" />
@@ -165,6 +170,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
         <PlusCircle className="w-4 h-4" />
         <span>{busy ? 'Đang tạo…' : 'Tạo không gian làm việc'}</span>
       </button>
+      </fieldset>
     </form>
   );
 };

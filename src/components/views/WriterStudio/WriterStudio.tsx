@@ -1,3 +1,4 @@
+import { useActionGuard } from '../../../hooks/useActionGuard';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   PlusCircle,
@@ -61,6 +62,7 @@ interface WriterStudioProps {
   };
   onAiDecision: (decision: 'ACCEPTED' | 'IGNORED') => Promise<void>;
   handleTriggerAiAction: (action: 'resegment' | 'grade' | 'extract' | 'terms') => void;
+  isAiRunning?: boolean;
   showToast: (message: string, type?: 'success' | 'info' | 'warn') => void;
 }
 
@@ -82,31 +84,60 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   aiAnalysisResult,
   onAiDecision,
   handleTriggerAiAction,
+  isAiRunning = false,
   showToast,
 }) => {
   const [draggedSceneIdx, setDraggedSceneIdx] = useState<number | null>(null);
   const [dragOverSceneIdx, setDragOverSceneIdx] = useState<number | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const mutations = useActionGuard();
+  const activeProject = React.useRef(script.id);
+  activeProject.current = script.id;
   const [rejectionNote, setRejectionNote] = useState<string | null>(script.reviewNote || null);
   const [rejectionVersion, setRejectionVersion] = useState<number | null>(null);
   const currentAudioRef = React.useRef<HTMLAudioElement | null>(null);
+  const speechRequest = React.useRef(0);
+  const speechActive = React.useRef(false);
+  const speechUrl = React.useRef<string | null>(null);
+  const stopSpeech = useCallback(() => {
+    speechRequest.current++;
+    speechActive.current = false;
+    if (currentAudioRef.current) {
+      currentAudioRef.current.onended = null;
+      currentAudioRef.current.onerror = null;
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    if (speechUrl.current) URL.revokeObjectURL(speechUrl.current);
+    speechUrl.current = null;
+    window.speechSynthesis?.cancel();
+  }, []);
+  useEffect(() => {
+    stopSpeech(); setIsSpeaking(false);
+    return stopSpeech;
+  }, [script.id, selectedScene?.id, stopSpeech]);
 
   const [comments, setComments] = useState<FeedbackComment[]>([]);
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyInput, setReplyInput] = useState('');
   const [submittingReply, setSubmittingReply] = useState(false);
+  const [commentsError, setCommentsError] = useState('');
 
   const fetchComments = useCallback(async () => {
     try {
       const cms = await reviewService.getComments(script.id);
+      if (activeProject.current !== script.id) return;
       setComments(cms);
-    } catch {
-      // ignore
+      setCommentsError('');
+    } catch (error: any) {
+      if (activeProject.current === script.id) setCommentsError(error.message || 'Không tải được góp ý của Reviewer.');
     }
   }, [script.id]);
 
   useEffect(() => {
+    setComments([]);
+    setCommentsError('');
     void fetchComments();
   }, [fetchComments]);
 
@@ -118,11 +149,21 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
     return groupedComments.filter((c) => c.sceneId === selectedScene?.id);
   }, [groupedComments, selectedScene?.id]);
 
-  const handleSendReply = async (commentId: string) => {
+  const resolveNote = mutations.wrap(async (id: string) => {
+    const projectId = script.id;
+    try {
+      const saved = await reviewService.resolveComment(projectId, id);
+      if (activeProject.current === projectId) setComments(rows => rows.map(row => row.id === id ? { ...row, ...saved } : row));
+    } catch (error: any) { showToast(error.message || 'Chưa giải quyết được góp ý.', 'warn'); }
+  });
+
+  const handleSendReply = mutations.wrap(async (commentId: string) => {
+    const projectId = script.id;
     if (!replyInput.trim()) return;
     setSubmittingReply(true);
     try {
       const replied = await reviewService.replyComment(commentId, replyInput.trim());
+      if (activeProject.current !== projectId) return;
       setComments((prev) => [...prev, replied]);
       setReplyInput('');
       setReplyingToId(null);
@@ -132,9 +173,11 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
     } finally {
       setSubmittingReply(false);
     }
-  };
+  });
 
   useEffect(() => {
+    setRejectionNote(script.reviewNote || null);
+    setRejectionVersion(null);
     if (script.scriptStatus === 'CHANGE_REQUESTED') {
       if (script.reviewNote) {
         setRejectionNote(script.reviewNote);
@@ -143,6 +186,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
       reviewService
         .getReviewHistory(script.id)
         .then((history) => {
+          if (activeProject.current !== script.id) return;
           if (Array.isArray(history) && history.length > 0) {
             const rejectEntry = history.find((h) => h.action === 'REJECT');
             if (rejectEntry?.note) {
@@ -155,6 +199,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           }
           // Fallback to version history
           return projectService.getVersions(script.id).then((versions) => {
+            if (activeProject.current !== script.id) return;
             if (Array.isArray(versions) && versions.length > 0) {
               const verWithNote =
                 versions.find((v: any) => v.status === 'CHANGE_REQUESTED' && v.reviewNote) ||
@@ -175,13 +220,16 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
     if (!('speechSynthesis' in window)) {
       showToast('Trình duyệt chưa hỗ trợ nghe thử lời thoại này.', 'warn');
       setIsSpeaking(false);
+      speechActive.current = false;
       return;
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'vi-VN';
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+    const request = speechRequest.current;
+    const finish = () => { if (request === speechRequest.current) { speechActive.current = false; setIsSpeaking(false); } };
+    utterance.onend = finish;
+    utterance.onerror = finish;
     setIsSpeaking(true);
     showToast('Nghe thử bằng giọng của trình duyệt; giọng video được tạo khi kết xuất.', 'info');
     window.speechSynthesis.speak(utterance);
@@ -192,35 +240,39 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
       showToast('Chưa có lời thoại để nghe thử.', 'warn');
       return;
     }
-    if (isSpeaking) {
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current = null;
-      }
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
+    if (speechActive.current) {
+      stopSpeech();
       setIsSpeaking(false);
       return;
     }
 
+    speechActive.current = true;
+    const request = ++speechRequest.current;
     setIsSpeaking(true);
     try {
       const audioUrl = await narrationService.getTtsPreview(script.id, text, selectedScene?.id);
+      if (request !== speechRequest.current) { URL.revokeObjectURL(audioUrl); return; }
+      speechUrl.current = audioUrl;
       const audio = new Audio(audioUrl);
       currentAudioRef.current = audio;
       audio.onended = () => {
+        if (request !== speechRequest.current) return;
+        stopSpeech();
         setIsSpeaking(false);
-        currentAudioRef.current = null;
       };
       audio.onerror = () => {
-        setIsSpeaking(false);
+        if (request !== speechRequest.current) return;
+        URL.revokeObjectURL(audioUrl); speechUrl.current = null;
         currentAudioRef.current = null;
         fallbackSpeechSynthesis(text);
       };
       await audio.play();
+      if (request !== speechRequest.current) return;
       showToast('Đang phát giọng đọc TTS trực tiếp từ máy chủ...', 'info');
     } catch {
+      if (request !== speechRequest.current) return;
+      if (speechUrl.current) URL.revokeObjectURL(speechUrl.current);
+      speechUrl.current = null;
       fallbackSpeechSynthesis(text);
     }
   };
@@ -347,20 +399,23 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
       ...s,
       durationInFrames: estSeconds * 30,
     }));
-    showToast(`⚡ Google Vids: Đã tự động khớp thời lượng: ${estSeconds}s (${estSeconds * 30} frames) theo giọng đọc!`, 'success');
+    showToast(`Đã đặt thời lượng ước tính ${estSeconds}s theo số từ. Dùng Khớp Thời Lượng Giọng Đọc để đo bằng TTS.`, 'info');
   };
 
   const [isSyncingDurations, setIsSyncingDurations] = useState(false);
 
-  const handleSyncDurationsWithBackend = async () => {
+  const handleSyncDurationsWithBackend = mutations.wrap(async () => {
     if (isSyncingDurations) return;
+    const projectId = script.id;
     setIsSyncingDurations(true);
     try {
       await sceneSaveQueue.saveNow(script.id, script.scenes);
       const res = await narrationService.syncDurations(script.id);
+      if (activeProject.current !== projectId) return;
       if (res && Array.isArray(res.scenes) && res.scenes.length > 0) {
         const durationMap = new Map(res.scenes.map((s) => [s.id, s.durationInFrames]));
         setScript((prev) => {
+          if (prev.id !== projectId) return prev;
           const updatedScenes = prev.scenes.map((sc) => {
             const frames = durationMap.get(sc.id);
             return frames ? { ...sc, durationInFrames: frames } : sc;
@@ -376,15 +431,14 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
         });
         showToast(`⚡ Đã đồng bộ thời lượng chuẩn theo giọng đọc Whisper (${res.totalDurationSeconds}s)!`, 'success');
       } else {
-        handleBatchAutoFitAllScenes();
+        throw new Error('Máy chủ chưa trả về thời lượng hợp lệ. Thời lượng hiện tại được giữ nguyên.');
       }
     } catch (err: any) {
-      showToast(`Dịch vụ TTS máy chủ (${err?.message || 'lỗi'}). Đang căn chỉnh ước tính...`, 'info');
-      handleBatchAutoFitAllScenes();
+      showToast(err?.message || 'Chưa đồng bộ được giọng đọc. Thời lượng hiện tại được giữ nguyên.', 'warn');
     } finally {
       setIsSyncingDurations(false);
     }
-  };
+  });
 
   // Google Vids: Batch Auto-Fit All Scenes
   const handleBatchAutoFitAllScenes = () => {
@@ -404,7 +458,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
         totalDurationSeconds: totalSec,
       };
     });
-    showToast(`🚀 Google Vids: Đã tự động căn chỉnh thời lượng cho toàn bộ ${script.scenes.length} phân cảnh!`, 'success');
+    showToast(`Đã ước tính thời lượng ${script.scenes.length} phân cảnh theo số từ; chưa đo bằng TTS.`, 'info');
   };
 
   // Real-time pacing calculation
@@ -415,10 +469,15 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   const isPacingTight = wordsCount > 0 && Number(currentSceneSec) < Number(estimatedReadSec) + 0.5;
 
   const suggestedTemplate = getContextualTemplateSuggestion(selectedScene.narration || '', selectedScene.type);
+  const canEdit = ['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)
+    && !['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '');
   return (
-    <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <section aria-busy={isSubmitting} className="studio-workspace flex-1 min-h-0 flex flex-col overflow-hidden">
+      <fieldset disabled={isSubmitting || isSyncingDurations} className="contents">
+      {!canEdit && <p role="status" className="bg-amber-50 p-3 text-sm text-amber-900">Kịch bản đã gửi duyệt hoặc được khóa xuất bản. Bạn vẫn có thể xem nội dung và góp ý; chỉ chỉnh sửa sau khi Reviewer yêu cầu sửa lại.</p>}
+      {commentsError && <div role="alert" className="bg-amber-50 p-3 text-sm"><p>{commentsError}</p><button onClick={() => void fetchComments()} className="underline">Tải lại góp ý</button></div>}
       {/* Top Bar Writer */}
-      <div className="bg-white border-b border-slate-200 px-6 py-2.5 flex justify-between items-center text-xs shrink-0 z-10 shadow-2xs">
+      <div className="studio-toolbar bg-white border-b border-slate-200 px-6 py-2.5 flex justify-between items-center text-xs shrink-0 z-10 shadow-2xs">
         <div className="flex items-center space-x-3">
           <span className="px-2 py-0.5 rounded bg-blue-50 text-brand-700 font-bold border border-blue-200">
             WRITER SCRIPT STUDIO
@@ -450,13 +509,14 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           </button>
           {/* Nút gửi sang Reviewer (Bước 1 -> Bước 2) */}
           <button
-            onClick={async () => {
+            onClick={mutations.wrap(async () => {
               if (isSubmitting) return;
               setIsSubmitting(true);
               try {
                 await sceneSaveQueue.saveNow(script.id, script.scenes);
                 await projectService.submitForReview(script.id);
                 const fresh = await projectService.getProjectById(script.id);
+                if (activeProject.current !== fresh.id) return;
                 setScript(fresh);
                 setActiveSceneId(fresh.scenes[0]?.id || '');
                 showToast('Kịch bản đã được lưu và gửi vào hàng đợi thẩm định.', 'success');
@@ -466,12 +526,12 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               } finally {
                 setIsSubmitting(false);
               }
-            }}
+            })}
             disabled={isSubmitting || !['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)}
             className="px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold shadow-xs flex items-center space-x-1.5"
           >
             <Send className="w-3.5 h-3.5" />
-            <span>Gửi Kịch Bản Cho Reviewer Thẩm Định (Bước 1 ➔ 2)</span>
+            <span>{isSubmitting ? 'Đang lưu và gửi duyệt…' : 'Gửi Kịch Bản Cho Reviewer Thẩm Định (Bước 1 ➔ 2)'}</span>
           </button>
         </div>
       </div>
@@ -504,7 +564,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
         </div>
       )}
 
-      <div className="flex-1 min-h-0 flex overflow-hidden">
+      <div className="studio-columns flex-1 min-h-0 flex overflow-hidden">
         {/* Cột 1: Cấu trúc phân cảnh (Cho phép Thêm / Xóa / Đổi thứ tự) */}
         <aside className="w-72 bg-white border-r border-slate-200 p-4 flex flex-col h-full min-h-0 overflow-hidden shrink-0">
           <div className="flex items-center justify-between mb-2 text-xs">
@@ -519,7 +579,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           {/* Google Vids: Batch Auto-Fit All Scenes with Backend Sync */}
           <button
             onClick={handleSyncDurationsWithBackend}
-            disabled={isSyncingDurations}
+            disabled={isSyncingDurations || !canEdit}
             className="w-full mb-3 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold border border-indigo-200 flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
             title="Đồng bộ thời lượng tất cả phân cảnh theo giọng đọc TTS chuẩn Whisper (POST /scripts/{id}/sync-durations)"
           >
@@ -537,7 +597,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               return (
                 <div
                   key={sc.id}
-                  draggable={true}
+                  draggable={canEdit}
                   onDragStart={(e) => {
                     setDraggedSceneIdx(i);
                     e.dataTransfer.effectAllowed = 'move';
@@ -553,7 +613,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                   }}
                   onDrop={(e) => {
                     e.preventDefault();
-                    if (draggedSceneIdx !== null && draggedSceneIdx !== i) {
+                    if (canEdit && draggedSceneIdx !== null && draggedSceneIdx !== i) {
                       handleReorderScenes(draggedSceneIdx, i);
                     }
                     setDraggedSceneIdx(null);
@@ -590,7 +650,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
+                    <fieldset disabled={!canEdit} className="flex items-center gap-1">
                       {i > 0 && (
                         <button
                           onClick={(e) => {
@@ -625,7 +685,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
-                    </div>
+                    </fieldset>
                   </div>
                   <p className="text-xs font-bold text-slate-800 line-clamp-1">{sc.title}</p>
                   <span className="text-[10px] font-mono text-brand-600 block">{sc.type}</span>
@@ -635,7 +695,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           </div>
 
           {/* Nút Thêm Cảnh Mới Nhanh */}
-          <div className="pt-3 border-t border-slate-100 space-y-1.5">
+          <fieldset disabled={!canEdit} className="pt-3 border-t border-slate-100 space-y-1.5">
             <button
               onClick={onOpenTemplateCatalog}
               className="w-full py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-lg border border-brand-200 flex items-center justify-center gap-1.5 shadow-2xs text-[11px]"
@@ -680,7 +740,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                 + Chu trình
               </button>
             </div>
-          </div>
+          </fieldset>
         </aside>
 
         {/* Cột 2: KHÔNG GIAN SOẠN THẢO KỊCH BẢN CHI TIẾT */}
@@ -722,6 +782,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                         </div>
                       )}
 
+                      {cm.status !== 'RESOLVED' && <button type="button" disabled={mutations.pending} className="text-emerald-700 underline" onClick={() => void resolveNote(cm.id)}>Đánh dấu đã sửa</button>}
                       {/* Reply button */}
                       <div className="pt-1 flex items-center justify-end">
                         <button
@@ -780,6 +841,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
             )}
 
             {/* 1. Tiêu Đề Cảnh (Cho Phép Writer Sửa Trực Tiếp) */}
+            <fieldset disabled={!canEdit} className="contents">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
                 <span>Tiêu Đề Phân Cảnh (Scene Title):</span>
@@ -841,12 +903,12 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                       narration: newText,
                       durationInFrames: estSeconds * 30,
                     }));
-                    showToast('AI: Đã mở rộng thêm lời dẫn dắt sư phạm & khớp thời lượng!');
+                    showToast('Đã thêm câu dẫn mẫu vào bản nháp; hãy kiểm tra nội dung trước khi gửi duyệt.', 'info');
                   }}
                   className="text-[11px] px-2.5 py-1 rounded-lg bg-blue-50 text-brand-700 hover:bg-blue-100 font-semibold border border-blue-200 flex items-center gap-1"
                 >
                   <Sparkles className="w-3 h-3 text-brand-600" />
-                  <span>AI Mở Rộng Lời Thoại</span>
+                  <span>Thêm Câu Dẫn Mẫu</span>
                 </button>
                 <button
                   onClick={() => {
@@ -858,11 +920,11 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                       narration: newText,
                       durationInFrames: estSeconds * 30,
                     }));
-                    showToast('AI: Đã tối ưu câu văn súc tích & khớp thời lượng!');
+                    showToast('Đã bỏ cụm từ thừa theo quy tắc; hãy kiểm tra lại câu văn.', 'info');
                   }}
                   className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold border border-emerald-200 flex items-center gap-1"
                 >
-                  <span>Tối Ưu Sư Phạm</span>
+                  <span>Bỏ Cụm Từ Thừa</span>
                 </button>
                 <button
                   type="button"
@@ -886,12 +948,12 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                       ...s,
                       durationInFrames: estSeconds * 30,
                     }));
-                    showToast(`⚡ Đã khớp thời lượng phân cảnh: ${estSeconds}s!`);
+                    showToast(`Đã đặt thời lượng ước tính ${estSeconds}s theo số từ; chưa đo bằng TTS.`, 'info');
                   }}
                   className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold border border-amber-200 flex items-center gap-1"
                   title="Tự động tính toán lại thời lượng phân cảnh theo độ dài lời thoại"
                 >
-                  <span>⚡ Khớp Thời Lượng</span>
+                  <span>Ước Tính Thời Lượng</span>
                 </button>
               </div>
 
@@ -913,7 +975,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                     )}
                     <div className="text-[11px] leading-tight">
                       <span className="font-bold">
-                        {isPacingTight ? 'Cảnh quá ngắn so với lời thoại!' : 'Thời lượng vừa vặn chuẩn giọng đọc AI'}
+                        {isPacingTight ? 'Cảnh có thể quá ngắn so với lời thoại' : 'Thời lượng phù hợp với ước tính theo số từ'}
                       </span>
                       <span className="block text-slate-500 text-[10px] mt-0.5">
                         Ước tính đọc: ~{estimatedReadSec}s | Thời lượng cảnh: {currentSceneSec}s ({selectedScene.durationInFrames || 150} frames)
@@ -1359,8 +1421,8 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                 <ul className="text-xs text-blue-800 space-y-1 pl-4 list-disc">
                   {aiAnalysisResult.requestId && !aiAnalysisResult.decision && (
                     <div className="flex gap-2 mb-3">
-                      <button onClick={() => void onAiDecision('ACCEPTED')} className="px-3 py-1 rounded bg-blue-600 text-white">Chấp nhận gợi ý</button>
-                      <button onClick={() => void onAiDecision('IGNORED')} className="px-3 py-1 rounded border">Bỏ qua gợi ý</button>
+                      <button disabled={mutations.pending} onClick={mutations.wrap(() => onAiDecision('ACCEPTED'))} className="px-3 py-1 rounded bg-blue-600 text-white">{mutations.pending ? 'Đang lưu…' : 'Chấp nhận gợi ý'}</button>
+                      <button disabled={mutations.pending} onClick={mutations.wrap(() => onAiDecision('IGNORED'))} className="px-3 py-1 rounded border">Bỏ qua gợi ý</button>
                     </div>
                   )}
                   {aiAnalysisResult.decision && <p>Đã lưu: {aiAnalysisResult.decision === 'ACCEPTED' ? 'Chấp nhận' : 'Bỏ qua'}. Kịch bản chưa tự thay đổi.</p>}
@@ -1370,6 +1432,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                 </ul>
               </div>
             )}
+            </fieldset>
           </div>
         </main>
 
@@ -1386,8 +1449,10 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2" aria-busy={isAiRunning}>
+              {isAiRunning && <p role="status" className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Đang phân tích AI…</p>}
               <button
+                disabled={isAiRunning}
                 onClick={() => handleTriggerAiAction('resegment')}
                 className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 text-left transition-all"
               >
@@ -1399,6 +1464,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               </button>
 
               <button
+                disabled={isAiRunning}
                 onClick={() => handleTriggerAiAction('grade')}
                 className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-brand-400 hover:bg-blue-50/50 text-left transition-all"
               >
@@ -1410,6 +1476,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               </button>
 
               <button
+                disabled={isAiRunning}
                 onClick={() => handleTriggerAiAction('extract')}
                 className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-left transition-all"
               >
@@ -1421,6 +1488,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               </button>
 
               <button
+                disabled={isAiRunning}
                 onClick={() => handleTriggerAiAction('terms')}
                 className="w-full p-2.5 rounded-lg border border-slate-200 hover:border-amber-400 hover:bg-amber-50/50 text-left transition-all"
               >
@@ -1434,6 +1502,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           </div>
         </aside>
       </div>
+      </fieldset>
     </section>
   );
 };

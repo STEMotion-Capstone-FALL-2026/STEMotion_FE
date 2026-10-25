@@ -278,7 +278,7 @@ export const RemotionPlayerWrapper: React.FC<RemotionPlayerWrapperProps> = ({
         </div>
 
         {/* Switch Full Video vs Single Scene Mode & Canva Mode */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
           {/* Nút Bật/Tắt chế độ tương tác Canva WYSIWYG */}
           {updateSceneProperty && (
             <button

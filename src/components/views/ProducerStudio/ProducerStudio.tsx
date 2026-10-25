@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useActionGuard } from '../../../hooks/useActionGuard';
+import { useDialog } from '../../../hooks/useDialog';
 import {
   PlusCircle,
   Image,
@@ -62,6 +64,7 @@ interface ProducerStudioProps {
   isRendering: boolean;
   renderProgress: number;
   renderStageText: string;
+  renderError?: string;
   renderPercentageText: string;
   startRender: () => void;
   onOpenPublishModal?: () => void;
@@ -69,6 +72,7 @@ interface ProducerStudioProps {
   onUpdateTheme?: (theme: VisualTheme) => void;
   onSyncDurations?: () => Promise<void>;
   isSyncingDurations?: boolean;
+  isSubmittingForReview?: boolean;
   showToast?: (message: string, type?: 'success' | 'info' | 'warn') => void;
 }
 
@@ -91,6 +95,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   isRendering,
   renderProgress,
   renderStageText,
+  renderError,
   renderPercentageText,
   startRender,
   onOpenPublishModal,
@@ -98,19 +103,23 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   onUpdateTheme,
   onSyncDurations,
   isSyncingDurations = false,
+  isSubmittingForReview = false,
   showToast,
 }) => {
   // Driven by the clip's state, not by whether an old video URL exists: a clip
   // sent back to production keeps its old URL but must be rendered again.
+  const retryActions = useActionGuard();
   const status = script.videoStatus;
   const isLocked = Boolean(
-    isSyncingDurations ||
+    isSyncingDurations || isSubmittingForReview ||
     (production && !production.editable) ||
     status === 'IN_QA' ||
     status === 'APPROVED' ||
     status === 'PUBLISHED'
   );
-  const lockReason = isSyncingDurations
+  const lockReason = isSubmittingForReview
+    ? 'Đang lưu và gửi bản dựng. Vui lòng chờ trước khi chỉnh sửa.'
+    : isSyncingDurations
     ? 'Đang đồng bộ thời lượng. Vui lòng chờ trước khi chỉnh sửa hoặc gửi duyệt.'
     : production?.lockedReason || (
     status === 'IN_QA'
@@ -128,8 +137,12 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
 
   const [activeLegoPieceId, setActiveLegoPieceId] = useState<string | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const historyDialog = useDialog(showHistoryModal, 'Lịch sử kết xuất video', () => setShowHistoryModal(false));
   const [historyJobs, setHistoryJobs] = useState<RenderHistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const activeProject = React.useRef(script.id);
+  activeProject.current = script.id;
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [historyRejectNote, setHistoryRejectNote] = useState<string | null>(null);
 
@@ -178,36 +191,43 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   }, [activeSceneId, selectedScene.type]);
 
   const handleOpenHistory = async () => {
+    const projectId = script.id;
     setShowHistoryModal(true);
     setLoadingHistory(true);
+    setHistoryError('');
     try {
       const jobs = await renderService.getHistory(script.id);
+      if (activeProject.current !== projectId) return;
       setHistoryJobs(jobs);
     } catch (err: any) {
-      showToast?.(err.message || 'Lỗi khi tải lịch sử render.', 'warn');
+      if (activeProject.current === projectId) setHistoryError(err.message || 'Lỗi khi tải lịch sử render.');
     } finally {
       setLoadingHistory(false);
     }
   };
 
-  const handleRetryJob = async (jobId: string) => {
+  const handleRetryJob = retryActions.wrap(async (jobId: string) => {
+    const projectId = script.id;
     setRetryingJobId(jobId);
     try {
       await renderService.retryRender(jobId);
+      if (activeProject.current !== projectId) return;
       showToast?.('Đã gửi lệnh thử render lại thành công! Máy chủ đang xử lý.', 'success');
-      const jobs = await renderService.getHistory(script.id);
-      setHistoryJobs(jobs);
+      try {
+        const jobs = await renderService.getHistory(projectId);
+        if (activeProject.current === projectId) setHistoryJobs(jobs);
+      } catch { setHistoryError('Đã gửi lệnh thử lại nhưng chưa tải được tiến độ. Hãy tải lại lịch sử.'); }
     } catch (err: any) {
       showToast?.(err.message || 'Không thể thử lại job render.', 'warn');
     } finally {
       setRetryingJobId(null);
     }
-  };
+  });
 
   return (
-    <section className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <section className="studio-workspace flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Top Bar Studio */}
-      <div className="bg-white border-b px-6 py-2.5 flex justify-between items-center text-xs shrink-0 z-10 shadow-2xs">
+      <div className="studio-toolbar bg-white border-b px-6 py-2.5 flex justify-between items-center text-xs shrink-0 z-10 shadow-2xs">
         <div className="flex items-center space-x-3">
           <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
             PRODUCER WORKSPACE
@@ -307,6 +327,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
           {onSubmitForReview && (
             <button
               onClick={onSubmitForReview}
+              aria-busy={isSubmittingForReview}
               disabled={isLocked || isRendering}
               className={`px-4 py-1.5 rounded-lg shadow-xs flex items-center space-x-1.5 transition-colors font-bold ${
                 status === 'IN_QA'
@@ -323,7 +344,9 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
                   : 'Gửi clip sang cho Reviewer thẩm định chất lượng trên Web Player (không cần chờ render MP4)'
               }
             >
-              {status === 'IN_QA' ? (
+              {isSubmittingForReview ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Đang lưu và gửi duyệt…</span></>
+              ) : status === 'IN_QA' ? (
                 <>
                   <Clock className="w-3.5 h-3.5 text-amber-700" />
                   <span>Đang Chờ Reviewer Duyệt Clip</span>
@@ -351,7 +374,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
           </button>
           <button
             onClick={action.run}
-            disabled={action.disabled || isSyncingDurations}
+            disabled={action.disabled || isSyncingDurations || isSubmittingForReview}
             className={`px-3.5 py-1.5 font-bold rounded-lg border flex items-center space-x-1.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer ${
               status === 'APPROVED' || status === 'PUBLISHED'
                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs border-emerald-500'
@@ -402,8 +425,9 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
         </div>
       )}
 
+      {renderError && <div role="alert" className="bg-rose-50 border-b border-rose-200 p-3 text-sm text-rose-900"><p>{renderError}</p><p>Job có thể vẫn chạy trên máy chủ nếu mất kết nối. Kiểm tra lịch sử trước khi gửi yêu cầu kết xuất mới.</p><button className="underline font-semibold" onClick={() => void handleOpenHistory()}>Kiểm tra lịch sử render</button></div>}
       {/* 3 CỘT ĐỘNG: Cột Trái (Scenes list) - Cột Giữa (Remotion Player Live) - Cột Phải (Live Props Inspector) */}
-      <div className="flex-1 min-h-0 flex overflow-hidden">
+      <div className="studio-columns flex-1 min-h-0 flex overflow-hidden">
         {/* Cột 1: Danh sách cảnh */}
         <SceneListColumn
           scenes={script.scenes}
@@ -468,7 +492,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
       {/* Modal Lịch Sử Render & Retry Job */}
       {showHistoryModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div ref={historyDialog} className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <History className="w-5 h-5 text-indigo-600" />
@@ -483,12 +507,13 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
             </div>
 
             <div className="p-6 overflow-y-auto flex-1 text-xs">
+              {historyError && <div role="alert" className="mb-3 rounded-lg bg-rose-50 p-3 text-rose-800">{historyError} <button disabled={loadingHistory} onClick={() => void handleOpenHistory()} className="font-bold underline">Tải lại lịch sử</button></div>}
               {loadingHistory ? (
                 <div className="py-12 text-center text-slate-500">
                   <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
                   Đang tải danh sách các tiến trình render...
                 </div>
-              ) : historyJobs.length === 0 ? (
+              ) : historyJobs.length === 0 && !historyError ? (
                 <div className="py-12 text-center text-slate-500">
                   Chưa có lần kết xuất nào cho dự án này.
                 </div>

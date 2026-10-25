@@ -1,6 +1,8 @@
+import { useDialog } from '../../hooks/useDialog';
 import React, { useState } from 'react';
 import { CheckCircle2, Loader2, PenLine, Sparkles } from 'lucide-react';
 import type { SceneData } from '../../types/stem';
+import { useActionGuard } from '../../hooks/useActionGuard';
 import { getTemplateLabel } from '../../constants/templatesCatalog';
 
 export interface PendingDraft {
@@ -22,20 +24,26 @@ export const DraftReviewModal: React.FC<{
   onIgnore: () => Promise<void>;
 }> = ({ draft, onAccept, onIgnore }) => {
   const [busy, setBusy] = useState<'accept' | 'ignore' | null>(null);
+  const actions = useActionGuard();
+  const [error, setError] = useState('');
+  const dialog = useDialog(true, 'Bản nháp AI gợi ý', undefined, busy !== null);
   const seconds = Math.round(draft.scenes.reduce((sum, s) => sum + (s.durationInFrames || 0), 0) / 30);
 
-  const run = async (which: 'accept' | 'ignore') => {
+  const run = actions.wrap(async (which: 'accept' | 'ignore') => {
     setBusy(which);
+    setError('');
     try {
       await (which === 'accept' ? onAccept() : onIgnore());
+    } catch (err: any) {
+      setError(err?.message || 'Chưa tạo được dự án. Bản nháp vẫn được giữ để thử lại.');
     } finally {
       setBusy(null);
     }
-  };
+  });
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 text-xs">
+      <div ref={dialog} className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 text-xs">
         <div className="p-5 border-b border-slate-100">
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
             <Sparkles className="w-4 h-4 text-indigo-600" />
@@ -65,6 +73,7 @@ export const DraftReviewModal: React.FC<{
         </ol>
 
         <div className="p-4 border-t border-slate-100 flex justify-end gap-2">
+          {error && <p role="alert" className="text-rose-700">{error}</p>}
           <button
             type="button"
             disabled={busy !== null}
