@@ -793,3 +793,33 @@ BE đã giảm số query cho mỗi màn hình (xem `STEMotion_BE/docs/DB_PERFOR
 - [ ] `apiClient`: thêm hàm đọc header `X-Total-Count`, `X-Total-Pages`, `X-Page`, `X-Size` cùng body mảng.
 - [ ] Từng màn ở bảng trên: truyền `page/size`, thêm điều khiển chuyển trang (hoặc "tải thêm"), đọc tổng từ header.
 
+### 9.7. Workspace đủ 3 role, quyền Leader, chống ghi đè bản nháp (BE, 26/10/2026)
+
+Theo biên bản mentor 26/10 (`master_update_plan.md`: M11, M15, D10, M17-revision). Chi tiết ở BE `docs/DESIGN_MEMBERSHIP_APPROVAL_2026-10-26.md` phần A. Phần B của tài liệu đó là thiết kế đề xuất project/tham gia/lease/contribution, chờ team chốt D08–D18.
+
+> ⚠️ Hai thay đổi đầu **đổi hành vi API đang dùng**. Khi BE lên, form tạo tổ hiện tại sẽ nhận 400 và Leader bấm thêm/xóa thành viên sẽ nhận 403, cho đến khi FE sửa. Nên deploy FE cùng đợt.
+
+**1. Tạo workspace (`POST /workspaces`, Admin)** — thêm `members: [{ userId, role, isLeader? }]`. Leader cộng `members` phải có ≥ 3 người khác nhau, đủ WRITER, REVIEWER, PRODUCER. 400 khi: thiếu người hoặc role (message nêu role thiếu), trùng user (kể cả trùng leader), user không ACTIVE, role `ADMIN`.
+
+- [ ] `CreateWorkspaceForm`: thêm danh sách chọn người + role; chỉ bật nút Tạo khi đủ 3 người/3 role; hiện message 400 của BE.
+- [ ] `workspaceService.createWorkspace`: gửi `members`.
+
+**2. Quyền Leader (M15)**
+
+| Thao tác | Admin | Leader |
+|---|---|---|
+| Thêm thành viên (`POST …/members`), danh sách ứng viên (`GET …/candidates`) | ✅ | 403 |
+| Xóa thành viên (`DELETE …/members/{id}`) | ✅ | 403 |
+| Đổi role (`PATCH …/members/{id}` với `role`) | ✅ | ✅ |
+| Đổi `status` hoặc `isLeader` | ✅ | 403 (gửi lại giá trị không đổi thì không sao) |
+
+Đổi role, vô hiệu hóa hoặc xóa mà làm một role đang có người ACTIVE không còn ai → 400 `…without an active [REVIEWER]…`.
+
+- [ ] `ManageMembersModal`: Leader (không phải Admin) chỉ thấy dropdown đổi role; ẩn Thêm, Xóa, Kích hoạt/Vô hiệu hóa, Bổ nhiệm Leader. Admin giữ nguyên.
+- [ ] Hiện message 400/403 từ BE thay vì lỗi chung.
+
+**3. Chống ghi đè bản nháp kịch bản** — `GET/PUT /scripts/{id}` trả thêm `draftRevision`. `PUT` nhận `baseRevision` (tùy chọn). Khác revision hiện tại → **409**, bản nháp trên BE giữ nguyên. Không gửi thì vẫn lưu như cũ, nên không vội, nhưng không gửi thì không được bảo vệ.
+
+- [ ] `projectService.update` và `sceneSaveQueue`: gửi `baseRevision: script.draftRevision`, lấy `draftRevision` mới từ response cho lần lưu sau.
+- [ ] Gặp 409: giữ bản local, báo "Bản nháp vừa được lưu ở tab/người khác", cho tải lại, giống cách đang xử lý 409 của composition.
+- [ ] Sau `sync-durations` trên bản nháp (`target: "SCRIPT"`), dùng `revision` trong response làm `draftRevision` mới, vì sync cũng tăng revision.
