@@ -52,8 +52,12 @@ export const projectService = {
     });
   },
 
-  async updateProject(id: string, updates: Partial<STEMScript>): Promise<STEMScript> {
+  async updateProject(id: string, updates: Partial<STEMScript> & { baseRevision?: number }): Promise<STEMScript> {
     return apiClient.put<STEMScript>(`/scripts/${id}`, updates);
+  },
+
+  async update(id: string, updates: Partial<STEMScript> & { baseRevision?: number }): Promise<STEMScript> {
+    return this.updateProject(id, updates);
   },
 
   async deleteProject(id: string): Promise<boolean> {

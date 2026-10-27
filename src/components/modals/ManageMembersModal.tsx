@@ -31,6 +31,7 @@ interface ManageMembersModalProps {
   onClose: () => void;
   workspaceId: string;
   workspaceName: string;
+  isAdmin?: boolean;
   isCurrentUserAdminOrLeader: boolean;
   onMembersUpdated?: () => void;
   workspaces?: WorkspaceItemSummary[];
@@ -50,6 +51,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   onClose,
   workspaceId,
   workspaceName,
+  isAdmin = false,
   isCurrentUserAdminOrLeader,
   onMembersUpdated,
   workspaces,
@@ -67,7 +69,10 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const loadRequest = useRef(0);
 
-  // Add Member Form state
+  const canAdmin = Boolean(isAdmin);
+  const canManageRoles = Boolean(isCurrentUserAdminOrLeader);
+
+  // Add Member Form state (Admin only)
   const [selectedUserId, setSelectedUserId] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'WRITER' | 'REVIEWER' | 'PRODUCER'>('WRITER');
   const [newMemberIsLeader, setNewMemberIsLeader] = useState(false);
@@ -83,7 +88,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
 
           let list: WorkspaceItemSummary[] = [];
           try {
-            const rawList = isCurrentUserAdminOrLeader
+            const rawList = canManageRoles
               ? await workspaceService.getAllWorkspaces()
               : await workspaceService.getMyWorkspaces(true);
             list = (rawList || []).map((w) => ({ id: w.id, name: w.name, department: w.department }));
@@ -116,7 +121,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
         }
       })();
     }
-  }, [isOpen, isCurrentUserAdminOrLeader, workspaceId, workspaces]);
+  }, [isOpen, canManageRoles, workspaceId, workspaces]);
 
   useEffect(() => {
     if (workspaceId) {
@@ -140,7 +145,8 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
       if (request !== loadRequest.current) return;
       setMembers(memberList);
 
-      if (isCurrentUserAdminOrLeader) {
+      // Only an administrator can list candidates (BE returns 403 for Leaders)
+      if (canAdmin) {
         const candidateList = await workspaceService.getCandidates(targetWsId);
         if (request !== loadRequest.current) return;
         setCandidates(candidateList);
@@ -155,7 +161,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     } finally {
       if (request === loadRequest.current) setIsLoading(false);
     }
-  }, [isCurrentUserAdminOrLeader]);
+  }, [canAdmin]);
 
   useEffect(() => {
     if (isOpen && activeWorkspaceId) {
@@ -182,7 +188,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
 
   const handleAddMember = actions.wrap(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUserId || !activeWorkspaceId) return;
+    if (!selectedUserId || !activeWorkspaceId || !canAdmin) return;
     setActionBusy(true);
     setError(null);
     setSuccessMsg(null);
@@ -224,7 +230,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   });
 
   const handleToggleLeader = actions.wrap(async (member: WorkspaceMemberDto) => {
-    if (!activeWorkspaceId) return;
+    if (!activeWorkspaceId || !canAdmin) return;
     setActionBusy(true);
     setError(null);
     setSuccessMsg(null);
@@ -247,7 +253,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
   });
 
   const handleToggleStatus = actions.wrap(async (member: WorkspaceMemberDto) => {
-    if (!activeWorkspaceId) return;
+    if (!activeWorkspaceId || !canAdmin) return;
     setActionBusy(true);
     setError(null);
     setSuccessMsg(null);
@@ -272,7 +278,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
     (activeWorkspaceId === workspaceId && workspaceName !== 'Chưa có nhóm' ? workspaceName : 'Không gian làm việc');
 
   const handleRemoveMember = actions.wrap(async (member: WorkspaceMemberDto) => {
-    if (!activeWorkspaceId) return;
+    if (!activeWorkspaceId || !canAdmin) return;
     if (!window.confirm(`Bạn có chắc chắn muốn xóa "${member.name}" khỏi nhóm ${currentWsDisplayName}?`)) {
       return;
     }
@@ -304,7 +310,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
             <div className="min-w-0">
               <div className="flex items-center flex-wrap gap-2">
                 <h3 className="font-extrabold text-sm text-slate-900 shrink-0">
-                  {isCurrentUserAdminOrLeader ? 'Quản Lý Thành Viên:' : 'Thành Viên Nhóm:'}
+                  {canAdmin ? 'Quản Lý Thành Viên (Admin):' : canManageRoles ? 'Phân Công Vai Trò (Leader):' : 'Thành Viên Nhóm:'}
                 </h3>
                 {workspaceList.length > 0 ? (
                   <div className="relative inline-flex items-center">
@@ -341,8 +347,10 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                 )}
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                {isCurrentUserAdminOrLeader
-                  ? 'Chuyển đổi không gian làm việc để quản lý thành viên, phân công vai trò và chỉ định Trưởng nhóm.'
+                {canAdmin
+                  ? 'Quản lý thành viên, bổ nhiệm Trưởng nhóm, phân công vai trò và trạng thái hoạt động.'
+                  : canManageRoles
+                  ? 'Trưởng nhóm có quyền phân công vai trò (Writer, Reviewer, Producer) cho các thành viên trong tổ.'
                   : 'Danh sách các thành viên cùng tham gia trong không gian làm việc này.'}
               </p>
             </div>
@@ -370,8 +378,8 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
           </div>
         )}
 
-        {/* Add Member Form (Admin / Leader only) */}
-        {isCurrentUserAdminOrLeader && (
+        {/* Add Member Form (Admin only per M15) */}
+        {canAdmin && (
           <form
             onSubmit={handleAddMember}
             className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 shrink-0"
@@ -494,60 +502,67 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
 
                 {/* Member Controls */}
                 <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
-                  {isCurrentUserAdminOrLeader ? (
+                  {canManageRoles ? (
                     <>
-                      {/* Role selector */}
+                      {/* Role selector - both Leader and Admin can change role */}
                       <select
+                        aria-label={`Vai trò của ${m.name}`}
                         value={m.role.toUpperCase()}
                         disabled={actionBusy}
                         onChange={(e) => handleUpdateRole(m, e.target.value)}
-                        className="border border-slate-200 bg-white rounded-lg px-2 py-1 text-[11px] font-medium"
+                        className="border border-slate-200 bg-white rounded-lg px-2 py-1 text-[11px] font-medium cursor-pointer"
                       >
                         <option value="WRITER">Writer</option>
                         <option value="REVIEWER">Reviewer</option>
                         <option value="PRODUCER">Producer</option>
                       </select>
 
-                      {/* Toggle Leader */}
-                      <button
-                        type="button"
-                        disabled={actionBusy}
-                        onClick={() => handleToggleLeader(m)}
-                        title={m.isLeader ? 'Hạ quyền Trưởng nhóm' : 'Đặt làm Trưởng nhóm'}
-                        className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
-                          m.isLeader
-                            ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
-                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        {m.isLeader ? 'Bỏ Trưởng nhóm' : '+ Làm Trưởng nhóm'}
-                      </button>
+                      {/* Administrator-only controls: Toggle Leader, Toggle Status, Remove Member */}
+                      {canAdmin && (
+                        <>
+                          {/* Toggle Leader */}
+                          <button
+                            type="button"
+                            disabled={actionBusy}
+                            onClick={() => handleToggleLeader(m)}
+                            title={m.isLeader ? 'Hạ quyền Trưởng nhóm' : 'Đặt làm Trưởng nhóm'}
+                            className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
+                              m.isLeader
+                                ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            {m.isLeader ? 'Bỏ Trưởng nhóm' : '+ Làm Trưởng nhóm'}
+                          </button>
 
-                      {/* Toggle Status */}
-                      <button
-                        type="button"
-                        disabled={actionBusy}
-                        onClick={() => handleToggleStatus(m)}
-                        title={m.status === 'ACTIVE' ? 'Vô hiệu hóa' : 'Kích hoạt lại'}
-                        className={`px-2 py-1 rounded-lg border text-[11px] font-medium transition-colors ${
-                          m.status === 'ACTIVE'
-                            ? 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                            : 'border-green-300 bg-green-50 text-green-700 hover:bg-green-100'
-                        }`}
-                      >
-                        {m.status === 'ACTIVE' ? 'Tắt' : 'Bật'}
-                      </button>
+                          {/* Toggle Status */}
+                          <button
+                            type="button"
+                            disabled={actionBusy}
+                            onClick={() => handleToggleStatus(m)}
+                            title={m.status === 'ACTIVE' ? 'Vô hiệu hóa' : 'Kích hoạt lại'}
+                            className={`px-2 py-1 rounded-lg border text-[11px] font-medium transition-colors ${
+                              m.status === 'ACTIVE'
+                                ? 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                : 'border-green-300 bg-green-50 text-green-700 hover:bg-green-100'
+                            }`}
+                          >
+                            {m.status === 'ACTIVE' ? 'Tắt' : 'Bật'}
+                          </button>
 
-                      {/* Remove Member */}
-                      <button
-                        type="button"
-                        disabled={actionBusy}
-                        onClick={() => handleRemoveMember(m)}
-                        title="Xóa thành viên khỏi tổ"
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                          {/* Remove Member */}
+                          <button
+                            type="button"
+                            disabled={actionBusy}
+                            onClick={() => handleRemoveMember(m)}
+                            title="Xóa thành viên khỏi tổ"
+                            aria-label={`Xóa thành viên ${m.name}`}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </>
                   ) : (
                     <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-brand-700 font-medium border border-blue-200">

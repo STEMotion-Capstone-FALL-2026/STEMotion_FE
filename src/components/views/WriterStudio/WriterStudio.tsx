@@ -425,16 +425,24 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           );
           return {
             ...prev,
+            draftRevision: typeof res.revision === 'number' ? res.revision : prev.draftRevision,
             scenes: updatedScenes,
             totalDurationSeconds: totalSec,
           };
         });
+        if (typeof res.revision === 'number') {
+          sceneSaveQueue.setDraftRevision(projectId, res.revision);
+        }
         showToast(`⚡ Đã đồng bộ thời lượng chuẩn theo giọng đọc Whisper (${res.totalDurationSeconds}s)!`, 'success');
       } else {
         throw new Error('Máy chủ chưa trả về thời lượng hợp lệ. Thời lượng hiện tại được giữ nguyên.');
       }
     } catch (err: any) {
-      showToast(err?.message || 'Chưa đồng bộ được giọng đọc. Thời lượng hiện tại được giữ nguyên.', 'warn');
+      if (err?.status === 409) {
+        showToast('Bản nháp vừa được lưu ở nơi khác. Vui lòng tải lại bản mới nhất trước khi đồng bộ.', 'warn');
+      } else {
+        showToast(err?.message || 'Chưa đồng bộ được giọng đọc. Thời lượng hiện tại được giữ nguyên.', 'warn');
+      }
     } finally {
       setIsSyncingDurations(false);
     }

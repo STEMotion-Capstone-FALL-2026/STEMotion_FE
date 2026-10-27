@@ -118,6 +118,48 @@ describe('workspaceService', () => {
     );
   });
 
+  it('createWorkspace sends members when provided', async () => {
+    const createdRaw = {
+      id: 'ws-team',
+      name: 'Tổ Lý',
+      department: 'Vật Lý',
+      membersCount: 3,
+      activeProjects: 0,
+      myRole: 'ADMIN',
+      isLeader: false,
+    };
+    global.fetch = mockJson(201, createdRaw) as typeof fetch;
+
+    const res = await workspaceService.createWorkspace({
+      name: 'Tổ Lý',
+      department: 'Vật Lý',
+      leaderUserId: 'leader-1',
+      leaderRole: 'WRITER',
+      members: [
+        { userId: 'u-reviewer', role: 'REVIEWER' },
+        { userId: 'u-producer', role: 'PRODUCER' },
+      ],
+    });
+
+    expect(res.id).toBe('ws-team');
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/workspaces'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Tổ Lý',
+          department: 'Vật Lý',
+          leaderUserId: 'leader-1',
+          leaderRole: 'WRITER',
+          members: [
+            { userId: 'u-reviewer', role: 'REVIEWER', isLeader: false },
+            { userId: 'u-producer', role: 'PRODUCER', isLeader: false },
+          ],
+        }),
+      })
+    );
+  });
+
   it('getMembers fetches and maps member details including isLeader and status', async () => {
     const rawMembers = [
       {

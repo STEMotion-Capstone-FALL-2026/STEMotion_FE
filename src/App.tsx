@@ -151,6 +151,29 @@ export default function App() {
     }, 3200);
   };
 
+  // Keep sceneSaveQueue draftRevision in sync with the active script
+  useEffect(() => {
+    if (script.id && typeof script.draftRevision === 'number') {
+      sceneSaveQueue.setDraftRevision(script.id, script.draftRevision);
+    }
+  }, [script.id, script.draftRevision]);
+
+  const handleReloadScript = async (scriptId: string) => {
+    try {
+      const reloaded = await projectService.getProjectById(scriptId);
+      setScript(reloaded);
+      setActiveSceneId(reloaded.scenes[0]?.id || '');
+      if (typeof reloaded.draftRevision === 'number') {
+        sceneSaveQueue.setDraftRevision(reloaded.id, reloaded.draftRevision);
+      }
+      setSaveConflict(false);
+      setSaveError('');
+      showToast('Đã tải lại bản nháp mới nhất từ máy chủ.', 'info');
+    } catch (err: any) {
+      showToast('Không thể tải lại bản nháp: ' + (err?.message || 'lỗi máy chủ'), 'warn');
+    }
+  };
+
   // ---- Load the studio from the backend -----------------------------------
   const bootstrapInFlight = React.useRef(false);
   /** Loads only server-owned workspace and script data. */
@@ -158,14 +181,23 @@ export default function App() {
     if (event.scriptId !== script.id) return;
     if (event.error) {
       setWriterSaving(false);
-      setSaveError((event.error as any)?.message || 'Chưa lưu được phân cảnh. Hãy thử lại trước khi gửi duyệt.');
+      const isConflict = (event.error as any)?.status === 409;
+      setSaveConflict(isConflict);
+      setSaveError(isConflict
+        ? 'Bản nháp vừa được lưu ở nơi khác. Nội dung đang chỉnh vẫn được giữ; tải bản mới để đối chiếu trước khi tiếp tục.'
+        : (event.error as any)?.message || 'Chưa lưu được phân cảnh. Hãy thử lại trước khi gửi duyệt.');
       return;
     }
     setWriterSaving(Boolean(event.saving));
-    if (!event.saving) setSaveError('');
+    if (!event.saving) {
+      setSaveError('');
+      setSaveConflict(false);
+    }
     // Reconcile identity only: a slow save must not replace newer local text.
     setScript(prev => prev.id !== event.scriptId ? prev : {
-      ...prev, scenes: prev.scenes.map(scene => ({ ...scene, id: sceneSaveQueue.resolveId(prev.id, scene.id) })),
+      ...prev,
+      draftRevision: typeof event.draftRevision === 'number' ? event.draftRevision : prev.draftRevision,
+      scenes: prev.scenes.map(scene => ({ ...scene, id: sceneSaveQueue.resolveId(prev.id, scene.id) })),
     });
     setActiveSceneId(id => sceneSaveQueue.resolveId(event.scriptId, id));
   }), [script.id]);
@@ -1106,8 +1138,13 @@ export default function App() {
         <span>{saveError || 'Đang lưu thay đổi…'}</span>
         {saveError && !saveConflict && <button disabled={writerSaving || isSavingComposition} onClick={() => void retrySave()} className="underline font-semibold">Thử lưu lại</button>}
         {saveConflict && <button className="underline font-semibold" onClick={() => {
-          if (window.confirm('Tải bản mới sẽ thay thế phần đang chỉnh trên màn hình. Bạn đã sao lưu nội dung cần giữ chưa?')) void loadComposition(script.id);
-        }}>Tải bản dựng mới nhất</button>}
+          if (window.confirm(inProduction
+            ? 'Tải bản mới sẽ thay thế phần đang chỉnh trên màn hình. Bạn đã sao lưu nội dung cần giữ chưa?'
+            : 'Tải bản nháp mới sẽ thay thế các chỉnh sửa chưa lưu trên màn hình. Bạn có chắc chắn muốn tải lại không?')) {
+            if (inProduction) void loadComposition(script.id);
+            else void handleReloadScript(script.id);
+          }
+        }}>{inProduction ? 'Tải bản dựng mới nhất' : 'Tải bản nháp mới nhất'}</button>}
       </div>}
 
       {/* Top Header Navigation */}
@@ -1348,6 +1385,7 @@ export default function App() {
             (w) => w.id === (workspaceService.getCachedWorkspaceId() || workspaces[0]?.id)
           )?.name || (activeGroup.name !== 'Chưa có nhóm' ? activeGroup.name : (workspaces[0]?.name || 'Không gian làm việc'))
         }
+        isAdmin={currentUser.role === 'admin'}
         isCurrentUserAdminOrLeader={currentUser.role === 'admin' || isLeader}
         workspaces={workspaces}
         onSelectWorkspace={(newWsId) => {

@@ -109,13 +109,22 @@ export const workspaceService = {
     department?: string;
     leaderUserId: string;
     leaderRole?: string;
+    members?: Array<{ userId: string; role: string; isLeader?: boolean }>;
   }): Promise<WorkspaceSummary> {
-    const created = await apiClient.post<any>('/workspaces', {
+    const payload: any = {
       name: data.name,
       department: data.department,
       leaderUserId: data.leaderUserId,
       leaderRole: data.leaderRole ? data.leaderRole.toUpperCase() : 'WRITER',
-    });
+    };
+    if (data.members && data.members.length > 0) {
+      payload.members = data.members.map((m) => ({
+        userId: m.userId,
+        role: m.role.toUpperCase(),
+        isLeader: Boolean(m.isLeader),
+      }));
+    }
+    const created = await apiClient.post<any>('/workspaces', payload);
     cachedWorkspaces = null;
     return this._toWorkspaceSummary(created);
   },

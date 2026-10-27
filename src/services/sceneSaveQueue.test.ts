@@ -112,4 +112,47 @@ describe('sceneSaveQueue', () => {
     await sceneSaveQueue.flush('nav-script');
     expect(sceneSaveQueue.isDirty('nav-script')).toBe(false);
   });
+
+  it('sends baseRevision when tracked, updates draftRevision from response, and notifies listeners', async () => {
+    const listener = vi.fn();
+    const unsubscribe = sceneSaveQueue.subscribe(listener);
+    sceneSaveQueue.setDraftRevision('rev-script', 2);
+    put.mockResolvedValue({ id: 'rev-script', scenes: scenes('revised'), draftRevision: 3 });
+
+    await sceneSaveQueue.saveNow('rev-script', scenes('revised'));
+    expect(put).toHaveBeenCalledWith('/scripts/rev-script', {
+      scenes: scenes('revised'),
+      baseRevision: 2,
+    });
+    expect(sceneSaveQueue.getDraftRevision('rev-script')).toBe(3);
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ scriptId: 'rev-script', draftRevision: 3 })
+    );
+
+    // Subsequent save sends the new revision
+    put.mockResolvedValue({ id: 'rev-script', scenes: scenes('revised 2'), draftRevision: 4 });
+    await sceneSaveQueue.saveNow('rev-script', scenes('revised 2'));
+    expect(put).toHaveBeenCalledWith('/scripts/rev-script', {
+      scenes: scenes('revised 2'),
+      baseRevision: 3,
+    });
+    expect(sceneSaveQueue.getDraftRevision('rev-script')).toBe(4);
+
+    unsubscribe();
+  });
+
+  it('notifies listeners of 409 conflict when baseRevision is stale', async () => {
+    const listener = vi.fn();
+    const unsubscribe = sceneSaveQueue.subscribe(listener);
+    sceneSaveQueue.setDraftRevision('conflict-script', 1);
+    const conflictError = Object.assign(new Error('Draft conflict'), { status: 409 });
+    put.mockRejectedValue(conflictError);
+
+    await expect(sceneSaveQueue.saveNow('conflict-script', scenes('edit'))).rejects.toThrow('Draft conflict');
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ scriptId: 'conflict-script', error: conflictError })
+    );
+
+    unsubscribe();
+  });
 });

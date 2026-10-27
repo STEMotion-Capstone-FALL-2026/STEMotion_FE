@@ -323,6 +323,7 @@ export interface STEMScript {
   visualTheme?: string | null;
   scenes: SceneData[];
   createdAt?: string;
+  draftRevision?: number;
   reviewComments?: FeedbackComment[];
   version?: string;
   reviewNote?: string;

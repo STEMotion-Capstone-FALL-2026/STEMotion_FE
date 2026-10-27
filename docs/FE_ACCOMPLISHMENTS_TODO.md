@@ -801,8 +801,8 @@ Theo biên bản mentor 26/10 (`master_update_plan.md`: M11, M15, D10, M17-revis
 
 **1. Tạo workspace (`POST /workspaces`, Admin)** — thêm `members: [{ userId, role, isLeader? }]`. Leader cộng `members` phải có ≥ 3 người khác nhau, đủ WRITER, REVIEWER, PRODUCER. 400 khi: thiếu người hoặc role (message nêu role thiếu), trùng user (kể cả trùng leader), user không ACTIVE, role `ADMIN`.
 
-- [ ] `CreateWorkspaceForm`: thêm danh sách chọn người + role; chỉ bật nút Tạo khi đủ 3 người/3 role; hiện message 400 của BE.
-- [ ] `workspaceService.createWorkspace`: gửi `members`.
+- [x] `CreateWorkspaceForm`: thêm danh sách chọn người + role; chỉ bật nút Tạo khi đủ 3 người/3 role; hiện message 400 của BE.
+- [x] `workspaceService.createWorkspace`: gửi `members`.
 
 **2. Quyền Leader (M15)**
 
@@ -815,11 +815,11 @@ Theo biên bản mentor 26/10 (`master_update_plan.md`: M11, M15, D10, M17-revis
 
 Đổi role, vô hiệu hóa hoặc xóa mà làm một role đang có người ACTIVE không còn ai → 400 `…without an active [REVIEWER]…`.
 
-- [ ] `ManageMembersModal`: Leader (không phải Admin) chỉ thấy dropdown đổi role; ẩn Thêm, Xóa, Kích hoạt/Vô hiệu hóa, Bổ nhiệm Leader. Admin giữ nguyên.
-- [ ] Hiện message 400/403 từ BE thay vì lỗi chung.
+- [x] `ManageMembersModal`: Leader (không phải Admin) chỉ thấy dropdown đổi role; ẩn Thêm, Xóa, Kích hoạt/Vô hiệu hóa, Bổ nhiệm Leader. Admin giữ nguyên.
+- [x] Hiện message 400/403 từ BE thay vì lỗi chung.
 
 **3. Chống ghi đè bản nháp kịch bản** — `GET/PUT /scripts/{id}` trả thêm `draftRevision`. `PUT` nhận `baseRevision` (tùy chọn). Khác revision hiện tại → **409**, bản nháp trên BE giữ nguyên. Không gửi thì vẫn lưu như cũ, nên không vội, nhưng không gửi thì không được bảo vệ.
 
-- [ ] `projectService.update` và `sceneSaveQueue`: gửi `baseRevision: script.draftRevision`, lấy `draftRevision` mới từ response cho lần lưu sau.
-- [ ] Gặp 409: giữ bản local, báo "Bản nháp vừa được lưu ở tab/người khác", cho tải lại, giống cách đang xử lý 409 của composition.
-- [ ] Sau `sync-durations` trên bản nháp (`target: "SCRIPT"`), dùng `revision` trong response làm `draftRevision` mới, vì sync cũng tăng revision.
+- [x] `projectService.update` và `sceneSaveQueue`: gửi `baseRevision: script.draftRevision`, lấy `draftRevision` mới từ response cho lần lưu sau.
+- [x] Gặp 409: giữ bản local, báo "Bản nháp vừa được lưu ở tab/người khác", cho tải lại, giống cách đang xử lý 409 của composition.
+- [x] Sau `sync-durations` trên bản nháp (`target: "SCRIPT"`), dùng `revision` trong response làm `draftRevision` mới, vì sync cũng tăng revision.
