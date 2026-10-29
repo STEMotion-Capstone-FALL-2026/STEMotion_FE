@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useActionGuard } from '../../../hooks/useActionGuard';
 import { useDialog } from '../../../hooks/useDialog';
 import { workspaceService, WorkspaceMemberDto, WorkspaceSummary } from '../../../services/workspaceService';
@@ -35,6 +35,11 @@ import {
   ToggleRight,
   Building2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   BarChart3,
   Edit3,
   X,
@@ -147,6 +152,104 @@ const initialsOf = (name: string): string => {
     : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
+
+function TablePagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = [5, 10, 20, 50],
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
+  pageSizeOptions?: number[];
+}) {
+  if (totalItems === 0) return null;
+  const start = Math.min((currentPage - 1) * pageSize + 1, totalItems);
+  const end = Math.min(currentPage * pageSize, totalItems);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 pt-3.5 border-t border-slate-100 text-xs text-slate-500">
+      <div className="flex items-center gap-2">
+        <span>
+          Hiển thị <strong className="text-slate-800">{start}–{end}</strong> trên tổng số <strong className="text-slate-800">{totalItems}</strong>
+        </span>
+        {onPageSizeChange && (
+          <div className="flex items-center gap-1.5 ml-2">
+            <span className="text-[11px] text-slate-400">Số dòng/trang:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              className="px-2 py-0.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-semibold cursor-pointer focus:outline-none focus:border-indigo-500"
+            >
+              {pageSizeOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          disabled={currentPage <= 1}
+          onClick={() => onPageChange(currentPage - 1)}
+          className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+          title="Trang trước"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+          <span>Trước</span>
+        </button>
+
+        <div className="flex items-center gap-1 px-1">
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+            .map((p, idx, arr) => {
+              const prev = arr[idx - 1];
+              const showEllipsis = prev && p - prev > 1;
+              return (
+                <React.Fragment key={p}>
+                  {showEllipsis && <span className="px-1 text-slate-400 select-none">…</span>}
+                  <button
+                    type="button"
+                    onClick={() => onPageChange(p)}
+                    className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      p === currentPage
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'hover:bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                </React.Fragment>
+              );
+            })}
+        </div>
+
+        <button
+          type="button"
+          disabled={currentPage >= totalPages}
+          onClick={() => onPageChange(currentPage + 1)}
+          className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+          title="Trang sau"
+        >
+          <span>Sau</span>
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersModal, onWorkspaceCreated }) => {
   const actions = useActionGuard();
   const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
@@ -166,6 +269,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
+  const [userSortField, setUserSortField] = useState<'name' | 'email' | 'role' | 'status'>('name');
+  const [userSortOrder, setUserSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [userPage, setUserPage] = useState(1);
+  const [userPageSize, setUserPageSize] = useState(8);
+
+  const [templateSortField, setTemplateSortField] = useState<'name' | 'category' | 'previewUrl' | 'isActive'>('name');
+  const [templateSortOrder, setTemplateSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [templatePage, setTemplatePage] = useState(1);
+  const [templatePageSize, setTemplatePageSize] = useState(8);
+
+  const [jobSortField, setJobSortField] = useState<'title' | 'subject' | 'requester' | 'status' | 'progress'>('title');
+  const [jobSortOrder, setJobSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [jobPage, setJobPage] = useState(1);
+  const [jobPageSize, setJobPageSize] = useState(5);
 
   // FE-16 state
   const [templates, setTemplates] = useState<AdminTemplateDto[]>([]);
@@ -471,13 +588,126 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     return matchRole && matchSearch;
   });
 
+  useEffect(() => {
+    setUserPage(1);
+  }, [userSearch, roleFilter]);
+
+  const sortedUsers = useMemo(() => {
+    return [...filteredUsers].sort((a, b) => {
+      let comp = 0;
+      if (userSortField === 'name') {
+        comp = (a.fullName || '').localeCompare(b.fullName || '', 'vi', { sensitivity: 'base' });
+      } else if (userSortField === 'email') {
+        comp = (a.email || '').localeCompare(b.email || '', 'en', { sensitivity: 'base' });
+      } else if (userSortField === 'role') {
+        comp = (a.role || '').localeCompare(b.role || '', 'en', { sensitivity: 'base' });
+      } else if (userSortField === 'status') {
+        comp = (a.status || '').localeCompare(b.status || '', 'en', { sensitivity: 'base' });
+      }
+      return userSortOrder === 'asc' ? comp : -comp;
+    });
+  }, [filteredUsers, userSortField, userSortOrder]);
+
+  const totalUserPages = Math.max(1, Math.ceil(sortedUsers.length / userPageSize));
+  const paginatedUsers = useMemo(() => {
+    const start = (userPage - 1) * userPageSize;
+    return sortedUsers.slice(start, start + userPageSize);
+  }, [sortedUsers, userPage, userPageSize]);
+
+  const handleUserSort = (field: 'name' | 'email' | 'role' | 'status') => {
+    if (userSortField === field) {
+      setUserSortOrder(userSortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setUserSortField(field);
+      setUserSortOrder('asc');
+    }
+    setUserPage(1);
+  };
+
   const filteredTemplates = templates.filter(
     (t) => templateSubjectFilter === 'ALL' || t.category === templateSubjectFilter
   );
 
+  useEffect(() => {
+    setTemplatePage(1);
+  }, [templateSubjectFilter]);
+
+  const sortedTemplates = useMemo(() => {
+    return [...filteredTemplates].sort((a, b) => {
+      let comp = 0;
+      if (templateSortField === 'name') {
+        comp = (a.name || '').localeCompare(b.name || '', 'vi', { sensitivity: 'base' });
+      } else if (templateSortField === 'category') {
+        comp = (a.category || '').localeCompare(b.category || '', 'en', { sensitivity: 'base' });
+      } else if (templateSortField === 'previewUrl') {
+        comp = (a.previewUrl || '').localeCompare(b.previewUrl || '', 'en', { sensitivity: 'base' });
+      } else if (templateSortField === 'isActive') {
+        const valA = a.isActive ? 1 : 0;
+        const valB = b.isActive ? 1 : 0;
+        comp = valA - valB;
+      }
+      return templateSortOrder === 'asc' ? comp : -comp;
+    });
+  }, [filteredTemplates, templateSortField, templateSortOrder]);
+
+  const totalTemplatePages = Math.max(1, Math.ceil(sortedTemplates.length / templatePageSize));
+  const paginatedTemplates = useMemo(() => {
+    const start = (templatePage - 1) * templatePageSize;
+    return sortedTemplates.slice(start, start + templatePageSize);
+  }, [sortedTemplates, templatePage, templatePageSize]);
+
+  const handleTemplateSort = (field: 'name' | 'category' | 'previewUrl' | 'isActive') => {
+    if (templateSortField === field) {
+      setTemplateSortOrder(templateSortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setTemplateSortField(field);
+      setTemplateSortOrder('asc');
+    }
+    setTemplatePage(1);
+  };
+
   const metrics = overview?.metrics;
   const aiUsage = overview?.aiUsage;
   const renderJobs = overview?.recentRenderJobs || [];
+
+  const sortedJobs = useMemo(() => {
+    return [...renderJobs].sort((a, b) => {
+      if (jobSortField === 'title') {
+        const comp = (a.projectTitle || '').localeCompare(b.projectTitle || '', 'vi', { sensitivity: 'base' });
+        return jobSortOrder === 'asc' ? comp : -comp;
+      } else if (jobSortField === 'subject') {
+        const comp = (a.subject || '').localeCompare(b.subject || '', 'vi', { sensitivity: 'base' });
+        return jobSortOrder === 'asc' ? comp : -comp;
+      } else if (jobSortField === 'requester') {
+        const comp = (a.requestedByName || '').localeCompare(b.requestedByName || '', 'vi', { sensitivity: 'base' });
+        return jobSortOrder === 'asc' ? comp : -comp;
+      } else if (jobSortField === 'status') {
+        const comp = (a.status || '').localeCompare(b.status || '', 'vi', { sensitivity: 'base' });
+        return jobSortOrder === 'asc' ? comp : -comp;
+      } else if (jobSortField === 'progress') {
+        const valA = a.progress || 0;
+        const valB = b.progress || 0;
+        return jobSortOrder === 'asc' ? valA - valB : valB - valA;
+      }
+      return 0;
+    });
+  }, [renderJobs, jobSortField, jobSortOrder]);
+
+  const totalJobPages = Math.max(1, Math.ceil(sortedJobs.length / jobPageSize));
+  const paginatedJobs = useMemo(() => {
+    const start = (jobPage - 1) * jobPageSize;
+    return sortedJobs.slice(start, start + jobPageSize);
+  }, [sortedJobs, jobPage, jobPageSize]);
+
+  const handleJobSort = (field: 'title' | 'subject' | 'requester' | 'status' | 'progress') => {
+    if (jobSortField === field) {
+      setJobSortOrder(jobSortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setJobSortField(field);
+      setJobSortOrder('asc');
+    }
+    setJobPage(1);
+  };
   const budgetPercent = aiUsage
     ? Math.min(100, Math.round((aiUsage.estimatedCostUsd / (aiUsage.monthlyBudgetUsd || 20)) * 100))
     : 0;
@@ -947,20 +1177,89 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                   Chưa có tiến trình Render MP4 nào được ghi nhận. Khi Producer bấm "Xuất Video MP4", tiến trình sẽ hiển thị trực tiếp tại đây.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-500 font-semibold">
-                        <th className="py-2.5 pr-4">Dự án bài giảng</th>
-                        <th className="py-2.5 px-3">Môn STEM</th>
-                        <th className="py-2.5 px-3">Người yêu cầu</th>
-                        <th className="py-2.5 px-3">Cấu hình</th>
-                        <th className="py-2.5 px-3">Trạng thái & Tiến độ</th>
-                        <th className="py-2.5 pl-3 text-right">Kết quả</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {renderJobs.map((job) => {
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-500 font-semibold">
+                          <th className="py-2.5 pr-4">
+                            <button
+                              type="button"
+                              onClick={() => handleJobSort('title')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Dự án bài giảng</span>
+                              {jobSortField === 'title' ? (
+                                jobSortOrder === 'asc' ? (
+                                  <ArrowUp className="w-3 h-3 text-indigo-600" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => handleJobSort('subject')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Môn STEM</span>
+                              {jobSortField === 'subject' ? (
+                                jobSortOrder === 'asc' ? (
+                                  <ArrowUp className="w-3 h-3 text-indigo-600" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => handleJobSort('requester')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Người yêu cầu</span>
+                              {jobSortField === 'requester' ? (
+                                jobSortOrder === 'asc' ? (
+                                  <ArrowUp className="w-3 h-3 text-indigo-600" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3">Cấu hình</th>
+                          <th className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => handleJobSort('status')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Trạng thái & Tiến độ</span>
+                              {jobSortField === 'status' ? (
+                                jobSortOrder === 'asc' ? (
+                                  <ArrowUp className="w-3 h-3 text-indigo-600" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 pl-3 text-right">Kết quả</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                      {paginatedJobs.map((job) => {
                         const subjMeta = SUBJECT_LABELS[job.subject] || SUBJECT_LABELS.Physics;
                         return (
                           <tr key={job.id} className="hover:bg-slate-50/80">
@@ -1029,10 +1328,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
+                <TablePagination
+                  currentPage={jobPage}
+                  totalPages={totalJobPages}
+                  totalItems={sortedJobs.length}
+                  pageSize={jobPageSize}
+                  onPageChange={setJobPage}
+                  onPageSizeChange={setJobPageSize}
+                  pageSizeOptions={[5, 10, 20]}
+                />
+              </>
+            )}
           </div>
-        )}
+        </div>
+      )}
 
         {/* ===================================================================
             TAB 2: FE-15 — MANAGE USERS & ROLES (RBAC)
@@ -1157,12 +1466,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                     type="text"
                     placeholder="Tìm theo tên hoặc email..."
                     value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
+                    onChange={(e) => { setUserSearch(e.target.value); setUserPage(1); }}
                     className="border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-500"
                   />
                   <select
                     value={roleFilter}
-                    onChange={(e) => setRoleFilter(e.target.value)}
+                    onChange={(e) => { setRoleFilter(e.target.value); setUserPage(1); }}
                     className="border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold bg-slate-50"
                   >
                     <option value="ALL">Tất cả loại tài khoản</option>
@@ -1177,19 +1486,71 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
               ) : filteredUsers.length === 0 ? (
                 <p className="text-xs text-slate-400 py-6">Không tìm thấy người dùng phù hợp.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-500 font-semibold">
-                        <th className="py-2.5 pr-3">Người dùng</th>
-                        <th className="py-2.5 px-3">Vai trò RBAC</th>
-                        <th className="py-2.5 px-3">Không gian làm việc hiện tại</th>
-                        <th className="py-2.5 px-3">Trạng thái</th>
-                        <th className="py-2.5 pl-3 text-right">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredUsers.map((u) => {
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-500 font-semibold">
+                          <th className="py-2.5 pr-3">
+                            <button
+                              type="button"
+                              onClick={() => handleUserSort('name')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Người dùng</span>
+                              {userSortField === 'name' ? (
+                                userSortOrder === 'asc' ? (
+                                  <ArrowUp className="w-3 h-3 text-indigo-600" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => handleUserSort('role')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Vai trò RBAC</span>
+                              {userSortField === 'role' ? (
+                                userSortOrder === 'asc' ? (
+                                  <ArrowUp className="w-3 h-3 text-indigo-600" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3">Không gian làm việc hiện tại</th>
+                          <th className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => handleUserSort('status')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Trạng thái</span>
+                              {userSortField === 'status' ? (
+                                userSortOrder === 'asc' ? (
+                                  <ArrowUp className="w-3 h-3 text-indigo-600" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 pl-3 text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                      {paginatedUsers.map((u) => {
                         const roleInfo = ROLE_LABELS[u.role] || ROLE_LABELS.WRITER;
                         const isInWorkspace = members.some(
                           (m) => m.userId === u.id || m.email.toLowerCase() === u.email.toLowerCase()
@@ -1267,8 +1628,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
+                <TablePagination
+                  currentPage={userPage}
+                  totalPages={totalUserPages}
+                  totalItems={sortedUsers.length}
+                  pageSize={userPageSize}
+                  onPageChange={setUserPage}
+                  onPageSizeChange={setUserPageSize}
+                  pageSizeOptions={[5, 8, 15, 30]}
+                />
+              </>
+            )}
+          </div>
           </div>
         )}
 
@@ -1334,7 +1705,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                 <div className="flex items-center gap-2">
                   {templateSubjectFilter !== 'ALL' && (
                     <button
-                      onClick={() => setTemplateSubjectFilter('ALL')}
+                      onClick={() => { setTemplateSubjectFilter('ALL'); setTemplatePage(1); }}
                       className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold"
                     >
                       Hiển thị tất cả môn ({templates.length})
@@ -1685,20 +2056,89 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
               ) : filteredTemplates.length === 0 ? (
                 <p className="text-xs text-slate-400 py-6">Chưa có mẫu hoạt họa nào trong danh mục này.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-500 font-semibold">
-                        <th className="py-2.5 pr-4">Tên Mẫu Remotion Template</th>
-                        <th className="py-2.5 px-3">Môn & Trụ Cột STEM</th>
-                        <th className="py-2.5 px-3">Composition Binding</th>
-                        <th className="py-2.5 px-3">Props Schema</th>
-                        <th className="py-2.5 px-3">Trạng thái</th>
-                        <th className="py-2.5 pl-3 text-right">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredTemplates.map((tpl) => {
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-500 font-semibold">
+                          <th className="py-2.5 pr-4">
+                            <button
+                              type="button"
+                              onClick={() => handleTemplateSort('name')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Tên Mẫu Remotion Template</span>
+                              {templateSortField === 'name' ? (
+                                templateSortOrder === 'asc' ? (
+                                  <ArrowUp className="w-3 h-3 text-indigo-600" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => handleTemplateSort('category')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Môn & Trụ Cột STEM</span>
+                              {templateSortField === 'category' ? (
+                                templateSortOrder === 'asc' ? (
+                                  <ArrowUp className="w-3 h-3 text-indigo-600" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => handleTemplateSort('previewUrl')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Composition Binding</span>
+                              {templateSortField === 'previewUrl' ? (
+                                templateSortOrder === 'asc' ? (
+                                  <ArrowUp className="w-3 h-3 text-indigo-600" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3">Props Schema</th>
+                          <th className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => handleTemplateSort('isActive')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Trạng thái</span>
+                              {templateSortField === 'isActive' ? (
+                                templateSortOrder === 'asc' ? (
+                                  <ArrowUp className="w-3 h-3 text-indigo-600" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 pl-3 text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                      {paginatedTemplates.map((tpl) => {
                         const subjMeta =
                           SUBJECT_LABELS[tpl.category] || SUBJECT_LABELS.Physics;
                         return (
@@ -1775,10 +2215,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
+                <TablePagination
+                  currentPage={templatePage}
+                  totalPages={totalTemplatePages}
+                  totalItems={sortedTemplates.length}
+                  pageSize={templatePageSize}
+                  onPageChange={setTemplatePage}
+                  onPageSizeChange={setTemplatePageSize}
+                  pageSizeOptions={[5, 8, 15, 30]}
+                />
+              </>
+            )}
           </div>
-        )}
+        </div>
+      )}
       </div>
       </fieldset>
     </main>
