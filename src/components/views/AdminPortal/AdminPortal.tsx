@@ -14,6 +14,8 @@ import {
 } from '../../../services/adminService';
 import { AccountProvisionForm } from './AccountProvisionForm';
 import { CreateWorkspaceForm } from './CreateWorkspaceForm';
+import { apiClient } from '../../../services/apiClient';
+import type { STEMScript } from '../../../types/stem';
 import {
   UserPlus,
   Activity,
@@ -250,6 +252,18 @@ function TablePagination({
   );
 }
 
+export interface WorkspaceVideoStat {
+  workspaceId: string;
+  workspaceName: string;
+  department: string;
+  membersCount: number;
+  totalScripts: number;
+  completedVideos: number;
+  inProgressVideos: number;
+  unrenderedScripts: number;
+  completionRate: number;
+}
+
 export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersModal, onWorkspaceCreated }) => {
   const actions = useActionGuard();
   const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
@@ -310,6 +324,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
 
   const editDialog = useDialog(Boolean(editingTemplate), 'Chỉnh sửa mẫu hoạt họa', () => setEditingTemplate(null), actions.pending);
 
+  // Workspace Video Analytics state (FE-17 Middle Table)
+  const [workspaceStats, setWorkspaceStats] = useState<WorkspaceVideoStat[]>([]);
+  const [loadingWorkspaceStats, setLoadingWorkspaceStats] = useState(false);
+  const [wsSearch, setWsSearch] = useState('');
+  const [wsSortField, setWsSortField] = useState<'name' | 'department' | 'members' | 'scripts' | 'completed' | 'rate'>('completed');
+  const [wsSortOrder, setWsSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [wsPage, setWsPage] = useState(1);
+  const [wsPageSize, setWsPageSize] = useState(5);
+
   // AI Usage Drill-down state (GET /api/v1/admin/ai-usage)
   const [aiUsagePage, setAiUsagePage] = useState<AiUsagePage | null>(null);
   const [loadingAiUsage, setLoadingAiUsage] = useState(false);
@@ -353,6 +376,61 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     }
   }, [aiUsageFilter]);
 
+  const loadWorkspaceStats = useCallback(async (workspaces: WorkspaceSummary[]) => {
+    if (!workspaces || workspaces.length === 0) {
+      setWorkspaceStats([]);
+      return;
+    }
+    setLoadingWorkspaceStats(true);
+    try {
+      const stats = await Promise.all(
+        workspaces.map(async (ws) => {
+          try {
+            const scripts = await apiClient.get<STEMScript[]>(`/workspaces/${ws.id}/scripts`);
+            const safeScripts = Array.isArray(scripts) ? scripts : [];
+            const completed = safeScripts.filter(
+              (s) => s.videoStatus === 'APPROVED' || s.videoStatus === 'PUBLISHED'
+            ).length;
+            const inProgress = safeScripts.filter(
+              (s) => s.videoStatus === 'RENDERING' || s.videoStatus === 'IN_QA'
+            ).length;
+            const unrendered = safeScripts.filter(
+              (s) => !s.videoStatus || s.videoStatus === 'NOT_RENDERED'
+            ).length;
+            const total = safeScripts.length;
+            const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+            return {
+              workspaceId: ws.id,
+              workspaceName: ws.name,
+              department: ws.department || 'Chung',
+              membersCount: ws.membersCount || 0,
+              totalScripts: total,
+              completedVideos: completed,
+              inProgressVideos: inProgress,
+              unrenderedScripts: unrendered,
+              completionRate: rate,
+            };
+          } catch {
+            return {
+              workspaceId: ws.id,
+              workspaceName: ws.name,
+              department: ws.department || 'Chung',
+              membersCount: ws.membersCount || 0,
+              totalScripts: ws.activeProjects || 0,
+              completedVideos: 0,
+              inProgressVideos: 0,
+              unrenderedScripts: ws.activeProjects || 0,
+              completionRate: 0,
+            };
+          }
+        })
+      );
+      setWorkspaceStats(stats);
+    } finally {
+      setLoadingWorkspaceStats(false);
+    }
+  }, []);
+
   const loadOverview = useCallback(async () => {
     setLoadingOverview(true);
     try {
@@ -372,6 +450,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
       ]);
       if (request !== loadSequence.current.users) return;
       setUsers(allUsers); setWorkspaceList(wsList);
+      void loadWorkspaceStats(wsList);
       const chosenId = activeId && wsList.some(w => w.id === activeId) ? activeId : wsList[0]?.id || '';
       setCurrentWorkspaceId(chosenId);
       const loadedMembers = chosenId ? await workspaceService.getMembers(chosenId) : [];
@@ -579,6 +658,53 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
       notify(err?.message || 'Không thể xóa mẫu hoạt họa.');
     }
   });
+
+  const filteredWorkspaceStats = useMemo(() => {
+    const q = wsSearch.trim().toLowerCase();
+    return workspaceStats.filter((w) => {
+      if (!q) return true;
+      return (
+        w.workspaceName.toLowerCase().includes(q) ||
+        w.department.toLowerCase().includes(q)
+      );
+    });
+  }, [workspaceStats, wsSearch]);
+
+  const sortedWorkspaceStats = useMemo(() => {
+    return [...filteredWorkspaceStats].sort((a, b) => {
+      let comp = 0;
+      if (wsSortField === 'name') {
+        comp = a.workspaceName.localeCompare(b.workspaceName, 'vi', { sensitivity: 'base' });
+      } else if (wsSortField === 'department') {
+        comp = a.department.localeCompare(b.department, 'vi', { sensitivity: 'base' });
+      } else if (wsSortField === 'members') {
+        comp = a.membersCount - b.membersCount;
+      } else if (wsSortField === 'scripts') {
+        comp = a.totalScripts - b.totalScripts;
+      } else if (wsSortField === 'completed') {
+        comp = a.completedVideos - b.completedVideos;
+      } else if (wsSortField === 'rate') {
+        comp = a.completionRate - b.completionRate;
+      }
+      return wsSortOrder === 'asc' ? comp : -comp;
+    });
+  }, [filteredWorkspaceStats, wsSortField, wsSortOrder]);
+
+  const totalWsPages = Math.max(1, Math.ceil(sortedWorkspaceStats.length / wsPageSize));
+  const paginatedWorkspaceStats = useMemo(() => {
+    const start = (wsPage - 1) * wsPageSize;
+    return sortedWorkspaceStats.slice(start, start + wsPageSize);
+  }, [sortedWorkspaceStats, wsPage, wsPageSize]);
+
+  const handleWsSort = (field: 'name' | 'department' | 'members' | 'scripts' | 'completed' | 'rate') => {
+    if (wsSortField === field) {
+      setWsSortOrder(wsSortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setWsSortField(field);
+      setWsSortOrder('desc');
+    }
+    setWsPage(1);
+  };
 
   const filteredUsers = users.filter((u) => {
     const matchRole = roleFilter === 'ALL' || u.role === roleFilter;
@@ -1001,6 +1127,257 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Row 2.3: Bảng Thống Kê Sản Lượng Video Theo Không Gian Làm Việc (Workspace Video Analytics) */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Video className="w-4 h-4 text-brand-600" />
+                    <span>Thống Kê Sản Lượng Video Theo Không Gian Làm Việc (Workspace Video Analytics)</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Theo dõi số lượng kịch bản, video hoàn thành, tiến độ dựng và tỷ lệ xuất bản bài giảng STEM của từng tổ bộ môn.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Tìm theo tên tổ, khoa..."
+                      value={wsSearch}
+                      onChange={(e) => { setWsSearch(e.target.value); setWsPage(1); }}
+                      className="pl-2.5 pr-6 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs w-48 focus:outline-none focus:border-brand-500"
+                    />
+                    {wsSearch && (
+                      <button
+                        onClick={() => setWsSearch('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => void loadWorkspaceStats(workspaceList)}
+                    disabled={loadingWorkspaceStats}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                    title="Làm mới thống kê video"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingWorkspaceStats ? 'animate-spin' : ''}`} />
+                    <span>Cập nhật</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Summary mini badges */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+                  <div className="text-[11px] text-slate-500">Tổng Không Gian Làm Việc</div>
+                  <div className="text-lg font-extrabold text-slate-900 mt-0.5">
+                    {workspaceStats.length} nhóm
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100">
+                  <div className="text-[11px] text-emerald-700 font-medium">Video Đã Hoàn Thành</div>
+                  <div className="text-lg font-extrabold text-emerald-700 mt-0.5">
+                    {workspaceStats.reduce((sum, w) => sum + w.completedVideos, 0)} video
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-100">
+                  <div className="text-[11px] text-amber-700 font-medium">Đang Sản Xuất / Thẩm Định</div>
+                  <div className="text-lg font-extrabold text-amber-700 mt-0.5">
+                    {workspaceStats.reduce((sum, w) => sum + w.inProgressVideos, 0)} video
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
+                  <div className="text-[11px] text-indigo-700 font-medium">Tổng Kịch Bản Soạn Thảo</div>
+                  <div className="text-lg font-extrabold text-indigo-700 mt-0.5">
+                    {workspaceStats.reduce((sum, w) => sum + w.totalScripts, 0)} kịch bản
+                  </div>
+                </div>
+              </div>
+
+              {/* Table */}
+              {loadingWorkspaceStats && workspaceStats.length === 0 ? (
+                <div className="py-8 text-center text-slate-500 text-xs">
+                  <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-600" />
+                  Đang tổng hợp số liệu video các Không gian làm việc...
+                </div>
+              ) : sortedWorkspaceStats.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-500">
+                  Chưa có dữ liệu không gian làm việc nào phù hợp.
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50/50">
+                          <th className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => handleWsSort('name')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Không gian làm việc</span>
+                              {wsSortField === 'name' ? (
+                                wsSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600" /> : <ArrowDown className="w-3 h-3 text-indigo-600" />
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => handleWsSort('department')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Khoa / Bộ môn</span>
+                              {wsSortField === 'department' ? (
+                                wsSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600" /> : <ArrowDown className="w-3 h-3 text-indigo-600" />
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleWsSort('members')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer mx-auto"
+                            >
+                              <span>Thành viên</span>
+                              {wsSortField === 'members' ? (
+                                wsSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600" /> : <ArrowDown className="w-3 h-3 text-indigo-600" />
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleWsSort('scripts')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer ml-auto"
+                            >
+                              <span>Tổng kịch bản</span>
+                              {wsSortField === 'scripts' ? (
+                                wsSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600" /> : <ArrowDown className="w-3 h-3 text-indigo-600" />
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleWsSort('completed')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer ml-auto"
+                            >
+                              <span>Video Đã Hoàn Thành</span>
+                              {wsSortField === 'completed' ? (
+                                wsSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600" /> : <ArrowDown className="w-3 h-3 text-indigo-600" />
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 px-3 text-center">Đang Sản Xuất</th>
+                          <th className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => handleWsSort('rate')}
+                              className="inline-flex items-center gap-1 font-semibold text-slate-600 hover:text-slate-900 focus:outline-none cursor-pointer"
+                            >
+                              <span>Tỷ lệ hoàn thành</span>
+                              {wsSortField === 'rate' ? (
+                                wsSortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600" /> : <ArrowDown className="w-3 h-3 text-indigo-600" />
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 hover:text-slate-500" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="py-2.5 pr-3 text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginatedWorkspaceStats.map((w) => (
+                          <tr key={w.workspaceId} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-3">
+                              <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                                <Building2 className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+                                <span>{w.workspaceName}</span>
+                              </div>
+                              <div className="text-[10px] font-mono text-slate-400">ID: {w.workspaceId.slice(0, 8)}</div>
+                            </td>
+                            <td className="py-3 px-3 text-slate-700 font-medium">
+                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200">
+                                {w.department}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-center font-bold text-slate-800">
+                              {w.membersCount}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono font-semibold text-slate-700">
+                              {w.totalScripts}
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>{w.completedVideos} video</span>
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              {w.inProgressVideos > 0 ? (
+                                <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 font-bold text-[11px]">
+                                  {w.inProgressVideos} video
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 font-mono text-[11px]">0</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 min-w-[130px]">
+                              <div className="flex items-center justify-between text-[11px] mb-1 font-semibold">
+                                <span className="text-slate-600">{w.completionRate}%</span>
+                                <span className="text-slate-400 text-[10px]">{w.completedVideos}/{Math.max(1, w.totalScripts)}</span>
+                              </div>
+                              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    w.completionRate >= 80 ? 'bg-emerald-500' : w.completionRate >= 40 ? 'bg-indigo-500' : 'bg-amber-500'
+                                  }`}
+                                  style={{ width: `${Math.min(100, Math.max(w.completedVideos > 0 ? 8 : 0, w.completionRate))}%` }}
+                                />
+                              </div>
+                            </td>
+                            <td className="py-3 pr-3 text-right">
+                              <button
+                                onClick={() => void handleSwitchWorkspace(w.workspaceId)}
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition cursor-pointer"
+                                title="Chuyển sang nhóm này để xem chi tiết"
+                              >
+                                Xem Nhóm →
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <TablePagination
+                    currentPage={wsPage}
+                    totalPages={totalWsPages}
+                    totalItems={sortedWorkspaceStats.length}
+                    pageSize={wsPageSize}
+                    onPageChange={setWsPage}
+                    onPageSizeChange={setWsPageSize}
+                    pageSizeOptions={[5, 10, 20]}
+                  />
+                </>
+              )}
             </div>
 
             {/* Row 2.5: AI Usage Telemetry Drill-down (GET /api/v1/admin/ai-usage — UC-31) */}
