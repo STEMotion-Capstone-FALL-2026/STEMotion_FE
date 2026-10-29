@@ -823,3 +823,15 @@ Theo biên bản mentor 26/10 (`master_update_plan.md`: M11, M15, D10, M17-revis
 - [x] `projectService.update` và `sceneSaveQueue`: gửi `baseRevision: script.draftRevision`, lấy `draftRevision` mới từ response cho lần lưu sau.
 - [x] Gặp 409: giữ bản local, báo "Bản nháp vừa được lưu ở tab/người khác", cho tải lại, giống cách đang xử lý 409 của composition.
 - [x] Sau `sync-durations` trên bản nháp (`target: "SCRIPT"`), dùng `revision` trong response làm `draftRevision` mới, vì sync cũng tăng revision.
+
+**Đối chiếu 29/10/2026 (BE):** commit `7d43fb8` đã làm đủ ba mục trên; 188 test pass, `tsc` sạch. Chỉ `sceneSaveQueue` ghi bản nháp, không có đường lưu nào bỏ sót `baseRevision`. Contract đầy đủ kèm ví dụ: BE `docs/API_CONTRACT_PART_A_2026-10-29.md`.
+
+BE bổ sung, chưa push. **Không đổi shape cũ**, chỉ thêm:
+- Xung đột revision trả `code: "STALE_REVISION"` kèm `details: { resource: "SCRIPT_DRAFT" | "COMPOSITION", currentRevision, baseRevision }`. Các lỗi 409 khác vẫn là `CONFLICT`.
+- `sync-durations` chụp revision trước khi gọi worker. Nếu bản nháp/bản dựng bị lưu trong lúc đo thì trả 409 và **không ghi** thời lượng cũ. `baseRevision` cũ bị chặn trước khi tốn TTS.
+
+Việc nhỏ còn lại (không chặn):
+
+- [ ] Writer sync bản nháp: gửi `baseRevision: script.draftRevision` (`narrationService.syncDurations(script.id, script.draftRevision)`) để biết sớm khi đang ở bản cũ.
+- [ ] `apiClient.ts` (dòng ~103) chỉ đọc `json.error?.details`. BE trả `details` ở **cấp trên cùng**, nên cần đổi thành `json.error?.details ?? json.details`. `code` thì đã có fallback `json.code`.
+- [ ] Xử lý 409: phân biệt `code === "STALE_REVISION"` (tải lại đúng `details.resource`) với các 409 khác (hiện message). Không tự retry.
