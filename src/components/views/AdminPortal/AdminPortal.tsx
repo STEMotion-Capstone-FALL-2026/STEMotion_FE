@@ -45,6 +45,9 @@ import {
   BarChart3,
   Edit3,
   X,
+  Film,
+  Play,
+  Download,
 } from 'lucide-react';
 
 interface AdminPortalProps {
@@ -262,6 +265,7 @@ export interface WorkspaceVideoStat {
   inProgressVideos: number;
   unrenderedScripts: number;
   completionRate: number;
+  scripts?: STEMScript[];
 }
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersModal, onWorkspaceCreated }) => {
@@ -332,6 +336,42 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   const [wsSortOrder, setWsSortOrder] = useState<'asc' | 'desc'>('desc');
   const [wsPage, setWsPage] = useState(1);
   const [wsPageSize, setWsPageSize] = useState(5);
+
+  // Modal Xem Video theo Khong gian lam viec
+  const [selectedWsForVideos, setSelectedWsForVideos] = useState<WorkspaceVideoStat | null>(null);
+  const [wsVideosList, setWsVideosList] = useState<STEMScript[]>([]);
+  const [loadingWsVideos, setLoadingWsVideos] = useState(false);
+  const [videoFilterTab, setVideoFilterTab] = useState<'completed' | 'all'>('completed');
+  const [previewVideo, setPreviewVideo] = useState<STEMScript | null>(null);
+
+  const wsVideosDialog = useDialog(
+    Boolean(selectedWsForVideos),
+    'Danh sách video bài giảng',
+    () => {
+      setSelectedWsForVideos(null);
+      setPreviewVideo(null);
+    },
+    actions.pending
+  );
+
+  const handleOpenWorkspaceVideos = async (w: WorkspaceVideoStat) => {
+    setSelectedWsForVideos(w);
+    setPreviewVideo(null);
+    setVideoFilterTab('completed');
+    if (w.scripts && w.scripts.length > 0) {
+      setWsVideosList(w.scripts);
+    } else {
+      setLoadingWsVideos(true);
+      try {
+        const res = await apiClient.get<STEMScript[]>('/workspaces/' + w.workspaceId + '/scripts');
+        setWsVideosList(Array.isArray(res) ? res : []);
+      } catch (err: any) {
+        notify('Không thể tải danh sách video: ' + (err?.message || 'lỗi máy chủ'));
+      } finally {
+        setLoadingWsVideos(false);
+      }
+    }
+  };
 
   // AI Usage Drill-down state (GET /api/v1/admin/ai-usage)
   const [aiUsagePage, setAiUsagePage] = useState<AiUsagePage | null>(null);
@@ -409,6 +449,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
               inProgressVideos: inProgress,
               unrenderedScripts: unrendered,
               completionRate: rate,
+              scripts: safeScripts,
             };
           } catch {
             return {
@@ -1300,7 +1341,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                               )}
                             </button>
                           </th>
-                          <th className="py-2.5 pr-3 text-right">Thao tác</th>
+                          <th className="py-2.5 pr-3 text-right">Video bài giảng</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -1354,13 +1395,27 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                               </div>
                             </td>
                             <td className="py-3 pr-3 text-right">
-                              <button
-                                onClick={() => void handleSwitchWorkspace(w.workspaceId)}
-                                className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition cursor-pointer"
-                                title="Chuyển sang nhóm này để xem chi tiết"
-                              >
-                                Xem Nhóm →
-                              </button>
+                              {w.completedVideos > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleOpenWorkspaceVideos(w)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs hover:shadow transition-all cursor-pointer"
+                                  title={'Xem ' + w.completedVideos + ' video bài giảng của nhóm ' + w.workspaceName}
+                                >
+                                  <Film className="w-3.5 h-3.5" />
+                                  <span>Xem video ({w.completedVideos})</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200/60 cursor-not-allowed"
+                                  title="Nhóm chưa có video nào hoàn thành"
+                                >
+                                  <Film className="w-3.5 h-3.5 opacity-40" />
+                                  <span>Chưa có video</span>
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -2608,6 +2663,271 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
       )}
       </div>
       </fieldset>
+      {/* Modal: Danh sach Video Bai Giang Theo Workspace */}
+      {selectedWsForVideos && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            ref={wsVideosDialog}
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+          >
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                  <Film className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                    <span>Video Bài Giảng — {selectedWsForVideos.workspaceName}</span>
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      Khoa: {selectedWsForVideos.department}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {selectedWsForVideos.completedVideos} video hoàn thành • {selectedWsForVideos.totalScripts} kịch bản tổng số • {selectedWsForVideos.membersCount} thành viên
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedWsForVideos(null);
+                  setPreviewVideo(null);
+                }}
+                className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                title="Đóng"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Video Player Preview (if user clicked "Phat video") */}
+            {previewVideo && (
+              <div className="p-4 bg-slate-900 text-white border-b border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                    <span className="font-bold text-sm truncate">Đang phát: {previewVideo.title}</span>
+                    {previewVideo.subject && SUBJECT_LABELS[previewVideo.subject] && (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-white/10 text-white border border-white/20 shrink-0">
+                        {SUBJECT_LABELS[previewVideo.subject].label}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {previewVideo.videoUrl && (
+                      <a
+                        href={previewVideo.videoUrl}
+                        download={previewVideo.title + ".mp4"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 text-white transition"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Tải MP4
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPreviewVideo(null)}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition cursor-pointer"
+                    >
+                      Đóng Player
+                    </button>
+                  </div>
+                </div>
+                {previewVideo.videoUrl ? (
+                  <div className="aspect-video w-full rounded-xl overflow-hidden bg-black max-h-[360px] flex items-center justify-center border border-white/10">
+                    <video
+                      src={previewVideo.videoUrl}
+                      controls
+                      autoPlay
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="py-8 bg-slate-800/80 rounded-xl text-center text-slate-300 text-xs flex flex-col items-center justify-center gap-2 border border-slate-700">
+                    <AlertTriangle className="w-6 h-6 text-amber-400" />
+                    <span>Bài giảng đã được duyệt nhưng chưa có URL video MP4 trực tiếp trên máy chủ.</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Filter Tabs */}
+            <div className="px-5 pt-3 pb-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setVideoFilterTab("completed")}
+                  className={"px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer " + (videoFilterTab === "completed" ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:bg-slate-200/60")}
+                >
+                  Đã hoàn thành ({wsVideosList.filter((s) => s.videoStatus === "APPROVED" || s.videoStatus === "PUBLISHED").length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVideoFilterTab("all")}
+                  className={"px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer " + (videoFilterTab === "all" ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:bg-slate-200/60")}
+                >
+                  Tất cả bài giảng ({wsVideosList.length})
+                </button>
+              </div>
+              <span className="text-[11px] text-slate-400 font-medium">
+                {videoFilterTab === "completed" ? "Chỉ hiển thị video đã duyệt / xuất bản" : "Hiển thị toàn bộ kịch bản và tiến độ"}
+              </span>
+            </div>
+
+            {/* Modal Body / Video List */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-3 max-h-[55vh]">
+              {loadingWsVideos ? (
+                <div className="py-12 text-center text-slate-400 text-xs">Đang tải danh sách video của không gian làm việc...</div>
+              ) : (
+                (() => {
+                  const filtered = wsVideosList.filter((s) =>
+                    videoFilterTab === "completed"
+                      ? s.videoStatus === "APPROVED" || s.videoStatus === "PUBLISHED"
+                      : true
+                  );
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="py-12 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2 bg-slate-50/80 rounded-xl border border-dashed border-slate-200">
+                        <Film className="w-8 h-8 opacity-30 text-slate-400" />
+                        <span>Không có video bài giảng nào phù hợp với bộ lọc hiện tại.</span>
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((script) => {
+                    const isCompleted = script.videoStatus === "APPROVED" || script.videoStatus === "PUBLISHED";
+                    const isPublished = script.videoStatus === "PUBLISHED";
+                    const isRendering = script.videoStatus === "RENDERING";
+                    const isQa = script.videoStatus === "IN_QA";
+                    const subjMeta = SUBJECT_LABELS[script.subject] || SUBJECT_LABELS.Physics;
+
+                    return (
+                      <div
+                        key={script.id}
+                        className={"p-4 rounded-xl border transition-all " + (previewVideo?.id === script.id ? "border-indigo-500 bg-indigo-50/30 ring-1 ring-indigo-500" : "border-slate-200 hover:border-slate-300 bg-white")}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1.5 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className={"px-2 py-0.5 rounded text-[10px] font-bold border " + subjMeta.badgeClass}>
+                                {subjMeta.label}
+                              </span>
+                              {script.gradeLevel && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                                  Khối {script.gradeLevel}
+                                </span>
+                              )}
+                              {isPublished ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Đã xuất bản (Thư viện)
+                                </span>
+                              ) : isCompleted ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Đã phê duyệt (Sẵn sàng)
+                                </span>
+                              ) : isRendering ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  Đang kết xuất MP4
+                                </span>
+                              ) : isQa ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                                  <ShieldCheck className="w-3 h-3" />
+                                  Đang kiểm định QA
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
+                                  Bản nháp ({script.scriptStatus})
+                                </span>
+                              )}
+                            </div>
+
+                            <h4 className="font-bold text-sm text-slate-900 leading-snug">
+                              {script.title}
+                            </h4>
+
+                            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
+                              <span>Số cảnh: <b className="text-slate-600">{script.scenes?.length || script.sceneCount || 0}</b></span>
+                              <span>•</span>
+                              <span>Thời lượng: <b className="text-slate-600">{script.totalDurationSeconds || script.estimatedDurationSeconds || 0}s</b></span>
+                              {script.ownerName && (
+                                <>
+                                  <span>•</span>
+                                  <span>Tác giả: <b className="text-slate-600">{script.ownerName}</b></span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                            {script.videoUrl ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewVideo(script)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-xs cursor-pointer"
+                                  title="Phát video này"
+                                >
+                                  <Play className="w-3.5 h-3.5 fill-current" />
+                                  <span>Phát video</span>
+                                </button>
+                                <a
+                                  href={script.videoUrl}
+                                  download={script.title + ".mp4"}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-slate-50 transition"
+                                  title="Tải MP4 về máy"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </a>
+                              </>
+                            ) : isCompleted ? (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewVideo(script)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition cursor-pointer"
+                              >
+                                <span>Xem chi tiết</span>
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">Chưa có MP4</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                Hiển thị tổng số {wsVideosList.length} bài giảng trong không gian này.
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedWsForVideos(null);
+                  setPreviewVideo(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 };
