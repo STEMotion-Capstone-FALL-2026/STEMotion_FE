@@ -5,21 +5,12 @@ import {
   Check,
   PlusCircle,
   Users,
-  PenTool,
-  CheckSquare,
-  Clapperboard,
   Shield,
   LogOut,
   Library,
   FolderKanban,
 } from 'lucide-react';
 import { UserRole } from '../../services';
-
-const ADMIN_STUDIOS: { role: UserRole; label: string; icon: typeof PenTool }[] = [
-  { role: 'writer', label: 'Writer', icon: PenTool },
-  { role: 'reviewer', label: 'Reviewer', icon: CheckSquare },
-  { role: 'producer', label: 'Producer', icon: Clapperboard },
-];
 
 /** Falls back to a question mark so the avatar is never blank. */
 const initialsOf = (fullName: string): string => {
@@ -103,26 +94,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           </button>
         )}
 
-        {accountRole === 'admin' && !isLibraryView && (
-          <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-            {ADMIN_STUDIOS.map(({ role, label, icon: Icon }) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => onRoleChange(role)}
-                className={`px-2 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 transition-colors ${
-                  currentRole === role
-                    ? 'bg-white text-brand-700 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title={`Làm việc với vai trò ${label}`}
-              >
-                <Icon className="w-3 h-3" />
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
-        )}
+
 
         {/* WORKSPACE SELECTOR */}
         <div className="relative flex items-center space-x-1.5">

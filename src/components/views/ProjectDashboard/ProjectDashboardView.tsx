@@ -229,7 +229,9 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
               <span>Không gian làm việc: {activeGroupName}</span>
               <span className="text-slate-300">•</span>
               <span className="px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 font-bold normal-case">
-                {currentRole === 'producer'
+                {currentRole === 'admin'
+                  ? '🛡️ Vai trò: Quản trị viên (Admin)'
+                  : currentRole === 'producer'
                   ? '🎬 Vai trò: Nhà Sản Xuất (Producer)'
                   : currentRole === 'reviewer'
                   ? '🔍 Vai trò: Người Thẩm Định (Reviewer)'
