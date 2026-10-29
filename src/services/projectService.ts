@@ -25,6 +25,7 @@ export const projectService = {
   /** Scripts of the active workspace, optionally narrowed by subject. */
   async getProjects(filterSubject?: STEMSubject): Promise<STEMScript[]> {
     const workspaceId = await workspaceService.resolveActiveWorkspaceId();
+    if (!workspaceId) return [];
     const list = await apiClient.get<STEMScript[]>(`/workspaces/${workspaceId}/scripts`);
     return filterSubject ? list.filter((p) => p.subject === filterSubject) : list;
   },

@@ -322,7 +322,11 @@ export default function App() {
       }
     } catch (error: any) {
       console.error('[bootstrap] Không tải được dữ liệu từ backend:', error);
-      showToast('Không tải được dữ liệu từ máy chủ. Kiểm tra backend đã chạy chưa.', 'warn');
+      if (error?.status === 401) {
+        showToast('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', 'info');
+      } else {
+        showToast('Không tải được dữ liệu từ máy chủ. Kiểm tra backend đã chạy chưa.', 'warn');
+      }
     } finally {
       bootstrapInFlight.current = false;
       setIsBootstrapping(false);
