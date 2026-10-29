@@ -296,13 +296,10 @@ export default function App() {
 
         const list = await projectService.getProjects();
         setProjectsList(list);
-        if (list.length > 0) {
-          // A routine refresh does not need a success toast.
-        } else {
+        if (list.length === 0) {
           setScript(EMPTY_SCRIPT);
           setComments([]);
           setActiveSceneId('');
-          showToast('Workspace chưa có kịch bản nào. Hãy tạo kịch bản đầu tiên.', 'info');
         }
       } else {
         setHasNoWorkspace(true);
