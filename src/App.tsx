@@ -38,7 +38,7 @@ import { DraftReviewModal, PendingDraft } from './components/modals/DraftReviewM
 import { WorkspacePickerModal } from './components/modals/WorkspacePickerModal';
 import { VersionDiffModal } from './components/modals/VersionDiffModal';
 import { CreateWorkspaceModal } from './components/modals/CreateWorkspaceModal';
-import { pipelineStage } from './lib/pipeline';
+import { canRoleOpenProject } from './lib/pipeline';
 
 /** Shape the studio renders before the first script arrives. */
 const EMPTY_SCRIPT: STEMScript = {
@@ -72,11 +72,33 @@ export default function App() {
   // Set when the user belongs to several workspaces and has not picked one on this device.
   const [workspaceChoices, setWorkspaceChoices] = useState<WorkspaceSummary[] | null>(null);
 
+  const leaveLibraryAndAdmin = (nextRole?: UserRole) => {
+    setIsLibraryView(false);
+    if (nextRole) {
+      setCurrentRole(nextRole);
+      return;
+    }
+    if (currentRole === 'admin' || currentRole === 'library') {
+      const studioRole = workspaceRole && workspaceRole !== 'admin' && workspaceRole !== 'library'
+        ? workspaceRole
+        : 'writer';
+      setCurrentRole(studioRole);
+    }
+  };
+
   const handleRoleChange = async (role: UserRole) => {
+    if (role === 'library') {
+      if (!await saveBeforeLeave()) return;
+      setIsLibraryView(true);
+      setIsInStudio(false);
+      return;
+    }
     // Only admins switch freely; everyone else works in the role of the active workspace.
-    if (currentUser.role !== 'admin' && role !== workspaceRole && role !== 'library') return;
+    if (currentUser.role !== 'admin' && role !== workspaceRole) return;
     if (!await saveBeforeLeave()) return;
+    setIsLibraryView(false);
     setCurrentRole(role);
+    if (role === 'admin') setIsInStudio(false);
   };
 
   // Multi-workspace state
@@ -95,6 +117,7 @@ export default function App() {
   const [writerSaving, setWriterSaving] = useState(false);
   const [projectsList, setProjectsList] = useState<STEMScript[]>([]);
   const [isInStudio, setIsInStudio] = useState<boolean>(false);
+  const [isLibraryView, setIsLibraryView] = useState(false);
   const openProjectRequest = React.useRef(0);
   const [isFetchingProjects, setIsFetchingProjects] = useState<boolean>(false);
   const [activeSceneId, setActiveSceneId] = useState<string>('');
@@ -140,15 +163,23 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const toastSeq = React.useRef(0);
+  const toastTimers = React.useRef<number[]>([]);
+
+  useEffect(() => {
+    return () => {
+      toastTimers.current.forEach((t) => window.clearTimeout(t));
+    };
+  }, []);
 
   const showToast = (message: string, type: 'success' | 'info' | 'warn' = 'success') => {
     // Date.now() alone collided when two toasts fired in the same millisecond,
     // which React reported as duplicate keys.
     const id = Date.now() * 1000 + (toastSeq.current++ % 1000);
     setToasts((prev) => prev.some(t => t.message === message && t.type === type) ? prev : [...prev, { id, message, type }]);
-    if (type !== 'warn') setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3200);
+    }, type === 'warn' ? 6000 : 3200);
+    toastTimers.current.push(timer);
   };
 
   // Keep sceneSaveQueue draftRevision in sync with the active script
@@ -254,7 +285,9 @@ export default function App() {
         setWorkspaceChoices(null);
 
         if (profile.role === 'admin') {
-          setCurrentRole('admin');
+          setCurrentRole((prev) => (
+            prev === 'writer' || prev === 'reviewer' || prev === 'producer' ? prev : 'admin'
+          ));
         } else if (active.myRole) {
           setCurrentRole(active.myRole);
         } else {
@@ -505,32 +538,29 @@ export default function App() {
   const selectedScene = viewScript.scenes.find((s) => s.id === activeSceneId) || viewScript.scenes[0];
 
   const lastLockToastTimeRef = React.useRef<number>(0);
+  const warnLocked = (message: string) => {
+    const now = Date.now();
+    if (now - lastLockToastTimeRef.current <= 3000) return;
+    lastLockToastTimeRef.current = now;
+    showToast(message, 'warn');
+  };
 
   /** Producer edits: per-scene properties of the draft; scenes and templates stay as approved. */
-  const editComposition = (change: (scenes: SceneData[]) => SceneData[]) => {
-    if (syncDurationsPending.current || producerSubmissionPending.current || saveConflict) return;
+  const editComposition = (change: (scenes: SceneData[]) => SceneData[]): boolean => {
+    if (syncDurationsPending.current || producerSubmissionPending.current || saveConflict) return false;
     if (!composition) {
       if (['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '')) {
-        const now = Date.now();
-        if (now - lastLockToastTimeRef.current > 3000) {
-          lastLockToastTimeRef.current = now;
-          showToast('Bản dựng đang khóa (đang chờ Reviewer thẩm định hoặc đã hoàn tất). Không thể chỉnh sửa.', 'warn');
-        }
-        return;
+        warnLocked('Bản dựng đang khóa (đang chờ Reviewer thẩm định hoặc đã hoàn tất). Không thể chỉnh sửa.');
+        return false;
       }
       setScript((prev) => ({ ...prev, scenes: change(prev.scenes) }));
-      return;
+      return true;
     }
     if (!composition.editable) {
-      const now = Date.now();
-      if (now - lastLockToastTimeRef.current > 3000) {
-        lastLockToastTimeRef.current = now;
-        showToast(
-          composition.lockedReason || 'Bản dựng đang khóa (đang chờ Reviewer thẩm định hoặc đã hoàn tất). Không thể chỉnh sửa.',
-          'warn'
-        );
-      }
-      return;
+      warnLocked(
+        composition.lockedReason || 'Bản dựng đang khóa (đang chờ Reviewer thẩm định hoặc đã hoàn tất). Không thể chỉnh sửa.'
+      );
+      return false;
     }
     setComposition((prev) => {
       if (!prev) return prev;
@@ -539,66 +569,49 @@ export default function App() {
       return next;
     });
     setIsSavingComposition(true);
+    return true;
   };
 
   // Dynamic Scene Updater (Live Props Binding via Service Layer)
   const canEditScript = () => {
     // The producer edits the composition (editComposition), never the approved script.
     if (inProduction) {
-      const now = Date.now();
-      if (now - lastLockToastTimeRef.current > 3000) {
-        lastLockToastTimeRef.current = now;
-        showToast('Bản dựng giữ đúng danh sách, thứ tự và template cảnh đã duyệt; Producer chỉnh thuộc tính từng cảnh.', 'warn');
-      }
+      warnLocked('Bản dựng giữ đúng danh sách, thứ tự và template cảnh đã duyệt; Producer chỉnh thuộc tính từng cảnh.');
       return false;
     }
     if (['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '')) {
-      const now = Date.now();
-      if (now - lastLockToastTimeRef.current > 3000) {
-        lastLockToastTimeRef.current = now;
-        showToast('Video đang trong quá trình duyệt hoặc đã xuất bản, không thể thay đổi.', 'warn');
-      }
+      warnLocked('Video đang trong quá trình duyệt hoặc đã xuất bản, không thể thay đổi.');
       return false;
     }
     // Roles are per workspace: the role of the active workspace decides, not the account role.
     if (!['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)
       || !(currentRole === 'writer' || currentRole === 'producer' || currentUser.role === 'admin')) {
-      showToast(currentRole === 'producer'
+      warnLocked(currentRole === 'producer'
         ? 'Producer chỉ dựng và chỉnh sửa video khi kịch bản chưa khóa xuất bản.'
-        : 'Kịch bản đã gửi duyệt hoặc đã được phê duyệt, Writer không thể chỉnh sửa.', 'warn');
+        : 'Kịch bản đã gửi duyệt hoặc đã được phê duyệt, Writer không thể chỉnh sửa.');
       return false;
     }
     return true;
   };
-  const updateSceneProperty = (updater: (s: any) => any) => {
-    if (!selectedScene) return;
+  const updateSceneProperty = (updater: (s: SceneData) => SceneData, sceneId = selectedScene?.id): boolean => {
+    if (!sceneId) return false;
     if (inProduction) {
-      const id = selectedScene.id;
-      editComposition((scenes) => scenes.map((sc) => (sc.id === id ? updater(sc) : sc)));
-      return;
+      return editComposition((scenes) => scenes.map((sc) => (sc.id === sceneId ? updater(sc) : sc)));
     }
     if (currentRole === 'producer' && !['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '')) {
-      const id = selectedScene.id;
       setScript((prev) => ({
         ...prev,
-        scenes: prev.scenes.map((sc) => (sc.id === id ? updater(sc) : sc)),
+        scenes: prev.scenes.map((sc) => (sc.id === sceneId ? updater(sc) : sc)),
       }));
-      return;
+      return true;
     }
-    if (!canEditScript()) return;
-    setScript((prev) => {
-      const updatedScenes = prev.scenes.map((sc) => {
-        if (sc.id === selectedScene.id) {
-          return updater(sc);
-        }
-        return sc;
-      });
-      const updatedScript = { ...prev, scenes: updatedScenes };
-      scriptService.updateScene(prev, selectedScene.id, updater).catch((err) => {
-        console.warn('[updateSceneProperty] Sync note:', err);
-      });
-      return updatedScript;
-    });
+    if (!canEditScript()) return false;
+    const nextScenes = script.scenes.map((sc) => (sc.id === sceneId ? updater(sc) : sc));
+    setScript((prev) => (
+      prev.id !== script.id ? prev : { ...prev, scenes: prev.scenes.map((sc) => (sc.id === sceneId ? updater(sc) : sc)) }
+    ));
+    sceneSaveQueue.schedule(script.id, nextScenes);
+    return true;
   };
 
   // Add new scene dynamically via Service Layer
@@ -631,9 +644,18 @@ export default function App() {
     }
   };
 
-  const handleUpdateSceneTitle = async (sceneId: string, newTitle: string) => {
-    await updateSceneProperty((s) => (s.id === sceneId ? { ...s, title: newTitle } : s));
-    showToast('Đã đổi tên phân cảnh thành công!');
+  const handleUpdateSceneTitle = (sceneId: string, newTitle: string) => {
+    const trimmed = newTitle.trim();
+    const source = inProduction && composition ? composition.scenes : script.scenes;
+    const current = source.find((scene) => scene.id === sceneId);
+    if (!current) {
+      showToast('Không tìm thấy phân cảnh để đổi tên.', 'warn');
+      return;
+    }
+    if (!trimmed || trimmed === current.title) return;
+    if (updateSceneProperty((scene) => ({ ...scene, title: trimmed }), sceneId)) {
+      showToast('Đã đổi tên phân cảnh thành công!');
+    }
   };
 
   const persistSceneList = async (scenes: SceneData[], message: string, activeId?: string) => {
@@ -863,17 +885,9 @@ export default function App() {
       const full = await projectService.getProjectById(projectId);
       const loadedComments = await reviewService.getComments(full.id);
       if (request !== openProjectRequest.current) return;
-      const stage = pipelineStage(full);
-
-      // Guard: Producer chỉ mở khi kịch bản đã được duyệt
-      if (currentRole === 'producer' && (stage === 'DRAFT' || stage === 'SCRIPT_REVIEW')) {
-        showToast('Kịch bản chưa được phê duyệt. Producer chỉ sản xuất khi kịch bản ở trạng thái Approved.', 'warn');
-        return;
-      }
-
-      // Guard: Reviewer chỉ mở khi kịch bản đã gửi duyệt hoặc video cần duyệt
-      if (currentRole === 'reviewer' && stage === 'DRAFT') {
-        showToast('Kịch bản này còn đang là Bản nháp của tác giả, chưa gửi duyệt.', 'info');
+      const gate = canRoleOpenProject(currentRole, full);
+      if (!gate.allowed) {
+        showToast(gate.message || 'Không mở được kịch bản với vai trò hiện tại.', 'warn');
         return;
       }
 
@@ -1002,7 +1016,7 @@ export default function App() {
       .map((s) => s.narration || (s as any).latex || (s as any).question || '')
       .join(' ');
 
-    showToast(`Dang gui kich ban cho AI phan tich (${action})...`, 'info');
+    showToast(`Đang gửi kịch bản cho AI phân tích (${action})...`, 'info');
 
     try {
       const res = await scriptService.runAiAction(action, rawScript, script.subject, script.gradeLevel);
@@ -1017,95 +1031,93 @@ export default function App() {
         setAiAnalysisResult({
           requestId: res.requestId,
           type: 'resegment',
-          title: `Phan Canh Tu Dong (${scenesList.length} Scenes)`,
+          title: `Phân Cảnh Tự Động (${scenesList.length} Scenes)`,
           details: [
             ...(scenesList.length
               ? scenesList.map(
                   (s: any, idx: number) =>
                     `Scene ${idx + 1} (${s.type || s.templateType || 'Scene'}, ${s.suggestedDurationSec || 15}s): ${
                       s.title ? s.title + ' - ' : ''
-                    }${s.narration || s.narrationText || 'Phan canh tieu chuan'}`
+                    }${s.narration || s.narrationText || 'Phân cảnh tiêu chuẩn'}`
                 )
-              : ['AI khong de xuat phan canh nao.']),
+              : ['AI không đề xuất phân cảnh nào.']),
             footer,
           ],
         });
-        showToast('AI: Da toi uu hoa phan canh thanh cong!', 'success');
+        showToast('AI: Đã tối ưu hóa phân cảnh thành công!', 'success');
       } else if (action === 'grade') {
         const details: string[] = [];
         if (response?.readabilityScore !== undefined) {
-          details.push(`Diem de doc (Readability Score): ${response.readabilityScore}/100`);
+          details.push(`Điểm dễ đọc (Readability Score): ${response.readabilityScore}/100`);
         }
         if (response?.estimatedGrade) {
           details.push(
-            `Cap do tiep can danh gia: ${response.estimatedGrade} (${
-              response.matchesTargetGrade ? 'Khop chuan muc tieu' : 'Can tinh chinh'
+            `Cấp độ tiếp cận đánh giá: ${response.estimatedGrade} (${
+              response.matchesTargetGrade ? 'Khớp chuẩn mục tiêu' : 'Cần tinh chỉnh'
             })`
           );
         }
         if (response?.verdict) {
-          details.push(`Nhan dinh su pham: ${response.verdict}`);
+          details.push(`Nhận định sư phạm: ${response.verdict}`);
         }
         if (Array.isArray(response?.suggestions) && response.suggestions.length > 0) {
-          response.suggestions.forEach((sug: string) => details.push(`Goi y: ${sug}`));
+          response.suggestions.forEach((sug: string) => details.push(`Gợi ý: ${sug}`));
         }
         details.push(footer);
         setAiAnalysisResult({
           requestId: res.requestId,
           type: 'grade',
-          title: `Cham Do Kho Su Pham (${response?.readabilityScore ?? '?'}/100)`,
+          title: `Chấm Độ Khó Sư Phạm (${response?.readabilityScore ?? '?'}/100)`,
           details,
         });
-        showToast('AI: Da phan tich do doc de hieu cho hoc sinh!', 'success');
+        showToast('AI: Đã phân tích độ đọc dễ hiểu cho học sinh!', 'success');
       } else if (action === 'extract') {
         const concepts = response?.concepts || [];
         setAiAnalysisResult({
           requestId: res.requestId,
           type: 'extract',
-          title: `Trich Xuat Khai Niem STEM (${concepts.length} Khai niem)`,
+          title: `Trích Xuất Khái Niệm STEM (${concepts.length} Khái niệm)`,
           details: [
             ...(concepts.length
               ? concepts.map(
                   (c: any) =>
-                    `#${String(c.name || '').replace(/\s+/g, '')} [${c.category || 'STEM'}] - Muc do: ${
-                      c.importance || 'Quan trong'
+                    `#${String(c.name || '').replace(/\s+/g, '')} [${c.category || 'STEM'}] - Mức độ: ${
+                      c.importance || 'Quan trọng'
                     }`
                 )
-              : ['Khong trich xuat duoc khai niem nao.']),
+              : ['Không trích xuất được khái niệm nào.']),
             footer,
           ],
         });
-        showToast('AI: Da trich xuat cac tu khoa khai niem STEM cot loi!', 'success');
+        showToast('AI: Đã trích xuất các từ khóa khái niệm STEM cốt lõi!', 'success');
       } else if (action === 'terms') {
         const issues = response?.issues || [];
         setAiAnalysisResult({
           requestId: res.requestId,
           type: 'terms',
-          title: `Ra Soat Tinh Nhat Quan Thuat Ngu (${issues.length} canh bao)`,
+          title: `Rà Soát Tính Nhất Quán Thuật Ngữ (${issues.length} cảnh báo)`,
           details: [
             ...(issues.length
               ? issues.map(
                   (iss: any) =>
-                    `[${iss.severity || 'Luu y'}] ${iss.term}: ${iss.issue}${
-                      iss.suggestion ? ` (Goi y: ${iss.suggestion})` : ''
-                    }`
+                    `[${iss.severity || 'Lưu ý'}] ${iss.term}: ${iss.issue}${iss.suggestion ? ` (Gợi ý: ${iss.suggestion})` : ''}`
                 )
-              : ['Khong phat hien mau thuan thuat ngu khoa hoc.']),
+              : ['Không phát hiện mâu thuẫn thuật ngữ khoa học.']),
             footer,
           ],
         });
-        showToast('AI: Da quet tinh nhat quan thuat ngu khoa hoc!', 'success');
+        showToast('AI: Đã quét tính nhất quán thuật ngữ khoa học!', 'success');
       }
     } catch (err: any) {
       console.error('AI action failed:', err);
       // A missing GEMINI_API_KEY comes back as 503 from the API.
       const message =
         err?.code === 'AI_NOT_CONFIGURED'
-          ? 'Chua cau hinh GEMINI_API_KEY o backend (.env).'
+          ? 'Chưa cấu hình GEMINI_API_KEY ở backend (.env).'
           : err?.code === 'AI_BUSY'
-            ? 'Mo hinh AI dang qua tai, thu lai sau it phut.'
-            : err?.message || 'Khong goi duoc dich vu AI.';
-      showToast('Loi AI: ' + message, 'warn');
+            ? 'Mô hình AI đang quá tải, vui lòng thử lại sau ít phút.'
+            : err?.message || 'Không gọi được dịch vụ AI.';
+      showToast('Lỗi AI: ' + message, 'warn');
     } finally {
       aiPending.current = false;
       setIsAiRunning(false);
@@ -1175,13 +1187,19 @@ export default function App() {
           setComments([]);
           setActiveSceneId('');
           setIsInStudio(false);
+          setIsLibraryView(false);
           void bootstrapFromApi();
         }}
         onOpenManageMembersModal={async () => { if (await saveBeforeLeave()) setIsManageMembersModalOpen(true); }}
         onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
         onCreateWorkspace={async () => { if (await saveBeforeLeave()) setIsCreateWorkspaceModalOpen(true); }}
-        onNavigateToDashboard={async () => { if (await saveBeforeLeave()) setIsInStudio(false); }}
+        onNavigateToDashboard={async () => {
+          if (!await saveBeforeLeave()) return;
+          leaveLibraryAndAdmin();
+          setIsInStudio(false);
+        }}
         isInStudio={isInStudio}
+        isLibraryView={isLibraryView}
       />
 
       {hasNoWorkspace && currentUser.role !== 'admin' && (
@@ -1209,7 +1227,7 @@ export default function App() {
       )}
 
       {/* Main Role View Container */}
-      {!hasNoWorkspace && currentRole !== 'admin' && currentRole !== 'library' && !isInStudio && (
+      {!hasNoWorkspace && currentRole !== 'admin' && !isLibraryView && !isInStudio && (
         <ProjectDashboardView
           scripts={projectsList}
           currentRole={currentRole}
@@ -1223,7 +1241,7 @@ export default function App() {
         />
       )}
 
-      {!hasNoWorkspace && isInStudio && script.scenes.length === 0 && currentRole !== 'admin' && currentRole !== 'library' && (
+      {!hasNoWorkspace && isInStudio && script.scenes.length === 0 && currentRole !== 'admin' && !isLibraryView && (
         <main className="flex-1 bg-slate-50 flex items-center justify-center p-6">
           <div className="max-w-md text-center space-y-3">
             <div className="text-4xl">📄</div>
@@ -1237,7 +1255,7 @@ export default function App() {
             </p>
             <div className="flex items-center justify-center gap-2 pt-2">
               <button
-                onClick={async () => { if (await saveBeforeLeave()) setIsInStudio(false); }}
+                onClick={async () => { if (await saveBeforeLeave()) { leaveLibraryAndAdmin(); setIsInStudio(false); } }}
                 className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
               >
                 ← Về kho kịch bản
@@ -1255,7 +1273,7 @@ export default function App() {
         </main>
       )}
 
-      {isInStudio && script.scenes.length > 0 && currentRole === 'producer' && (
+      {isInStudio && !isLibraryView && script.scenes.length > 0 && currentRole === 'producer' && (
         <ProducerStudio
           script={viewScript}
           production={inProduction && composition ? {
@@ -1294,7 +1312,7 @@ export default function App() {
         />
       )}
 
-      {isInStudio && script.scenes.length > 0 && currentRole === 'reviewer' && (
+      {isInStudio && !isLibraryView && script.scenes.length > 0 && currentRole === 'reviewer' && (
         <ReviewerStudio
           script={script}
           setScript={setScript}
@@ -1303,6 +1321,7 @@ export default function App() {
           selectedScene={selectedScene}
           setActiveSceneId={setActiveSceneId}
           comments={comments}
+          onCommentsChange={setComments}
           currentSec={currentSec}
           setCurrentSec={setCurrentSec}
           seekTimestampSec={seekTimestampSec}
@@ -1320,7 +1339,7 @@ export default function App() {
         />
       )}
 
-      {isInStudio && script.scenes.length > 0 && currentRole === 'writer' && (
+      {isInStudio && !isLibraryView && script.scenes.length > 0 && currentRole === 'writer' && (
         <WriterStudio
           script={script}
           setScript={setScript}
@@ -1353,7 +1372,7 @@ export default function App() {
         />
       )}
 
-      {currentRole === 'admin' && (
+      {currentRole === 'admin' && !isLibraryView && (
         <AdminPortal
           onOpenManageMembersModal={() => setIsManageMembersModalOpen(true)}
           onWorkspaceCreated={(workspace) => {
@@ -1363,7 +1382,7 @@ export default function App() {
         />
       )}
 
-      {currentRole === 'library' && (
+      {isLibraryView && (
         <MediaLibraryView
           script={script}
           onOpenPublishModal={() => setIsPublishModalOpen(true)}

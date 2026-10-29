@@ -48,6 +48,7 @@ interface ReviewerStudioProps {
   selectedScene: SceneData;
   setActiveSceneId: (id: string) => void;
   comments: FeedbackComment[];
+  onCommentsChange?: React.Dispatch<React.SetStateAction<FeedbackComment[]>>;
   currentSec: number;
   setCurrentSec: (sec: number) => void;
   seekTimestampSec: number | null;
@@ -271,6 +272,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   selectedScene,
   setActiveSceneId,
   comments,
+  onCommentsChange,
   currentSec,
   setCurrentSec,
   seekTimestampSec,
@@ -398,6 +400,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       });
       if (activeProject.current !== projectId) return;
       setLocalComments((prev) => [...prev, added]);
+      onCommentsChange?.((prev) => [...prev, added]);
       setSceneCommentInput('');
       showToast('Đã thêm nhận xét cho phân cảnh.', 'success');
     } catch (err: any) {
@@ -422,6 +425,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       const replied = await reviewService.replyComment(commentId, replyInput.trim());
       if (activeProject.current !== projectId) return;
       setLocalComments((prev) => [...prev, replied]);
+      onCommentsChange?.((prev) => [...prev, replied]);
       setReplyInput('');
       setReplyingToId(null);
       showToast('Đã gửi phản hồi nhận xét.', 'success');
@@ -483,6 +487,9 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       setLocalComments((prev) =>
         prev.map((c) => (c.id === commentId ? { ...c, ...saved } : c))
       );
+      onCommentsChange?.((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, ...saved } : c))
+      );
     } catch (err: any) {
       showToast(err.message || 'Lỗi khi giải quyết góp ý.', 'warn');
     }
@@ -497,6 +504,9 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       setLocalComments((prev) =>
         prev.map((c) => (c.id === commentId ? { ...c, ...saved } : c))
       );
+      onCommentsChange?.((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, ...saved } : c))
+      );
     } catch (err: any) {
       showToast(err.message || 'Lỗi khi mở lại nhận xét.', 'warn');
     }
@@ -509,6 +519,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       if (activeProject.current !== projectId) return;
       showToast('Đã xóa nhận xét.', 'info');
       setLocalComments((prev) => prev.filter((c) => c.id !== commentId));
+      onCommentsChange?.((prev) => prev.filter((c) => c.id !== commentId));
     } catch (err: any) {
       showToast(err.message || 'Lỗi khi xóa nhận xét.', 'warn');
     }
@@ -583,10 +594,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       setActiveSceneId(updated.scenes[0]?.id || '');
       showToast(decision.includes('RETURNED') || decision === 'CHANGE_REQUESTED'
         ? 'Đã lưu yêu cầu chỉnh sửa và chuyển trả thành công.' : 'Đã lưu quyết định phê duyệt.', 'success');
-      if (decision === 'VIDEO_APPROVED') {
-        if (updated.videoUrl) {
-          onOpenPublishModal();
-        }
+      if (decision === 'VIDEO_APPROVED' && updated.videoUrl) {
+        showToast('Video đã duyệt. Producer hoặc Admin sẽ xuất bản vào thư viện.', 'info');
       }
       return true;
     } catch (error: any) {
@@ -735,10 +744,10 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
                     <button
                       onClick={onOpenPublishModal}
                       className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer"
-                      title="Tải video MP4 Full HD hoặc xuất bản"
+                      title="Tải video MP4 đã kết xuất"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      <span>Tải MP4 / Xuất Bản</span>
+                      <span>Tải MP4</span>
                     </button>
                   ) : !isRendering && onStartRender ? (
                     <button

@@ -45,6 +45,15 @@ describe('apiClient', () => {
     });
   });
 
+  it('does not report an HTML error page as a network failure', async () => {
+    global.fetch = mockResponse(502, '<html>bad gateway</html>') as typeof fetch;
+
+    await expect(apiClient.get('/scripts/1')).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE',
+      status: 502,
+    });
+  });
+
   it('wraps a network failure as ApiError rather than leaking it', async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('connection refused')) as typeof fetch;
 

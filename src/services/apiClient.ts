@@ -81,7 +81,18 @@ export const apiClient = {
       });
 
       const raw = await response.text();
-      const json = raw ? JSON.parse(raw) : {};
+      let json: any = {};
+      if (raw) {
+        try {
+          json = JSON.parse(raw);
+        } catch {
+          throw new ApiError(
+            'Máy chủ trả về dữ liệu không hợp lệ. Vui lòng thử lại hoặc kiểm tra backend.',
+            'INVALID_RESPONSE',
+            response.status
+          );
+        }
+      }
 
       // An expired or revoked token invalidates the whole session, so drop it
       // and let the app fall back to the login screen instead of leaving the

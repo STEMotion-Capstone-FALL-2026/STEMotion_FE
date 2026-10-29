@@ -119,8 +119,8 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
   });
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xs text-xs">
-      <fieldset disabled={busy} className="contents">
+    <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs text-xs">
+      <fieldset disabled={busy} className="space-y-4 border-0 p-0 m-0">
       <div className="flex items-center space-x-2.5">
         <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
           <Building2 className="w-4 h-4" />

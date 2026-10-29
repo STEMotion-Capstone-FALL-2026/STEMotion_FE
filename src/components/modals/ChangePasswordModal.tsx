@@ -73,8 +73,8 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <fieldset disabled={busy} className="contents">
+        <form onSubmit={handleSubmit}>
+          <fieldset disabled={busy} className="space-y-4 border-0 p-0 m-0">
           <label className="block">
             <span className="font-semibold text-slate-700">Mật khẩu hiện tại (được cấp)</span>
             <input

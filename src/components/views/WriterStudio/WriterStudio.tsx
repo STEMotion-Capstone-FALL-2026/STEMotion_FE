@@ -448,27 +448,6 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
     }
   });
 
-  // Google Vids: Batch Auto-Fit All Scenes
-  const handleBatchAutoFitAllScenes = () => {
-    setScript((prev) => {
-      const updatedScenes = prev.scenes.map((sc) => {
-        const words = (sc.narration || '').trim().split(/\s+/).filter(Boolean).length;
-        const estSeconds = words > 0 ? Math.max(4, Math.ceil(words / 2.3) + 1) : 5;
-        return {
-          ...sc,
-          durationInFrames: estSeconds * 30,
-        };
-      });
-      const totalSec = Math.round(updatedScenes.reduce((acc, sc) => acc + (sc.durationInFrames || 150), 0) / 30);
-      return {
-        ...prev,
-        scenes: updatedScenes,
-        totalDurationSeconds: totalSec,
-      };
-    });
-    showToast(`Đã ước tính thời lượng ${script.scenes.length} phân cảnh theo số từ; chưa đo bằng TTS.`, 'info');
-  };
-
   // Real-time pacing calculation
   const wordsCount = (selectedScene.narration || '').trim().split(/\s+/).filter(Boolean).length;
   const estimatedReadSec = wordsCount > 0 ? (wordsCount / 2.5).toFixed(1) : '0';
@@ -481,7 +460,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
     && !['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '');
   return (
     <section aria-busy={isSubmitting} className="studio-workspace flex-1 min-h-0 flex flex-col overflow-hidden">
-      <fieldset disabled={isSubmitting || isSyncingDurations} className="contents">
+      <fieldset disabled={isSubmitting || isSyncingDurations} className="min-w-0 min-h-0 flex-1 flex flex-col overflow-hidden border-0 p-0 m-0">
       {!canEdit && <p role="status" className="bg-amber-50 p-3 text-sm text-amber-900">Kịch bản đã gửi duyệt hoặc được khóa xuất bản. Bạn vẫn có thể xem nội dung và góp ý; chỉ chỉnh sửa sau khi Reviewer yêu cầu sửa lại.</p>}
       {commentsError && <div role="alert" className="bg-amber-50 p-3 text-sm"><p>{commentsError}</p><button onClick={() => void fetchComments()} className="underline">Tải lại góp ý</button></div>}
       {/* Top Bar Writer */}
@@ -849,7 +828,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
             )}
 
             {/* 1. Tiêu Đề Cảnh (Cho Phép Writer Sửa Trực Tiếp) */}
-            <fieldset disabled={!canEdit} className="contents">
+            <fieldset disabled={!canEdit} className="min-w-0 flex flex-col space-y-5 border-0 p-0 m-0">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
                 <span>Tiêu Đề Phân Cảnh (Scene Title):</span>

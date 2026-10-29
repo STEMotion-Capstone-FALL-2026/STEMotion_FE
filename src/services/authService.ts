@@ -96,15 +96,10 @@ const response = await apiClient.post<any>('/auth/login', {
     if (!apiClient.getAuthToken()) {
       return this.getCurrentUser();
     }
-    try {
-      const me = await apiClient.get<any>('/auth/me');
-      const user = this._toProfile(me);
-      this.setCurrentUser(user);
-      return user;
-    } catch (error) {
-      console.warn('[authService] Could not refresh the current user:', error);
-      return this.getCurrentUser();
-    }
+    const me = await apiClient.get<any>('/auth/me');
+    const user = this._toProfile(me);
+    this.setCurrentUser(user);
+    return user;
   },
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {

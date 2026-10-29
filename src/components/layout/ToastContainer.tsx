@@ -14,13 +14,13 @@ interface ToastContainerProps {
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismiss }) => {
   return (
-    <div className="fixed bottom-5 right-5 z-[70] max-w-[calc(100vw-2.5rem)] flex flex-col space-y-2 pointer-events-none">
+    <div className="fixed bottom-5 right-5 z-[70] w-[min(24rem,calc(100vw-2.5rem))] flex flex-col space-y-2 pointer-events-none">
       {toasts.map((t) => (
         <div
           key={t.id}
           role={t.type === 'warn' ? 'alert' : 'status'}
           aria-atomic="true"
-          className={`px-4 py-2.5 rounded-xl shadow-xl border text-xs font-semibold flex items-center space-x-2 animate-slide-up pointer-events-auto ${
+          className={`px-4 py-2.5 rounded-xl shadow-xl border text-xs font-semibold flex items-start space-x-2 animate-slide-up pointer-events-auto max-w-full ${
             t.type === 'warn'
               ? 'bg-amber-50 text-amber-800 border-amber-200'
               : t.type === 'info'
@@ -35,7 +35,7 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismis
           ) : (
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           )}
-          <span>{t.message}</span>
+          <span className="min-w-0 flex-1 break-words whitespace-pre-wrap">{t.message}</span>
           {onDismiss && <button onClick={() => onDismiss(t.id)} aria-label="Đóng thông báo" className="p-1 shrink-0 rounded hover:bg-black/5"><X className="w-4 h-4" /></button>}
         </div>
       ))}

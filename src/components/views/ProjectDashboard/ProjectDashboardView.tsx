@@ -17,7 +17,7 @@ import {
   PlayCircle
 } from 'lucide-react';
 import { STEMScript, STEMSubject, UserRole } from '../../../types/stem';
-import { PIPELINE_STAGES, pipelineStage, PipelineStage } from '../../../lib/pipeline';
+import { PIPELINE_STAGES, pipelineStage, PipelineStage, canRoleSeeProject } from '../../../lib/pipeline';
 
 interface ProjectDashboardViewProps {
   scripts: STEMScript[];
@@ -90,32 +90,7 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
   // - Writer: Xem bản nháp của mình và toàn bộ tiến trình kịch bản trong tổ.
   // - Admin: Xem toàn bộ.
   const roleAccessibleScripts = useMemo(() => {
-    return scripts.filter((sc) => {
-      const stage = pipelineStage(sc);
-      if (currentRole === 'admin') return true;
-
-      if (currentRole === 'producer') {
-        return (
-          stage === 'APPROVED' ||
-          stage === 'IN_PRODUCTION' ||
-          stage === 'CLIP_REVIEW' ||
-          stage === 'PUBLISHED'
-        );
-      }
-
-      if (currentRole === 'reviewer') {
-        return (
-          stage === 'SCRIPT_REVIEW' ||
-          stage === 'APPROVED' ||
-          stage === 'IN_PRODUCTION' ||
-          stage === 'CLIP_REVIEW' ||
-          stage === 'PUBLISHED'
-        );
-      }
-
-      // Writer / default
-      return true;
-    });
+    return scripts.filter((sc) => canRoleSeeProject(currentRole, sc));
   }, [scripts, currentRole]);
 
   // Statistics dựa trên danh sách phù hợp với role
