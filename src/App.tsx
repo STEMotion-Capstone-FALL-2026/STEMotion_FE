@@ -181,7 +181,8 @@ export default function App() {
     if (event.scriptId !== script.id) return;
     if (event.error) {
       setWriterSaving(false);
-      const isConflict = (event.error as any)?.status === 409;
+      const err = event.error as any;
+      const isConflict = err?.code === 'STALE_REVISION' || (err?.status === 409 && err?.code !== 'CONFLICT');
       setSaveConflict(isConflict);
       setSaveError(isConflict
         ? 'Bản nháp vừa được lưu ở nơi khác. Nội dung đang chỉnh vẫn được giữ; tải bản mới để đối chiếu trước khi tiếp tục.'
@@ -360,8 +361,9 @@ export default function App() {
         },
         onError: (error: any) => {
           setIsSavingComposition(false);
-          setSaveConflict(error?.status === 409);
-          setSaveError(error?.status === 409
+          const isStale = error?.code === 'STALE_REVISION' || (error?.status === 409 && error?.code !== 'CONFLICT');
+          setSaveConflict(isStale);
+          setSaveError(isStale
             ? 'Bản dựng đã được sửa ở nơi khác. Nội dung đang chỉnh vẫn được giữ; tải bản mới để đối chiếu trước khi tiếp tục.'
             : error?.message || 'Không lưu được bản dựng. Nội dung đang chỉnh vẫn được giữ.');
         },

@@ -100,7 +100,7 @@ export const apiClient = {
           json.error?.message || json.message || response.statusText || 'API Request Failed',
           json.error?.code || json.code || `HTTP_${response.status}`,
           response.status,
-          json.error?.details
+          json.error?.details ?? json.details
         );
       }
 

@@ -410,7 +410,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
     setIsSyncingDurations(true);
     try {
       await sceneSaveQueue.saveNow(script.id, script.scenes);
-      const res = await narrationService.syncDurations(script.id);
+      const res = await narrationService.syncDurations(script.id, script.draftRevision);
       if (activeProject.current !== projectId) return;
       if (res && Array.isArray(res.scenes) && res.scenes.length > 0) {
         const durationMap = new Map(res.scenes.map((s) => [s.id, s.durationInFrames]));

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { AlertCircle, Loader2, LogIn } from 'lucide-react';
 import { authService, UserProfile } from '../services';
-import { GoogleSignInButton } from './GoogleSignInButton';
 
 interface LoginScreenProps {
   onAuthenticated: (user: UserProfile) => void;
@@ -10,13 +9,13 @@ interface LoginScreenProps {
 /**
  * Gate in front of the studio. The backend issues a JWT that every later
  * request carries, so nothing else in the app can run until this succeeds.
+ * Accounts are strictly provisioned by system administrators.
  */
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -53,7 +52,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
               Đăng nhập
             </h1>
             <p className="text-xs text-slate-500 mt-1">
-              Nền tảng sản xuất clip STEM có hỗ trợ AI
+              Nền tảng sản xuất video giáo dục STEM có hỗ trợ AI
             </p>
           </div>
 
@@ -63,8 +62,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
               <span>{error}</span>
             </div>
           )}
-
-
 
           <label className="block">
             <span className="text-xs font-bold text-slate-600">Email</span>
@@ -91,41 +88,23 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
             />
           </label>
 
-
-
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full flex items-center justify-center space-x-2 rounded-lg bg-brand-600 text-white font-bold text-sm py-2.5 hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed transition"
+            className="w-full flex items-center justify-center space-x-2 rounded-lg bg-brand-600 text-white font-bold text-sm py-2.5 hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed transition cursor-pointer"
           >
             {isSubmitting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
-
             ) : (
               <LogIn className="w-4 h-4" />
             )}
             <span>Đăng nhập</span>
           </button>
 
-          <p className="text-xs text-slate-500">Tài khoản do quản trị viên cấp. Liên hệ quản trị viên nếu bạn chưa có tài khoản.</p>
+          <p className="text-xs text-slate-500 text-center pt-2">
+            Tài khoản do quản trị viên cấp. Liên hệ quản trị viên nếu bạn chưa có tài khoản.
+          </p>
         </form>
-
-        <div className="mt-4">
-          <GoogleSignInButton
-            onCredential={async (credential) => {
-              setError(null);
-              setIsSubmitting(true);
-              try {
-                onAuthenticated(await authService.loginWithGoogle(credential));
-              } catch (err: any) {
-                setError(err?.message || 'Đăng nhập Google không thành công.');
-              } finally {
-                setIsSubmitting(false);
-              }
-            }}
-          />
-        </div>
-
       </div>
     </div>
   );

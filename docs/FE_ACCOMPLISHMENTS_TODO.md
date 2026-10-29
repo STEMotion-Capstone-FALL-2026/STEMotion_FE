@@ -832,6 +832,6 @@ BE bổ sung, chưa push. **Không đổi shape cũ**, chỉ thêm:
 
 Việc nhỏ còn lại (không chặn):
 
-- [ ] Writer sync bản nháp: gửi `baseRevision: script.draftRevision` (`narrationService.syncDurations(script.id, script.draftRevision)`) để biết sớm khi đang ở bản cũ.
-- [ ] `apiClient.ts` (dòng ~103) chỉ đọc `json.error?.details`. BE trả `details` ở **cấp trên cùng**, nên cần đổi thành `json.error?.details ?? json.details`. `code` thì đã có fallback `json.code`.
-- [ ] Xử lý 409: phân biệt `code === "STALE_REVISION"` (tải lại đúng `details.resource`) với các 409 khác (hiện message). Không tự retry.
+- [x] Writer sync bản nháp: gửi `baseRevision: script.draftRevision` (`narrationService.syncDurations(script.id, script.draftRevision)`) để biết sớm khi đang ở bản cũ.
+- [x] `apiClient.ts` (dòng ~103) chỉ đọc `json.error?.details`. BE trả `details` ở **cấp trên cùng**, nên cần đổi thành `json.error?.details ?? json.details`. `code` thì đã có fallback `json.code`.
+- [x] Xử lý 409: phân biệt `code === "STALE_REVISION"` (tải lại đúng `details.resource`) với các 409 khác (hiện message). Không tự retry.
