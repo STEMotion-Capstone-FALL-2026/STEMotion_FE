@@ -78,6 +78,10 @@ export default function App() {
       setCurrentRole(nextRole);
       return;
     }
+    if (currentUser.role === 'admin') {
+      setCurrentRole('admin');
+      return;
+    }
     if (currentRole === 'admin' || currentRole === 'library') {
       const studioRole = workspaceRole && workspaceRole !== 'admin' && workspaceRole !== 'library'
         ? workspaceRole
