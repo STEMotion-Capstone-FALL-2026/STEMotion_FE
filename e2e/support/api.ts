@@ -55,3 +55,84 @@ export async function provisionTeam(request: APIRequestContext, run: string) {
     producer: await team('PRODUCER', 'Producer'),
   };
 }
+
+const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+export async function changePassword(request: APIRequestContext, token: string, current: string, next: string) {
+  const res = await request.post(`${API_URL}/auth/change-password`, {
+    headers: bearer(token),
+    data: { currentPassword: current, newPassword: next },
+  });
+  expect(res.ok(), 'change password').toBeTruthy();
+}
+
+/**
+ * A ready team for WF-02..WF-04: three provisioned accounts that already changed their initial
+ * password, seated by the Admin in one workspace (writer is the Leader).
+ */
+export async function setupWorkspace(request: APIRequestContext, run: string) {
+  const team = await provisionTeam(request, run);
+  const res = await request.post(`${API_URL}/workspaces`, {
+    headers: bearer(team.adminToken),
+    data: {
+      name: `E2E Workspace ${run}`,
+      department: 'Vật Lý',
+      leaderUserId: team.writer.id,
+      leaderRole: 'WRITER',
+      members: [
+        { userId: team.reviewer.id, role: 'REVIEWER' },
+        { userId: team.producer.id, role: 'PRODUCER' },
+      ],
+    },
+  });
+  expect(res.status(), 'create workspace').toBe(201);
+  const workspaceId = (await res.json()).id as string;
+  const tokens = {} as Record<SystemRole, string>;
+  for (const account of [team.writer, team.reviewer, team.producer]) {
+    const first = await login(request, account.email, INITIAL_PASSWORD);
+    await changePassword(request, first, INITIAL_PASSWORD, CHANGED_PASSWORD);
+    tokens[account.role] = await login(request, account.email, CHANGED_PASSWORD);
+  }
+  return { ...team, workspaceId, tokens };
+}
+
+/** Two 10 s formula scenes: valid props, 20 s in total (the QA lower bound). */
+export function formulaScenes(prefix = 'Cảnh') {
+  return [1, 2].map((n) => ({
+    type: 'MATH_FORMULA',
+    title: `${prefix} ${n}`,
+    narration: `Đây là lời thoại của ${prefix.toLowerCase()} ${n} về định luật Ôm.`,
+    durationInFrames: 300,
+    latex: 'I = \frac{U}{R}',
+    steps: [{ label: 'Công thức', latexSnippet: 'I = U/R', explanation: 'Dòng điện tỉ lệ với hiệu điện thế.' }],
+  }));
+}
+
+export async function createProject(request: APIRequestContext, writerToken: string, workspaceId: string, title: string) {
+  const res = await request.post(`${API_URL}/workspaces/${workspaceId}/scripts`, {
+    headers: bearer(writerToken),
+    data: { title, subject: 'Physics', gradeLevel: 'Cơ bản', scenes: formulaScenes() },
+  });
+  expect(res.status(), `create project ${title}`).toBe(201);
+  return (await res.json()).id as string;
+}
+
+export async function getProject(request: APIRequestContext, token: string, projectId: string) {
+  const res = await request.get(`${API_URL}/scripts/${projectId}`, { headers: bearer(token) });
+  expect(res.ok(), 'get project').toBeTruthy();
+  return res.json();
+}
+
+export async function post(request: APIRequestContext, token: string, path: string, data?: unknown) {
+  const res = await request.post(`${API_URL}${path}`, { headers: bearer(token), data: data ?? {} });
+  expect(res.ok(), `POST ${path} -> ${res.status()} ${await res.text()}`).toBeTruthy();
+  return res.json().catch(() => ({}));
+}
+
+/** A project whose script the Reviewer already approved: where WF-03 starts. */
+export async function approvedProject(request: APIRequestContext, ws: Awaited<ReturnType<typeof setupWorkspace>>, title: string) {
+  const projectId = await createProject(request, ws.tokens.WRITER, ws.workspaceId, title);
+  await post(request, ws.tokens.WRITER, `/scripts/${projectId}/submit-review`);
+  await post(request, ws.tokens.REVIEWER, `/scripts/${projectId}/approve`, { note: 'E2E: đạt' });
+  return projectId;
+}

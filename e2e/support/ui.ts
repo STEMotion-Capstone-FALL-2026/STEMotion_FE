@@ -17,3 +17,14 @@ export async function changeFirstPassword(page: Page, current: string, next: str
   await page.getByRole('button', { name: 'Xác nhận đổi mật khẩu' }).click();
   await expect(modal).toBeHidden();
 }
+
+/** Signs in an account whose password was already changed (setupWorkspace). */
+export async function signInReady(page: Page, email: string, password: string) {
+  await signIn(page, email, password);
+  await expect(page.getByRole('button', { name: /Thành viên/ }).first()).toBeVisible();
+}
+
+/** Opens a project from the dashboard by its title. */
+export async function openProject(page: Page, title: string) {
+  await page.getByText(title, { exact: true }).first().click();
+}
