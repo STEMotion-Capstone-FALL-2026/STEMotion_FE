@@ -1471,6 +1471,8 @@ export default function App() {
           setIsChangePasswordModalOpen(false);
           setCurrentUser((prev) => ({ ...prev, mustChangePassword: false }));
           showToast('Đổi mật khẩu thành công! Chào mừng bạn đến với STEMotion.', 'success');
+          // The first bootstrap was refused until the password changed; load workspaces now.
+          void bootstrapFromApi();
         }}
         onLogout={() => {
           authService.logout();
