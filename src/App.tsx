@@ -105,6 +105,17 @@ export default function App() {
     if (role === 'admin') setIsInStudio(false);
   };
 
+  // Clears per-session view state so the next login lands on the dashboard, not the last open script.
+  const resetSessionView = () => {
+    openProjectRequest.current++;
+    setIsInStudio(false);
+    setIsLibraryView(false);
+    setScript(EMPTY_SCRIPT);
+    setComments([]);
+    setActiveSceneId('');
+    setReviewerMode('script');
+  };
+
   // Multi-workspace state
   const [workspaces, setWorkspaces] = useState<any[]>([]);
   const [activeGroup, setActiveGroup] = useState({ name: 'Đang tải nhóm…', code: '' });
@@ -1176,6 +1187,7 @@ export default function App() {
         onLogout={async () => {
           if (!await saveBeforeLeave()) return;
           authService.logout();
+          resetSessionView();
           setIsAuthenticated(false);
           setIsChangePasswordModalOpen(false);
           setIsManageMembersModalOpen(false);
@@ -1221,6 +1233,7 @@ export default function App() {
               type="button"
               onClick={() => {
                 authService.logout();
+                resetSessionView();
                 setIsAuthenticated(false);
               }}
               className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
