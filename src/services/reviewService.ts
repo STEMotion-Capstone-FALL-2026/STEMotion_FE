@@ -140,7 +140,6 @@ export const reviewService = {
     const project = await projectService.getProjectById(projectId);
     if (note) {
       (project as any).videoReviewNote = note;
-      (project as any).reviewNote = note;
     }
     return project;
   },

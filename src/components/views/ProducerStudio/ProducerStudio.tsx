@@ -148,23 +148,26 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
 
   useEffect(() => {
     let active = true;
+    setHistoryRejectNote(null);
     void reviewService
       .getReviewHistory(script.id)
       .then((history) => {
         if (!active) return;
-        const latestReturn =
-          history.find(
-            (h) => h.action === 'REJECT' && (h.targetType === 'CLIP' || h.targetType === 'COMPOSITION')
-          ) || history.find((h) => h.action === 'REJECT');
-        if (latestReturn?.note) {
-          setHistoryRejectNote(latestReturn.note);
+        // Only video-stage decisions concern the producer; script (writer) feedback must never show here.
+        const latestVideoDecision = history.find(
+          (h) => h.targetType === 'CLIP' || h.targetType === 'COMPOSITION'
+        );
+        if (latestVideoDecision?.action === 'REJECT' && latestVideoDecision.note) {
+          setHistoryRejectNote(latestVideoDecision.note);
+        } else {
+          setHistoryRejectNote(null);
         }
       })
       .catch(() => {});
     return () => {
       active = false;
     };
-  }, [script.id]);
+  }, [script.id, script.videoStatus]);
 
   const [selectedTheme, setSelectedTheme] = useState<VisualTheme>(
     () => ((script as any).visualTheme as VisualTheme) || 'default'
@@ -413,7 +416,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
       )}
 
       {/* Banner Thông Báo Nếu Clip Bị Reviewer Trả Về */}
-      {Boolean(historyRejectNote || (script as any).videoReviewNote || (script as any).reviewNote) && script.videoStatus === 'NOT_RENDERED' && (
+      {Boolean(historyRejectNote || (script as any).videoReviewNote) && script.videoStatus === 'NOT_RENDERED' && (
         <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-start gap-3 text-amber-900 shrink-0 z-10 animate-in fade-in">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <div className="text-xs">
