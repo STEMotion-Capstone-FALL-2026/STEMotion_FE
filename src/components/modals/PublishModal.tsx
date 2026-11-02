@@ -1,7 +1,7 @@
-import { useActionGuard } from '../../hooks/useActionGuard';
+﻿import { useActionGuard } from '../../hooks/useActionGuard';
 import { useDialog } from '../../hooks/useDialog';
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, X, Youtube, Code } from 'lucide-react';
+import { AlertTriangle, Download, X, Youtube, Code } from 'lucide-react';
 import { STEMScript } from '../../types/stem';
 import { projectService } from '../../services/projectService';
 import { publicationService } from '../../services/publicationService';
@@ -22,9 +22,10 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
   const [busy, setBusy] = useState(false);
   const [embedCode, setEmbedCode] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
   const activeProject = useRef(script.id);
   activeProject.current = script.id;
-  useEffect(() => { setEmbedCode(null); setPublished(false); }, [script.id]);
+  useEffect(() => { setEmbedCode(null); setPublished(false); setInlineError(null); }, [script.id]);
   const dialog = useDialog(isOpen, 'Xuất bản video', onClose, busy);
 
   if (!isOpen) return null;
@@ -33,6 +34,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
     if (busy || published) return;
     const projectId = script.id;
     setBusy(true);
+    setInlineError(null);
     try {
       const result = await publicationService.publishInternal(script.id, script.title);
       if (activeProject.current === projectId) {
@@ -44,13 +46,16 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
       try { await onPublished?.(); }
       catch { onNotify('Đã xuất bản; hãy tải lại trang để cập nhật trạng thái.', 'info'); }
     } catch (error: any) {
-      onNotify(error.message || 'Không xuất bản được video.', 'warn');
+      const msg = error.message || 'Không xuất bản được video.';
+      if (activeProject.current === projectId) setInlineError(msg);
+      onNotify(msg, 'warn');
     } finally { setBusy(false); }
   });
 
   const download = actions.wrap(async () => {
     if (busy) return;
     setBusy(true);
+    setInlineError(null);
     try {
       const latest = await projectService.getProjectById(script.id);
       if (!latest.videoUrl) throw new Error('Chưa có video đã kết xuất. Hãy kết xuất từ Producer Studio.');
@@ -67,7 +72,9 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
       link.remove();
       onNotify('Đã mở video trên máy chủ. Trình duyệt có thể yêu cầu chọn Lưu video.', 'info');
     } catch (error: any) {
-      onNotify(error.message || 'Không tải được video.', 'warn');
+      const msg = error.message || 'Không tải được video.';
+      setInlineError(msg);
+      onNotify(msg, 'warn');
     } finally { setBusy(false); }
   });
 
@@ -79,6 +86,15 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
           <button onClick={onClose} disabled={busy} aria-label="Đóng"><X size={20} /></button>
         </div>
         <p className="text-sm text-slate-600">Trạng thái: {script.videoStatus}. File tải xuống là video đã kết xuất trên máy chủ.</p>
+
+        {/* Inline error banner — shown directly inside the modal on failure */}
+        {inlineError && (
+          <div role="alert" className="flex items-start gap-2.5 rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-800">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
+            <span>{inlineError}</span>
+          </div>
+        )}
+
         <button disabled={busy || !script.videoUrl} onClick={download}
           className="bg-brand-600 text-white rounded-lg px-4 py-2 flex items-center gap-2 disabled:opacity-50">
           <Download size={18} /> {busy ? 'Đang lấy video…' : 'Mở / tải video MP4'}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useActionGuard } from '../../../hooks/useActionGuard';
 import { useDialog } from '../../../hooks/useDialog';
 import {
@@ -173,11 +173,33 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
     () => ((script as any).visualTheme as VisualTheme) || 'default'
   );
 
+  // Sync selectedTheme when the composition loads from the server for this project.
+  // Only apply the server value if the user has NOT yet made a local theme selection
+  // for this project session — prevents the race where GET /composition resolves after
+  // the user already picked a theme and overwrites their choice.
+  const themeOverriddenByUser = React.useRef(false);
+  const lastSyncedScriptId = React.useRef(script.id);
+  useEffect(() => {
+    if (script.id !== lastSyncedScriptId.current) {
+      // Project changed — reset flag so the incoming server value is accepted.
+      themeOverriddenByUser.current = false;
+      lastSyncedScriptId.current = script.id;
+    }
+    if (!themeOverriddenByUser.current) {
+      const incoming = ((script as any).visualTheme as VisualTheme) || 'default';
+      setSelectedTheme(incoming);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [script.id, (script as any).visualTheme]);
+
   const handleSelectTheme = (themeId: VisualTheme) => {
     if (isLocked) {
       showToast?.(lockReason, 'warn');
       return;
     }
+    // Mark that the user has actively chosen a theme for this session so that
+    // a late-arriving GET /composition response does not overwrite the selection.
+    themeOverriddenByUser.current = true;
     setSelectedTheme(themeId);
     (script as any).visualTheme = themeId;
     // Embed theme seed suffix into workspaceId so RemotionPlayer picks up variation if workspace is present
