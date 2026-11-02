@@ -73,7 +73,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
             <input
               type="text"
               autoComplete="username"
-              pattern={String.raw`[A-Za-z0-9][A-Za-z0-9._\-]{2,31}`}
+              maxLength={254}
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
