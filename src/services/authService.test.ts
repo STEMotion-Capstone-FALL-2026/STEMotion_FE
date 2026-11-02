@@ -1,145 +1,42 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiClient } from './apiClient';
-import { authService } from './authService';
-
-/**
- * The backend spells roles in upper case and returns the token as
- * `accessToken`; both used to be read wrongly, so they are pinned here.
- */
-describe('authService', () => {
-  const originalFetch = global.fetch;
-
-  beforeEach(() => {
-    localStorage.clear();
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
+import {authService} from './authService';
+import {apiClient} from './apiClient';
+const payload={accessToken:'new-token',user:{id:'u1',fullName:'Writer',username:'writer',systemRole:'USER',hasLocalPassword:true},session:{authMethod:'PASSWORD',requiresPasswordChange:true}};
+const respond=(status:number,body:unknown)=>vi.fn().mockResolvedValue({ok:status<300,status,statusText:String(status),text:async()=>JSON.stringify(body)} as Response);
+describe('auth v2 session contract',()=>{
+  beforeEach(()=>{localStorage.clear();});afterEach(()=>vi.unstubAllGlobals());
+  it('sends canonical username without carrying an old JWT',async()=>{
+    apiClient.setAuthToken('old-token');const fetch=respond(200,payload);vi.stubGlobal('fetch',fetch);
+    const u=await authService.login(' Writer ','password');
+    const options=fetch.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(options.body as string)).toEqual({username:'writer',password:'password'});
+    expect(options.headers).not.toHaveProperty('Authorization');expect(u.requiresPasswordChange).toBe(true);
   });
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-    vi.restoreAllMocks();
-  });
-
-  const mockJson = (status: number, payload: unknown) =>
-    vi.fn().mockResolvedValue({
-      ok: status >= 200 && status < 300,
-      status,
-      statusText: String(status),
-      text: () => Promise.resolve(JSON.stringify(payload)),
-    } as unknown as Response);
-
-  const loginPayload = {
-    accessToken: 'jwt-token',
-    tokenType: 'Bearer',
-    user: {
-      id: 'user-1',
-      fullName: 'Nguyen Van A',
-      email: 'writer@stemotion.vn',
-      role: 'WRITER',
-    },
-  };
-
-  it('stores the token returned as accessToken', async () => {
-    global.fetch = mockJson(200, loginPayload) as typeof fetch;
-
-    await authService.login('writer@stemotion.vn', 'password123');
-
-    expect(apiClient.getAuthToken()).toBe('jwt-token');
-  });
-
-  it('maps the backend role onto the UI spelling', async () => {
-    global.fetch = mockJson(200, loginPayload) as typeof fetch;
-
-    const user = await authService.login('writer@stemotion.vn', 'password123');
-
-    expect(user.role).toBe('writer');
-  });
-
-  it('maps fullName onto the profile name', async () => {
-    global.fetch = mockJson(200, loginPayload) as typeof fetch;
-
-    const user = await authService.login('writer@stemotion.vn', 'password123');
-
-    expect(user.name).toBe('Nguyen Van A');
-    expect(user.email).toBe('writer@stemotion.vn');
-  });
-
-  it.each([
-    ['WRITER', 'writer'],
-    ['REVIEWER', 'reviewer'],
-    ['PRODUCER', 'producer'],
-    ['ADMIN', 'admin'],
-  ])('maps %s to %s', async (backendRole, uiRole) => {
-    global.fetch = mockJson(200, {
-      ...loginPayload,
-      user: { ...loginPayload.user, role: backendRole },
-    }) as typeof fetch;
-
-    const user = await authService.login('x@stemotion.vn', 'password123');
-
-    expect(user.role).toBe(uiRole);
-  });
-
-  it('propagates a rejected login instead of signing the user in', async () => {
-    global.fetch = mockJson(400, {
-      status: 400,
-      code: 'BAD_REQUEST',
-      message: 'Invalid email or password',
-    }) as typeof fetch;
-
-    await expect(authService.login('writer@stemotion.vn', 'wrong')).rejects.toMatchObject({
-      message: 'Invalid email or password',
-    });
+  it('rejects an incomplete response instead of using the previous cached identity',async()=>{
+    vi.stubGlobal('fetch',respond(200,{user:payload.user}));
+    await expect(authService.login('writer','password')).rejects.toMatchObject({code:'INVALID_AUTH_RESPONSE'});
     expect(apiClient.getAuthToken()).toBeNull();
   });
-
-  it('drops the token on logout', async () => {
-    global.fetch = mockJson(200, loginPayload) as typeof fetch;
-    await authService.login('writer@stemotion.vn', 'password123');
-
-    authService.logout();
-
-    expect(apiClient.getAuthToken()).toBeNull();
+  it('uses the server session flag rather than the local credential flag on Google login',async()=>{
+    vi.stubGlobal('fetch',respond(200,{...payload,user:{...payload.user,mustChangePassword:true},session:{authMethod:'GOOGLE',requiresPasswordChange:false}}));
+    const u=await authService.loginWithGoogle({credential:'token',challengeId:'id',challengeSecret:'secret'});
+    expect(u.requiresPasswordChange).toBe(false);expect(u.authMethod).toBe('GOOGLE');
   });
-
-  it('returns the cached user when no token is stored', async () => {
-    const user = await authService.fetchCurrentUser();
-
-    expect(user).toBeDefined();
-    expect(user.role).toBeDefined();
+  it('replaces the JWT before the app can bootstrap after changing a password',async()=>{
+    apiClient.setAuthToken('old-token');vi.stubGlobal('fetch',respond(200,{...payload,session:{authMethod:'PASSWORD',requiresPasswordChange:false}}));
+    await authService.changePassword('old-password','new-password');
+    expect(apiClient.getAuthToken()).toBe('new-token');expect(authService.getCurrentUser().requiresPasswordChange).toBe(false);
   });
-
-  it('maps mustChangePassword flag from login response', async () => {
-    global.fetch = mockJson(200, {
-      ...loginPayload,
-      user: { ...loginPayload.user, mustChangePassword: true },
-    }) as typeof fetch;
-
-    const user = await authService.login('writer@stemotion.vn', 'password123');
-
-    expect(user.mustChangePassword).toBe(true);
-    expect(authService.getCurrentUser().mustChangePassword).toBe(true);
+  it('does not clear an existing session after a public login is refused',async()=>{
+    apiClient.setAuthToken('existing');vi.stubGlobal('fetch',respond(401,{code:'INVALID_CREDENTIALS',message:'Invalid credentials'}));
+    await expect(authService.login('writer','wrong')).rejects.toMatchObject({code:'INVALID_CREDENTIALS'});
+    expect(apiClient.getAuthToken()).toBe('existing');
   });
-
-  it('changePassword calls api and updates mustChangePassword to false', async () => {
-    apiClient.setAuthToken('jwt-token');
-    authService.setCurrentUser({
-      id: 'user-1',
-      name: 'Nguyen Van A',
-      email: 'writer@stemotion.vn',
-      role: 'writer',
-      mustChangePassword: true,
-    });
-
-    global.fetch = mockJson(204, {}) as typeof fetch;
-
-    await authService.changePassword('oldPass123', 'newPass1234');
-
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/auth/change-password'),
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ currentPassword: 'oldPass123', newPassword: 'newPass1234' }),
-      })
-    );
-    expect(authService.getCurrentUser().mustChangePassword).toBe(false);
+  it('discards a Google response arriving after logout',async()=>{
+    let finish!:(value:unknown)=>void;
+    vi.stubGlobal('fetch',vi.fn(()=>new Promise(resolve=>{finish=resolve;})));
+    const pending=authService.loginWithGoogle({credential:'token',challengeId:'id',challengeSecret:'secret'});
+    authService.logout();finish({ok:true,status:200,text:async()=>JSON.stringify(payload)});
+    await expect(pending).rejects.toThrow();expect(apiClient.getAuthToken()).toBeNull();
   });
 });

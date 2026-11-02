@@ -25,6 +25,9 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${WEB_PORT}`,
     locale: 'vi-VN',
     timezoneId: 'Asia/Ho_Chi_Minh',
+    launchOptions: process.env.E2E_CHROMIUM_EXECUTABLE
+      ? { executablePath: process.env.E2E_CHROMIUM_EXECUTABLE }
+      : undefined,
     // In CI the report is published as evidence (BM04), so it keeps every run, passed or not.
     trace: process.env.CI ? 'on' : 'retain-on-failure',
     screenshot: process.env.CI ? 'on' : 'only-on-failure',
@@ -46,7 +49,7 @@ export default defineConfig({
       url: `http://127.0.0.1:${WEB_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
-      env: { VITE_API_BASE_URL: API_URL, VITE_GOOGLE_CLIENT_ID: '' },
+      env: { VITE_API_BASE_URL: API_URL, VITE_GOOGLE_CLIENT_ID: 'e2e-fixture.apps.googleusercontent.com' },
     },
   ],
 });

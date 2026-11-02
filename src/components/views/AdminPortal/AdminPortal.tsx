@@ -13,6 +13,7 @@ import {
   AiUsageGroup,
 } from '../../../services/adminService';
 import { AccountProvisionForm } from './AccountProvisionForm';
+import { GoogleWhitelistPanel } from './GoogleWhitelistPanel';
 import { CreateWorkspaceForm } from './CreateWorkspaceForm';
 import { apiClient } from '../../../services/apiClient';
 import type { STEMScript } from '../../../types/stem';
@@ -56,7 +57,7 @@ interface AdminPortalProps {
   onWorkspaceCreated?: (workspace: WorkspaceSummary) => void;
 }
 
-type AdminTab = 'MONITORING' | 'USERS' | 'TEMPLATES';
+type AdminTab = 'MONITORING' | 'USERS' | 'TEMPLATES' | 'GOOGLE_WHITELIST';
 
 const SUBJECT_LABELS: Record<string, { label: string; pillar: string; badgeClass: string }> = {
   Physics: { label: 'Vật Lý', pillar: 'S — Science', badgeClass: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -68,9 +69,7 @@ const SUBJECT_LABELS: Record<string, { label: string; pillar: string; badgeClass
 
 const ROLE_LABELS: Record<SystemUserRole, { label: string; badge: string }> = {
   ADMIN: { label: 'ADMIN (Quản trị)', badge: 'bg-rose-50 text-rose-700 border-rose-200' },
-  PRODUCER: { label: 'PRODUCER (Sản xuất)', badge: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  REVIEWER: { label: 'REVIEWER (Thẩm định)', badge: 'bg-amber-50 text-amber-700 border-amber-200' },
-  WRITER: { label: 'WRITER (Biên soạn)', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  USER: { label: 'USER (Người dùng)', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
 };
 
 const SCENE_TYPE_OPTIONS = [
@@ -287,6 +286,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
+  const [assignmentRoles, setAssignmentRoles] = useState<Record<string, 'writer'|'reviewer'|'producer'>>({});
   const [userSortField, setUserSortField] = useState<'name' | 'email' | 'role' | 'status'>('name');
   const [userSortOrder, setUserSortOrder] = useState<'asc' | 'desc'>('asc');
   const [userPage, setUserPage] = useState(1);
@@ -558,7 +558,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   // Handlers for FE-15 (Users & Roles)
   const handleRoleChange = actions.wrap(async (user: AdminUserDto, newRole: SystemUserRole) => {
     try {
-      const updated = await adminService.updateUser(user.id, { role: newRole });
+      const updated = await adminService.updateUser(user.id, { systemRole: newRole }, user.version);
       setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
       notify(`Đã cập nhật vai trò của ${user.fullName} thành ${newRole}`);
     } catch (err: any) {
@@ -570,9 +570,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
     try {
       const workspaceId = currentWorkspaceId || (await workspaceService.resolveActiveWorkspaceId());
       if (!workspaceId) return;
-      await workspaceService.addMember(workspaceId, { userId: user.id, role: 'writer' });
+      const role = assignmentRoles[user.id];
+      if (!role) return;
+      await workspaceService.addMember(workspaceId, { userId: user.id, role });
       await loadUsersAndMembers();
-      notify(`Đã thêm ${user.fullName} (${user.email}) vào Không gian làm việc hiện tại!`);
+      notify(`Đã thêm ${user.fullName} (${user.username || user.googleEmail || user.email || user.id}) vào Không gian làm việc hiện tại!`);
     } catch (err: any) {
       notify(err?.message || 'Không thể thêm thành viên vào Không gian làm việc.');
     }
@@ -592,13 +594,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   });
 
   const handleRemoveWorkspaceMember = actions.wrap(async (member: WorkspaceMemberDto) => {
-    if (!window.confirm(`Xóa ${member.name} (${member.email}) khỏi Không gian làm việc hiện tại?`)) return;
+    if (!window.confirm(`Xóa ${member.name} (${member.username || member.googleEmail || member.email || member.id}) khỏi Không gian làm việc hiện tại?`)) return;
     try {
       const workspaceId = currentWorkspaceId || (await workspaceService.resolveActiveWorkspaceId());
       if (!workspaceId) return;
       await workspaceService.removeMember(workspaceId, member.id);
       setMembers((prev) => prev.filter((m) => m.id !== member.id));
-      notify(`Đã xóa ${member.email} khỏi Không gian làm việc.`);
+      notify(`Đã xóa ${member.username || member.googleEmail || member.email || member.id} khỏi Không gian làm việc.`);
     } catch (err: any) {
       notify(err?.message || 'Không thể xóa thành viên khỏi Không gian làm việc.');
     }
@@ -607,20 +609,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   const handleStatusToggle = actions.wrap(async (user: AdminUserDto) => {
     const nextStatus: SystemUserStatus = user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     try {
-      const updated = await adminService.updateUser(user.id, { status: nextStatus });
+      const updated = await adminService.updateUser(user.id, { status: nextStatus }, user.version);
       setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
-      notify(`Đã chuyển trạng thái tài khoản ${user.email} sang ${nextStatus}`);
+      notify(`Đã chuyển trạng thái tài khoản ${user.username || user.googleEmail || user.email || user.id} sang ${nextStatus}`);
     } catch (err: any) {
       notify(err?.message || 'Không thể cập nhật trạng thái tài khoản.');
     }
   });
 
   const handleDeleteUser = actions.wrap(async (user: AdminUserDto) => {
-    if (!window.confirm(`Xác nhận xóa tài khoản ${user.fullName} (${user.email})?`)) return;
+    if (!window.confirm(`Xác nhận xóa tài khoản ${user.fullName} (${user.username || user.googleEmail || user.email || user.id})?`)) return;
     try {
-      await adminService.deleteUser(user.id);
+      await adminService.deleteUser(user.id, user.version);
       setUsers((prev) => prev.filter((u) => u.id !== user.id));
-      notify(`Đã xóa tài khoản ${user.email}`);
+      notify(`Đã xóa tài khoản ${user.username || user.googleEmail || user.email || user.id}`);
     } catch (err: any) {
       notify(err?.message || 'Không thể xóa tài khoản đang có dữ liệu liên kết.');
     }
@@ -748,10 +750,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   };
 
   const filteredUsers = users.filter((u) => {
-    const matchRole = roleFilter === 'ALL' || u.role === roleFilter;
+    const matchRole = roleFilter === 'ALL' || u.systemRole === roleFilter;
     const q = userSearch.trim().toLowerCase();
     const matchSearch =
-      !q || u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+      !q || u.fullName.toLowerCase().includes(q) || (u.username || u.googleEmail || u.email || '').toLowerCase().includes(q);
     return matchRole && matchSearch;
   });
 
@@ -765,9 +767,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
       if (userSortField === 'name') {
         comp = (a.fullName || '').localeCompare(b.fullName || '', 'vi', { sensitivity: 'base' });
       } else if (userSortField === 'email') {
-        comp = (a.email || '').localeCompare(b.email || '', 'en', { sensitivity: 'base' });
+        comp = (a.username || a.googleEmail || a.email || '').localeCompare(b.username || b.googleEmail || b.email || '', 'en', { sensitivity: 'base' });
       } else if (userSortField === 'role') {
-        comp = (a.role || '').localeCompare(b.role || '', 'en', { sensitivity: 'base' });
+        comp = (a.systemRole || '').localeCompare(b.systemRole || '', 'en', { sensitivity: 'base' });
       } else if (userSortField === 'status') {
         comp = (a.status || '').localeCompare(b.status || '', 'en', { sensitivity: 'base' });
       }
@@ -962,6 +964,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
             <span>FE-15: Người Dùng & Phân Quyền RBAC ({users.length})</span>
           </button>
 
+          <button onClick={() => setActiveTab('GOOGLE_WHITELIST')}
+            className={`flex-1 min-w-[180px] py-2.5 px-4 rounded-xl text-xs font-bold ${activeTab === 'GOOGLE_WHITELIST' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+            Whitelist Google
+          </button>
+
           <button
             onClick={() => setActiveTab('TEMPLATES')}
             className={`flex-1 min-w-[220px] py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition ${
@@ -978,6 +985,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
         {/* ===================================================================
             TAB 1: FE-17 — MONITOR RENDER QUEUE & STORAGE + AI COST & USAGE
            =================================================================== */}
+        {activeTab === 'GOOGLE_WHITELIST' && <GoogleWhitelistPanel />}
         {activeTab === 'MONITORING' && (
           <div className="space-y-6">
             {/* Row 1: Host Resource & Render Queue KPIs */}
@@ -1854,7 +1862,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                         </span>
                         <div className="min-w-0">
                           <div className="font-bold text-slate-800 truncate">{m.name}</div>
-                          <div className="text-slate-400 font-mono text-[10px] truncate">{m.email}</div>
+                          <div className="text-slate-400 font-mono text-[10px] truncate">{m.username || m.googleEmail || m.email || m.id}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -1896,7 +1904,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                 <div className="flex items-center gap-2 text-xs">
                   <input
                     type="text"
-                    placeholder="Tìm theo tên hoặc email..."
+                    placeholder="Tìm theo tên, tài khoản hoặc Gmail..."
                     value={userSearch}
                     onChange={(e) => { setUserSearch(e.target.value); setUserPage(1); }}
                     className="border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-500"
@@ -1907,7 +1915,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                     className="border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold bg-slate-50"
                   >
                     <option value="ALL">Tất cả loại tài khoản</option>
-                    <option value="WRITER">Thành viên</option>
+                    <option value="USER">Thành viên</option>
                     <option value="ADMIN">Quản trị viên</option>
                   </select>
                 </div>
@@ -1983,9 +1991,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                       {paginatedUsers.map((u) => {
-                        const roleInfo = ROLE_LABELS[u.role] || ROLE_LABELS.WRITER;
+                        const roleInfo = ROLE_LABELS[u.systemRole] || ROLE_LABELS.USER;
                         const isInWorkspace = members.some(
-                          (m) => m.userId === u.id || m.email.toLowerCase() === u.email.toLowerCase()
+                          (m) => m.userId === u.id
                         );
                         return (
                           <tr key={u.id} className="hover:bg-slate-50/80">
@@ -1996,27 +2004,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                                 </span>
                                 <div>
                                   <div className="font-bold text-slate-900">{u.fullName}</div>
-                                  <div className="text-[11px] font-mono text-slate-400">{u.email}</div>
+                                  <div className="text-[11px] font-mono text-slate-400">{u.username || u.googleEmail || u.email || u.id}</div>
                                 </div>
                               </div>
                             </td>
                             <td className="py-3 px-3">
                               <select
-                                value={u.role}
+                                value={u.systemRole}
                                 onChange={(e) =>
                                   void handleRoleChange(u, e.target.value as SystemUserRole)
                                 }
                                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer ${roleInfo.badge}`}
                               >
-                                <option value="WRITER">Thành viên</option>
+                                <option value="USER">Thành viên</option>
                                 <option value="ADMIN">Quản trị viên</option>
-                                {u.role !== 'WRITER' && u.role !== 'ADMIN' && (
-                                  <option value={u.role}>{u.role} (vai trò cũ)</option>
-                                )}
                               </select>
                             </td>
                             <td className="py-3 px-3">
-                              {u.role === 'ADMIN' ? (
+                              {u.systemRole === 'ADMIN' ? (
                                 <span className="text-[10px] text-slate-400 font-medium">Toàn hệ thống</span>
                               ) : isInWorkspace ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-brand-700 border border-blue-200">
@@ -2024,12 +2029,21 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                                   <span>Đã trong Nhóm</span>
                                 </span>
                               ) : (
+                                <div className="flex items-center gap-2">
+                                <select aria-label={`Vai trò workspace của ${u.fullName}`} value={assignmentRoles[u.id]||''}
+                                  onChange={e=>setAssignmentRoles(prev=>({...prev,[u.id]:e.target.value as 'writer'|'reviewer'|'producer'}))}
+                                  className="border rounded px-2 py-1 text-xs">
+                                  <option value="" disabled>Chọn vai trò workspace</option>
+                                  <option value="writer">Writer</option><option value="reviewer">Reviewer</option><option value="producer">Producer</option>
+                                </select>
                                 <button
+                                  disabled={!assignmentRoles[u.id]||u.status!=='ACTIVE'}
                                   onClick={() => void handleQuickAddToWorkspace(u)}
                                   className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition"
                                 >
                                   + Thêm vào Nhóm
                                 </button>
+                                </div>
                               )}
                             </td>
                             <td className="py-3 px-3">

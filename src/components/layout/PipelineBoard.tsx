@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Check, KanbanSquare, Loader2, X } from 'lucide-react';
-import type { STEMScript, UserRole } from '../../types/stem';
+import type { STEMScript, AppView } from '../../types/stem';
 import { projectService } from '../../services/projectService';
 import { PIPELINE_STAGES, pipelineStage, stageIndex, PipelineStage } from '../../lib/pipeline';
 
@@ -13,7 +13,7 @@ export const PipelineStatusBar: React.FC<{
   script: STEMScript;
   onOpenProject: (id: string) => void;
   onBackToDashboard?: () => void;
-  currentRole?: UserRole;
+  currentRole?: AppView;
 }> = ({
   script,
   onOpenProject,
@@ -84,7 +84,7 @@ export const PipelineStatusBar: React.FC<{
 const PipelineBoardModal: React.FC<{
   onClose: () => void;
   onOpenProject: (id: string) => void;
-  currentRole?: UserRole;
+  currentRole?: AppView;
 }> = ({
   onClose,
   onOpenProject,

@@ -8,7 +8,7 @@ function toComment(c: any): FeedbackComment {
     id: c.id,
     author: c.author,
     avatar: c.avatar,
-    role: (c.role?.charAt(0) + c.role?.slice(1).toLowerCase()) as FeedbackComment['role'],
+    role: (c.systemRole === 'ADMIN' ? 'Admin' : 'Thành viên') as FeedbackComment['role'],
     timestampSec: c.timestampSec ?? 0,
     sceneId: c.sceneId ?? undefined,
     content: c.content,

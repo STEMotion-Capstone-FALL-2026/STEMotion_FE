@@ -1,4 +1,6 @@
-export type UserRole = 'producer' | 'reviewer' | 'writer' | 'admin' | 'library';
+export type SystemRole = 'ADMIN' | 'USER';
+export type WorkspaceRole = 'producer' | 'reviewer' | 'writer';
+export type AppView = WorkspaceRole | 'admin' | 'library' | 'dashboard';
 
 export type STEMSubject = 'Math' | 'Physics' | 'Chemistry' | 'Biology' | 'ComputerScience';
 
@@ -357,7 +359,7 @@ export interface WorkspaceMember {
   userId?: string;
   name: string;
   email: string;
-  role: 'Trưởng bộ môn (Admin)' | 'Writer (Biên kịch)' | 'Reviewer (Chuyên gia)' | 'Producer (Dựng video)' | UserRole | string;
+  role: 'Trưởng bộ môn (Admin)' | 'Writer (Biên kịch)' | 'Reviewer (Chuyên gia)' | 'Producer (Dựng video)' | AppView | string;
   avatar?: string;
   status: 'ACTIVE' | 'INACTIVE';
   isLeader: boolean;
@@ -369,6 +371,6 @@ export interface Workspace {
   department: string;
   membersCount: number;
   activeProjects: number;
-  myRole?: UserRole;
+  myRole?: WorkspaceRole;
   isLeader?: boolean;
 }

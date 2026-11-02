@@ -8,7 +8,7 @@
  */
 
 import { apiClient } from './apiClient';
-import { UserRole } from '../types/stem';
+import { WorkspaceRole } from '../types/stem';
 
 export interface WorkspaceSummary {
   id: string;
@@ -16,7 +16,7 @@ export interface WorkspaceSummary {
   department?: string;
   membersCount: number;
   activeProjects: number;
-  myRole?: UserRole;
+  myRole?: WorkspaceRole;
   isLeader?: boolean;
 }
 
@@ -25,7 +25,9 @@ export interface WorkspaceMemberDto {
   userId?: string;
   name: string;
   email: string;
-  role: UserRole;
+  username?: string | null;
+  googleEmail?: string | null;
+  role: WorkspaceRole;
   status: 'ACTIVE' | 'INACTIVE';
   isLeader: boolean;
 }
@@ -33,8 +35,9 @@ export interface WorkspaceMemberDto {
 export interface CandidateUser {
   id: string;
   fullName: string;
-  email: string;
-  systemRole: string;
+  email: string | null;
+  username?: string | null;
+  googleEmail?: string | null;
 }
 
 const ACTIVE_WORKSPACE_KEY = 'stemotion_active_workspace';
@@ -197,37 +200,39 @@ export const workspaceService = {
   },
 
   _toMemberDto(raw: any): WorkspaceMemberDto {
-    const roleMap: Record<string, UserRole> = {
+    const roleMap: Record<string, WorkspaceRole> = {
       WRITER: 'writer',
       REVIEWER: 'reviewer',
       PRODUCER: 'producer',
-      ADMIN: 'admin',
     };
+    if (!roleMap[raw.role]) throw new Error('Vai trò workspace không hợp lệ.');
     return {
       id: raw.id,
       userId: raw.userId,
       name: raw.name || '',
       email: raw.email || '',
-      role: roleMap[raw.role] ?? (raw.role?.toLowerCase() as UserRole) ?? 'writer',
+      username: raw.username,
+      googleEmail: raw.googleEmail,
+      role: roleMap[raw.role],
       status: raw.status || 'ACTIVE',
       isLeader: Boolean(raw.isLeader),
     };
   },
 
   _toWorkspaceSummary(raw: any): WorkspaceSummary {
-    const roleMap: Record<string, UserRole> = {
+    const roleMap: Record<string, WorkspaceRole> = {
       WRITER: 'writer',
       REVIEWER: 'reviewer',
       PRODUCER: 'producer',
-      ADMIN: 'admin',
     };
+    if (raw.myRole != null && !roleMap[raw.myRole]) throw new Error('Vai trò workspace không hợp lệ.');
     return {
       id: raw.id,
       name: raw.name,
       department: raw.department || '',
       membersCount: raw.membersCount ?? 0,
       activeProjects: raw.activeProjects ?? 0,
-      myRole: raw.myRole ? (roleMap[raw.myRole] ?? (raw.myRole.toLowerCase() as UserRole)) : undefined,
+      myRole: raw.myRole ? roleMap[raw.myRole] : undefined,
       isLeader: Boolean(raw.isLeader),
     };
   },

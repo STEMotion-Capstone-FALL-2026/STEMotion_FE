@@ -110,37 +110,41 @@ export interface AdminTemplateRequest {
   defaultVisualTheme?: string | null;
 }
 
-export type SystemUserRole = 'WRITER' | 'REVIEWER' | 'PRODUCER' | 'ADMIN';
+export type SystemUserRole = 'ADMIN' | 'USER';
 export type SystemUserStatus = 'ACTIVE' | 'INACTIVE' | 'BANNED';
 
 export interface ProvisionUserRequest {
   fullName: string;
-  email: string;
+  username: string;
   password: string;
-  role: SystemUserRole;
+  systemRole: SystemUserRole;
 }
 
 export interface AdminUserDto {
   id: string;
   fullName: string;
-  email: string;
-  role: SystemUserRole;
+  email: string | null;
+  username?: string | null;
+  googleEmail?: string | null;
+  hasLocalPassword?: boolean;
+  systemRole: SystemUserRole;
   status: SystemUserStatus;
   createdAt: string;
+  version: number;
   /** Set for accounts that have not replaced their temporary password yet. */
   mustChangePassword?: boolean;
 }
 
 export interface UpdateUserRequest {
   fullName?: string;
-  role?: SystemUserRole;
+  systemRole?: SystemUserRole;
   status?: SystemUserStatus;
 }
 
 
 export const adminService = {
   // FE-15: Manage Users & Roles
-  async provisionUser(request: ProvisionUserRequest): Promise<{ id: string; email: string }> {
+  async provisionUser(request: ProvisionUserRequest): Promise<{ id: string; username: string }> {
     return apiClient.post('/users', request);
   },
 
@@ -153,12 +157,12 @@ export const adminService = {
     return apiClient.get<AdminUserDto[]>('/users');
   },
 
-  async updateUser(id: string, request: UpdateUserRequest): Promise<AdminUserDto> {
-    return apiClient.patch<AdminUserDto>(`/users/${id}`, request);
+  async updateUser(id: string, request: UpdateUserRequest, version: number): Promise<AdminUserDto> {
+    return apiClient.patch<AdminUserDto>(`/users/${id}`, request, {'If-Match': String(version)});
   },
 
-  async deleteUser(id: string): Promise<void> {
-    return apiClient.delete<void>(`/users/${id}`);
+  async deleteUser(id: string, version: number): Promise<void> {
+    return apiClient.delete<void>(`/users/${id}`, {'If-Match': String(version)});
   },
 
   // FE-16: Manage Templates

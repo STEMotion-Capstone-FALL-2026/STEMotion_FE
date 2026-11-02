@@ -37,7 +37,7 @@ test.describe.serial('WF-04 clip review and publishing', () => {
   });
 
   test('DS-04a: Reviewer pins two notes and sends the clip back with a reason', async ({ page, request }) => {
-    await signInReady(page, ws.reviewer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.reviewer.username, CHANGED_PASSWORD);
     await openProject(page, title);
     await page.getByRole('button', { name: /2\. Duyệt Video Thành Phẩm/ }).click();
 
@@ -56,7 +56,7 @@ test.describe.serial('WF-04 clip review and publishing', () => {
   });
 
   test('DS-04a: Producer sees the reason, resolves the notes and resubmits', async ({ page, request }) => {
-    await signInReady(page, ws.producer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.producer.username, CHANGED_PASSWORD);
     await openProject(page, title);
     await expect(page.getByText('Sửa hai ghi chú rồi gửi lại.').first()).toBeVisible();
 
@@ -70,7 +70,7 @@ test.describe.serial('WF-04 clip review and publishing', () => {
   });
 
   test('DS-04a: Reviewer approves the clip', async ({ page, request }) => {
-    await signInReady(page, ws.reviewer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.reviewer.username, CHANGED_PASSWORD);
     await openProject(page, title);
     await page.getByRole('button', { name: /2\. Duyệt Video Thành Phẩm/ }).click();
     await page.getByRole('button', { name: /Duyệt Video ➔/ }).click();
@@ -80,7 +80,7 @@ test.describe.serial('WF-04 clip review and publishing', () => {
   });
 
   test('DS-04a: Producer publishes to the library and gets the LMS embed code', async ({ page, request }) => {
-    await signInReady(page, ws.producer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.producer.username, CHANGED_PASSWORD);
     await openProject(page, title);
     await page.getByRole('button', { name: /Xuất bản \(đã duyệt\)/ }).click();
     await page.getByRole('button', { name: 'Xuất bản vào thư viện & lấy mã nhúng LMS' }).click();
@@ -96,7 +96,7 @@ test.describe.serial('WF-04 clip review and publishing', () => {
   test('DS-04b: a clip with an open note cannot be approved; YouTube answers 503', async ({ page, request }) => {
     const blockedTitle = `Ghi chú mở ${run}`;
     const id = await clipInReview(request, ws, blockedTitle);
-    await signInReady(page, ws.reviewer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.reviewer.username, CHANGED_PASSWORD);
     await openProject(page, blockedTitle);
     await page.getByRole('button', { name: /2\. Duyệt Video Thành Phẩm/ }).click();
     await page.getByPlaceholder('Nhập góp ý sư phạm hoặc đồ họa...').fill('Thiếu đơn vị đo.');

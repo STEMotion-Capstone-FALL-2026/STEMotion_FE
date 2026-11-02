@@ -1,5 +1,19 @@
 # Backend API specification — verified local snapshot 2026-10-11
 
+**System roles and mail update, 02/11/2026:** current local FE/BE use `systemRole: ADMIN|USER` on
+accounts, `role: WRITER|REVIEWER|PRODUCER` only on workspace membership, and a numeric If-Match
+version header for user update/delete. Whitelist responses include notification status and an
+ADMIN resend action. The [current auth contract](../STEMotion_BE/docs/api/AUTH_V2_CONTRACT.md) and
+refreshed local OpenAPI supersede the legacy role examples in this historical specification.
+
+**Local auth v2 changes, 02/11/2026:** the auth entries in this historical snapshot
+are superseded by [the auth v2 contract](../STEMotion_BE/docs/api/AUTH_V2_CONTRACT.md).
+Login now accepts username/password; `/auth/me` returns `{user,session}` and change-password
+returns a replacement AuthResponse. Google requires a challenge and an active Gmail whitelist;
+profile/link routes and admin whitelist routes are added. Local build and isolated tests have run;
+the shared database and deployment have not changed. A separate runtime snapshot is available at
+[auth-v2 local OpenAPI](../STEMotion_BE/docs/api/auth-v2-local-openapi.json).
+
 This replaces the previous design/mock specification. Canonical machine-readable request/response schemas: [BE OpenAPI](../STEMotion_BE/docs/api/openapi.json). Exported from the current packaged Spring Boot application at local `/v3/api-docs`; **61 operations**, not an assertion about the deployed production version. The snapshot is generated, so controller/service authorization rules below remain necessary; Springdoc does not infer all runtime role/ownership checks.
 
 ## Connection and responses

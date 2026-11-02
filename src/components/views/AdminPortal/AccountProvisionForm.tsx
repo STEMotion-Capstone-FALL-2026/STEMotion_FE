@@ -7,7 +7,7 @@ interface AccountProvisionFormProps {
 }
 
 export const AccountProvisionForm: React.FC<AccountProvisionFormProps> = ({ onUserCreated }) => {
-  const [form, setForm] = useState<ProvisionUserRequest>({ fullName: '', email: '', password: '', role: 'WRITER' });
+  const [form, setForm] = useState<ProvisionUserRequest>({ fullName: '', username: '', password: '', systemRole: 'USER' });
   const [busy, setBusy] = useState(false);
   const actions = useActionGuard();
   const [error, setError] = useState('');
@@ -17,8 +17,8 @@ export const AccountProvisionForm: React.FC<AccountProvisionFormProps> = ({ onUs
     setBusy(true); setError(''); setCreated('');
     try {
       const user = await adminService.provisionUser(form);
-      setCreated(user.email);
-      setForm({ fullName: '', email: '', password: '', role: 'WRITER' });
+      setCreated(user.username);
+      setForm({ fullName: '', username: '', password: '', systemRole: 'USER' });
       onUserCreated?.();
     } catch (err: any) {
       setError(err?.message || 'Không thể cấp tài khoản.');
@@ -28,10 +28,10 @@ export const AccountProvisionForm: React.FC<AccountProvisionFormProps> = ({ onUs
     <h2 className="font-bold">Cấp tài khoản hệ thống</h2>
     <p className="text-xs text-slate-500">Sau khi cấp tài khoản, gán người dùng vào không gian làm việc tương ứng. Người dùng sẽ phải đổi mật khẩu ở lần đăng nhập đầu tiên.</p>
     <label className="block">Họ tên<input required disabled={busy} value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} className="block w-full border rounded p-2" /></label>
-    <label className="block">Email<input required type="email" disabled={busy} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="block w-full border rounded p-2" /></label>
+    <label className="block">Tài khoản<input required type="text" autoComplete="off" pattern={String.raw`[A-Za-z0-9][A-Za-z0-9._\-]{2,31}`} disabled={busy} value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} className="block w-full border rounded p-2" /><span className="text-xs text-slate-500">3–32 ký tự chữ, số, dấu chấm, gạch dưới hoặc gạch ngang. Không dùng email.</span></label>
     <label className="block">Mật khẩu ban đầu<input required type="password" minLength={8} autoComplete="new-password" disabled={busy} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} className="block w-full border rounded p-2" /></label>
-    <label className="block">Vai trò toàn hệ thống<select disabled={busy} value={form.role} onChange={e => setForm({ ...form, role: e.target.value as ProvisionUserRequest['role'] })} className="block border rounded p-2">
-      <option value="WRITER">Thành viên đội ngũ sản xuất (WRITER / CREATOR)</option>
+    <label className="block">Vai trò toàn hệ thống<select disabled={busy} value={form.systemRole} onChange={e => setForm({ ...form, systemRole: e.target.value as ProvisionUserRequest['systemRole'] })} className="block border rounded p-2">
+      <option value="USER">Người dùng (USER)</option>
       <option value="ADMIN">Quản trị viên hệ thống (ADMIN)</option>
     </select></label>
     {error && <p role="alert" className="text-rose-600">{error}</p>}

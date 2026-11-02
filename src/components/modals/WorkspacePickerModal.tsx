@@ -2,9 +2,9 @@ import React from 'react';
 import { useDialog } from '../../hooks/useDialog';
 import { Building2, Crown } from 'lucide-react';
 import type { WorkspaceSummary } from '../../services/workspaceService';
-import type { UserRole } from '../../types/stem';
+import type { WorkspaceRole } from '../../types/stem';
 
-const ROLE_LABELS: Partial<Record<UserRole, string>> = {
+const ROLE_LABELS: Record<WorkspaceRole, string> = {
   writer: 'Biên kịch',
   reviewer: 'Kiểm duyệt',
   producer: 'Sản xuất',
@@ -43,7 +43,7 @@ export const WorkspacePickerModal: React.FC<{
             <div className="flex items-center justify-between gap-2">
               <span className="font-bold text-slate-900 text-sm">{w.name}</span>
               <span className="flex items-center gap-1">
-                {w.isLeader && w.myRole !== 'admin' && (
+                {w.isLeader && (
                   <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
                     <Crown className="w-3 h-3" /> Trưởng nhóm
                   </span>

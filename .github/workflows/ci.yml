@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/auth-roles-google-whitelist-mail]
   pull_request:
     branches: [main]
 

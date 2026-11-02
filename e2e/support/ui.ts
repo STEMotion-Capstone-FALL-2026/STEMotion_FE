@@ -1,8 +1,11 @@
 import { expect, type Page } from '@playwright/test';
 
-export async function signIn(page: Page, email: string, password: string) {
+export async function signIn(page: Page, username: string, password: string) {
+  // Password workflow tests never load Google's external SDK. The dedicated auth spec
+  // installs a test-side GIS implementation to exercise the real component callback.
+  await page.route('https://accounts.google.com/gsi/client', route => route.abort());
   await page.goto('/');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Tài khoản').fill(username);
   await page.getByLabel('Mật khẩu').fill(password);
   await page.getByRole('button', { name: 'Đăng nhập' }).click();
 }
@@ -19,8 +22,8 @@ export async function changeFirstPassword(page: Page, current: string, next: str
 }
 
 /** Signs in an account whose password was already changed (setupWorkspace). */
-export async function signInReady(page: Page, email: string, password: string) {
-  await signIn(page, email, password);
+export async function signInReady(page: Page, username: string, password: string) {
+  await signIn(page, username, password);
   await expect(page.getByRole('button', { name: /Thành viên/ }).first()).toBeVisible();
 }
 

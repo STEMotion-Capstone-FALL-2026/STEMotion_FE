@@ -36,7 +36,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
       try {
         const list = await adminService.getUsers();
         if (!cancelled) {
-          const eligibleLeaders = list.filter((u) => u.role !== 'ADMIN' && u.status === 'ACTIVE');
+          const eligibleLeaders = list.filter((u) => u.systemRole !== 'ADMIN' && u.status === 'ACTIVE');
           setUsers(eligibleLeaders);
           if (eligibleLeaders.length > 0) {
             setLeaderUserId(eligibleLeaders[0].id);
@@ -180,7 +180,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
               ) : (
                 users.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.fullName} ({u.email}) - {u.role}
+                    {u.fullName} ({u.username || u.googleEmail || u.email || u.id}) - {u.systemRole}
                   </option>
                 ))
               )}
@@ -238,7 +238,7 @@ export const CreateWorkspaceForm: React.FC<CreateWorkspaceFormProps> = ({ onWork
                   >
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
-                        {u.fullName} ({u.email})
+                        {u.fullName} ({u.username || u.googleEmail || u.email || u.id})
                       </option>
                     ))}
                   </select>

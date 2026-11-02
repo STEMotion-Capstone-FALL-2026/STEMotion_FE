@@ -1,4 +1,4 @@
-import type { STEMScript, UserRole } from '../types/stem';
+import type { STEMScript, AppView } from '../types/stem';
 
 /**
  * The content lifecycle of the proposal: Draft → Script Review → Approved →
@@ -38,7 +38,7 @@ export const pipelineStage = ({ scriptStatus, videoStatus }: StatusPair): Pipeli
 export const isChangeRequested = (script: StatusPair) => script.scriptStatus === 'CHANGE_REQUESTED';
 
 /** Dashboard list: each workspace role only sees the work that is theirs to do (admin/writer see all). */
-export function canRoleSeeProject(role: UserRole, script: StatusPair): boolean {
+export function canRoleSeeProject(role: AppView, script: StatusPair): boolean {
   if (role === 'admin' || role === 'writer' || role === 'library') return true;
   const stage = pipelineStage(script);
   if (role === 'producer') {
@@ -58,7 +58,7 @@ export function canRoleSeeProject(role: UserRole, script: StatusPair): boolean {
 }
 
 /** Opening a project in studio: producer cannot start from a draft; reviewer cannot open an unsubmitted draft. */
-export function canRoleOpenProject(role: UserRole, script: StatusPair): { allowed: boolean; message?: string } {
+export function canRoleOpenProject(role: AppView, script: StatusPair): { allowed: boolean; message?: string } {
   const stage = pipelineStage(script);
   if (role === 'admin') return { allowed: true };
   if (role === 'producer' && (stage === 'DRAFT' || stage === 'SCRIPT_REVIEW')) {

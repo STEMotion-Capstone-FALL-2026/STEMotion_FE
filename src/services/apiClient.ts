@@ -63,9 +63,10 @@ export const apiClient = {
     }
   },
 
-  async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  async request<T>(endpoint: string, options: RequestInit & { anonymous?: boolean } = {}): Promise<T> {
+    const { anonymous = false, ...fetchOptions } = options;
     const url = `${this.getBaseUrl()}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
-    const token = this.getAuthToken();
+    const token = anonymous ? null : this.getAuthToken();
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -76,7 +77,7 @@ export const apiClient = {
 
     try {
       const response = await fetch(url, {
-        ...options,
+        ...fetchOptions,
         headers,
       });
 
@@ -97,7 +98,7 @@ export const apiClient = {
       // An expired or revoked token invalidates the whole session, so drop it
       // and let the app fall back to the login screen instead of leaving the
       // studio half-loaded and every later request failing the same way.
-      if (response.status === 401) {
+      if (response.status === 401 && !anonymous && token === this.getAuthToken()) {
         this.removeAuthToken();
         window.dispatchEvent(new CustomEvent('stemotion:unauthorized'));
       }
@@ -126,6 +127,10 @@ export const apiClient = {
 
   async get<T>(endpoint: string, headers?: Record<string, string>): Promise<T> {
     return this.request<T>(endpoint, { method: 'GET', headers });
+  },
+
+  async postPublic<T>(endpoint: string, body?: unknown): Promise<T> {
+    return this.request<T>(endpoint, { method: 'POST', anonymous: true, body: JSON.stringify(body ?? {}) });
   },
 
   async post<T>(endpoint: string, body?: any, headers?: Record<string, string>): Promise<T> {

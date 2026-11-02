@@ -21,7 +21,7 @@ test.describe.serial('WF-02 script authoring and approval', () => {
   });
 
   test('DS-02a: Writer drafts the script with AI and submits it for review', async ({ page, request }) => {
-    await signInReady(page, ws.writer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.writer.username, CHANGED_PASSWORD);
     await page.getByRole('button', { name: 'Tạo Kịch Bản Mới' }).click();
     await page.getByLabel('Chủ đề bài học STEM:').fill(title);
     await page.getByLabel(/Nhờ AI gợi ý bản nháp kịch bản/).check();
@@ -45,7 +45,7 @@ test.describe.serial('WF-02 script authoring and approval', () => {
   });
 
   test('DS-02b + DS-02a: a change request needs a reason; Reviewer returns the script', async ({ page, request }) => {
-    await signInReady(page, ws.reviewer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.reviewer.username, CHANGED_PASSWORD);
     await openProject(page, title);
     await page.getByRole('button', { name: 'Yêu Cầu Writer Sửa Lại' }).click();
 
@@ -67,7 +67,7 @@ test.describe.serial('WF-02 script authoring and approval', () => {
   });
 
   test('DS-02a: Writer sees the reason, revises and resubmits', async ({ page, request }) => {
-    await signInReady(page, ws.writer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.writer.username, CHANGED_PASSWORD);
     await openProject(page, title);
     await expect(page.getByText('Cảnh 2 cần ví dụ thực tế về bóng đèn.').first()).toBeVisible();
 
@@ -80,7 +80,7 @@ test.describe.serial('WF-02 script authoring and approval', () => {
   });
 
   test('DS-02a: Reviewer approves the revised script', async ({ page, request }) => {
-    await signInReady(page, ws.reviewer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.reviewer.username, CHANGED_PASSWORD);
     await openProject(page, title);
     await page.getByRole('button', { name: /Duyệt Kịch Bản ➔ Chuyển Producer/ }).click();
     await expect.poll(async () => (await getProject(request, ws.tokens.WRITER, projectId)).scriptStatus).toBe('APPROVED');
@@ -96,7 +96,7 @@ test.describe.serial('WF-02 script authoring and approval', () => {
     const id = await createProject(request, ws.tokens.WRITER, ws.workspaceId, conflictTitle);
     const context = await browser.newContext();
     const tabA = await context.newPage();
-    await signInReady(tabA, ws.writer.email, CHANGED_PASSWORD);
+    await signInReady(tabA, ws.writer.username, CHANGED_PASSWORD);
     await openProject(tabA, conflictTitle);
     const tabB = await context.newPage();
     await tabB.goto('/');

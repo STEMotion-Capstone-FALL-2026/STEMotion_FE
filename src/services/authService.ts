@@ -1,142 +1,95 @@
-/**
- * STEMotion Front-End - Authentication Service
- * Manages user session, JWT tokens, and role switching across 5 roles:
- * - Producer, Reviewer, Writer, Admin, Library
- */
-
-import { apiClient } from './apiClient';
+import { apiClient, ApiError } from './apiClient';
 import { workspaceService } from './workspaceService';
-import { UserRole } from '../types/stem';
+import { SystemRole } from '../types/stem';
 
 export interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
-  avatarUrl?: string;
-  role: UserRole;
-  mustChangePassword?: boolean;
+  id: string; name: string; email: string; username?: string | null; avatarUrl?: string;
+  accountLabel?: string;
+  systemRole: SystemRole; hasLocalPassword?: boolean; googleLinked?: boolean; googleEmail?: string | null;
+  authMethod?: 'PASSWORD' | 'GOOGLE'; requiresPasswordChange?: boolean;
 }
-
-const USER_STORAGE_KEY = 'stemotion_user_profile';
-
-/**
- * Placeholder used only before the first /auth/me answers. It carries no
- * invented identity: the fields stay blank so a half-loaded header is obvious
- * rather than showing somebody who does not exist.
- */
-const EMPTY_USER: UserProfile = {
-  id: '',
-  name: '',
-  email: '',
-  role: 'writer',
-  mustChangePassword: false,
-};
+export interface GoogleChallenge { challengeId: string; nonce: string; challengeSecret: string; expiresInSeconds: number }
+export interface GoogleCredential { credential: string; challengeId: string; challengeSecret: string }
+export interface ProfileSettings { user: any; session: any; googleLinked: boolean; googleEmail: string | null; googleLoginAllowed: boolean; canLinkGoogle: boolean }
+const USER_STORAGE_KEY = 'stemotion_user_profile_v3';
+const EMPTY: UserProfile = { id: '', name: '', email: '', systemRole: 'USER', requiresPasswordChange: false };
+let generation = 0;
 
 export const authService = {
+  generation: () => generation,
   getCurrentUser(): UserProfile {
-    try {
-      const stored = localStorage.getItem(USER_STORAGE_KEY);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (e) {
-      console.warn('Failed to parse cached user profile', e);
-    }
-    return EMPTY_USER;
+    try { return JSON.parse(localStorage.getItem(USER_STORAGE_KEY) || 'null') || EMPTY; } catch { return EMPTY; }
   },
-
   setCurrentUser(user: UserProfile): void {
-    try {
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-    } catch (e) {
-      console.error('Failed to store user profile', e);
-    }
+    try { localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user)); }
+    catch { console.warn('Không thể lưu bộ nhớ đệm hồ sơ.'); }
   },
-
-  switchRole(newRole: UserRole): UserProfile {
-    const current = this.getCurrentUser();
-    const updated: UserProfile = { ...current, role: newRole };
-    this.setCurrentUser(updated);
-    return updated;
+  accept(response: any): UserProfile {
+    if (!response?.accessToken || !response?.user?.id || !['PASSWORD','GOOGLE'].includes(response?.session?.authMethod)
+      || typeof response?.session?.requiresPasswordChange !== 'boolean'
+      || !['USER','ADMIN'].includes(response?.user?.systemRole))
+      throw new ApiError('Phản hồi đăng nhập không đầy đủ.', 'INVALID_AUTH_RESPONSE');
+    const user = this._toProfile(response.user, response.session);
+    apiClient.setAuthToken(response.accessToken); this.setCurrentUser(user); return user;
   },
-
-  async login(email: string, pass: string): Promise<UserProfile> {
-const response = await apiClient.post<any>('/auth/login', {
-      email,
-      password: pass,
-    });
-
-    if (response?.accessToken) {
-      apiClient.setAuthToken(response.accessToken);
-    }
-    if (response?.user) {
-      const user = this._toProfile(response.user);
-      this.setCurrentUser(user);
-      return user;
-    }
-    return this.getCurrentUser();
+  async login(username: string, password: string): Promise<UserProfile> {
+    const request = ++generation;
+    const token = apiClient.getAuthToken();
+    const r = await apiClient.postPublic('/auth/login', { username: username.trim().toLowerCase(), password });
+    if (request !== generation || token !== apiClient.getAuthToken()) throw new Error('Thao tác đăng nhập đã kết thúc.');
+    return this.accept(r);
   },
-
-  /** Signs in with a Google ID token; only accounts an admin provisioned are accepted. */
-  async loginWithGoogle(credential: string): Promise<UserProfile> {
-    const response = await apiClient.post<any>('/auth/google', { credential });
-    if (response?.accessToken) {
-      apiClient.setAuthToken(response.accessToken);
-    }
-    if (response?.user) {
-      const user = this._toProfile(response.user);
-      this.setCurrentUser(user);
-      return user;
-    }
-    return this.getCurrentUser();
+  async googleChallenge(): Promise<GoogleChallenge> { return apiClient.postPublic('/auth/google/challenge'); },
+  async loginWithGoogle(body: GoogleCredential, expectedGeneration = generation): Promise<UserProfile> {
+    const token = apiClient.getAuthToken();
+    const r = await apiClient.postPublic('/auth/google', body);
+    if (expectedGeneration !== generation || token !== apiClient.getAuthToken()) throw new Error('Thao tác đăng nhập đã kết thúc.');
+    generation++; return this.accept(r);
   },
-
-  /** Re-reads the signed-in user from the backend, e.g. after a reload. */
   async fetchCurrentUser(): Promise<UserProfile> {
-    if (!apiClient.getAuthToken()) {
-      return this.getCurrentUser();
-    }
-    const me = await apiClient.get<any>('/auth/me');
-    const user = this._toProfile(me);
-    this.setCurrentUser(user);
-    return user;
+    if (!apiClient.getAuthToken()) return EMPTY;
+    const expected = generation, token = apiClient.getAuthToken();
+    const r = await apiClient.get<any>('/auth/me');
+    if (generation !== expected || token !== apiClient.getAuthToken()) throw new Error('Phiên đăng nhập đã thay đổi.');
+    if (!r?.user?.id || !r?.session?.authMethod) throw new ApiError('Phản hồi hồ sơ không đầy đủ.', 'INVALID_AUTH_RESPONSE');
+    const u = this._toProfile(r.user, r.session); this.setCurrentUser(u); return u;
   },
-
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await apiClient.post('/auth/change-password', {
-      currentPassword,
-      newPassword,
-    });
-    const current = this.getCurrentUser();
-    this.setCurrentUser({ ...current, mustChangePassword: false });
+    const expected = generation, token = apiClient.getAuthToken();
+    const r = await apiClient.post('/auth/change-password', { currentPassword, newPassword });
+    if (generation !== expected || token !== apiClient.getAuthToken()) throw new Error('Phiên đăng nhập đã thay đổi.');
+    this.accept(r);
   },
-
-  /** The backend spells roles in upper case; the UI uses capitalised names. */
-  _toProfile(raw: any): UserProfile {
-    const roleMap: Record<string, UserRole> = {
-      WRITER: 'writer',
-      REVIEWER: 'reviewer',
-      PRODUCER: 'producer',
-      ADMIN: 'admin',
-    };
-    return {
-      id: raw?.id ?? '',
-      name: raw?.fullName ?? raw?.name ?? '',
-      email: raw?.email ?? '',
-      role: roleMap[raw?.role] ?? (raw?.role as UserRole) ?? 'writer',
-      mustChangePassword: Boolean(raw?.mustChangePassword),
-    };
+  async profile(): Promise<ProfileSettings> {
+    const expected = generation, token = apiClient.getAuthToken();
+    const result = await apiClient.get<ProfileSettings>('/profile');
+    if (generation !== expected || token !== apiClient.getAuthToken()) throw new Error('Phiên đăng nhập đã thay đổi.');
+    return result;
   },
-
-  _toBackendRole(role: UserRole): string {
-    return String(role).toUpperCase();
+  async rename(fullName: string): Promise<ProfileSettings> {
+    const expected = generation;
+    const r = await apiClient.patch<ProfileSettings>('/profile', { fullName });
+    if (expected !== generation) throw new Error('Phiên đăng nhập đã thay đổi.');
+    this.setCurrentUser(this._toProfile(r.user, r.session)); return r;
   },
-
+  async linkChallenge(currentPassword: string): Promise<GoogleChallenge> { return apiClient.post('/profile/google/link-challenge', { currentPassword }); },
+  async linkGoogle(body: GoogleCredential): Promise<UserProfile> {
+    const expected = generation, token = apiClient.getAuthToken();
+    const r = await apiClient.post('/profile/google/link', body);
+    if (expected !== generation || token !== apiClient.getAuthToken()) throw new Error('Phiên đăng nhập đã thay đổi.');
+    return this.accept(r);
+  },
+  _toProfile(raw: any, session?: any): UserProfile {
+    if (!['USER','ADMIN'].includes(raw?.systemRole)) throw new ApiError('Vai trò hệ thống không hợp lệ.', 'INVALID_AUTH_RESPONSE');
+    return { id: raw?.id ?? '', name: raw?.fullName ?? raw?.name ?? '', email: raw?.email ?? '',
+      accountLabel: raw?.username || raw?.googleEmail || raw?.id || '',
+      username: raw?.username, systemRole: raw.systemRole, hasLocalPassword: Boolean(raw?.hasLocalPassword),
+      googleLinked: Boolean(raw?.googleLinked), googleEmail: raw?.googleEmail, authMethod: session?.authMethod,
+      requiresPasswordChange: Boolean(session?.requiresPasswordChange) };
+  },
   logout(): void {
-    workspaceService.clearCache();
-    apiClient.removeAuthToken();
-    try {
-      localStorage.removeItem(USER_STORAGE_KEY);
-    } catch {}
+    generation++; workspaceService.clearCache(); apiClient.removeAuthToken();
+    try { localStorage.removeItem(USER_STORAGE_KEY); localStorage.removeItem('stemotion_user_profile'); } catch { /* Storage may be unavailable. */ }
+    window.google?.accounts?.id?.disableAutoSelect?.();
   },
 };

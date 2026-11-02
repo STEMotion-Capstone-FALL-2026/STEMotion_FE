@@ -4,6 +4,7 @@ import { renderService, type RenderJobStatus } from './services/renderService';
 import { compositionService, createCompositionSaver, type Composition, type CompositionSaver } from './services/compositionService';
 import { STEMScript, FeedbackComment, SceneData, STEMSubject } from './types/stem';
 import { LoginScreen } from './components/LoginScreen';
+import { ProfileSettingsModal } from './components/modals/ProfileSettingsModal';
 import type { WorkspaceSummary } from './services/workspaceService';
 import {
   apiClient,
@@ -13,7 +14,7 @@ import {
   scriptService,
   reviewService,
   narrationService,
-  UserRole,
+  AppView,
 } from './services';
 
 // Layout Components
@@ -64,33 +65,34 @@ export default function App() {
   );
   const [isBootstrapping, setIsBootstrapping] = useState<boolean>(false);
 
-  const [currentRole, setCurrentRole] = useState<UserRole>(() => authService.getCurrentUser().role);
+  const [currentRole, setCurrentRole] = useState<AppView>(() => authService.getCurrentUser().systemRole === 'ADMIN' ? 'admin' : 'dashboard');
   const [currentUser, setCurrentUser] = useState(() => authService.getCurrentUser());
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // The role the user holds in the active workspace; roles are per workspace.
-  const [workspaceRole, setWorkspaceRole] = useState<UserRole | null>(null);
+  const [workspaceRole, setWorkspaceRole] = useState<AppView | null>(null);
   // Set when the user belongs to several workspaces and has not picked one on this device.
   const [workspaceChoices, setWorkspaceChoices] = useState<WorkspaceSummary[] | null>(null);
 
-  const leaveLibraryAndAdmin = (nextRole?: UserRole) => {
+  const leaveLibraryAndAdmin = (nextRole?: AppView) => {
     setIsLibraryView(false);
     if (nextRole) {
       setCurrentRole(nextRole);
       return;
     }
-    if (currentUser.role === 'admin') {
+    if (currentUser.systemRole === 'ADMIN') {
       setCurrentRole('admin');
       return;
     }
     if (currentRole === 'admin' || currentRole === 'library') {
       const studioRole = workspaceRole && workspaceRole !== 'admin' && workspaceRole !== 'library'
         ? workspaceRole
-        : 'writer';
+        : 'dashboard';
       setCurrentRole(studioRole);
     }
   };
 
-  const handleRoleChange = async (role: UserRole) => {
+  const handleRoleChange = async (role: AppView) => {
     if (role === 'library') {
       if (!await saveBeforeLeave()) return;
       setIsLibraryView(true);
@@ -98,7 +100,7 @@ export default function App() {
       return;
     }
     // Only admins switch freely; everyone else works in the role of the active workspace.
-    if (currentUser.role !== 'admin' && role !== workspaceRole) return;
+    if (currentUser.systemRole !== 'ADMIN' && role !== workspaceRole) return;
     if (!await saveBeforeLeave()) return;
     setIsLibraryView(false);
     setCurrentRole(role);
@@ -256,14 +258,15 @@ export default function App() {
     try {
       const profile = await authService.fetchCurrentUser();
       setCurrentUser(profile);
-      if (profile.mustChangePassword) {
+      if (profile.requiresPasswordChange) {
         setIsChangePasswordModalOpen(true);
+        return; // Protected workspace requests must wait for the replacement password-session token.
       }
 
       // Remembered before resolving, which would otherwise fall back to the first workspace.
       const remembered = workspaceService.getCachedWorkspaceId();
       let myWorkspaces = await workspaceService.getMyWorkspaces(true);
-      if (profile.role === 'admin' || myWorkspaces.length === 0) {
+      if (profile.systemRole === 'ADMIN') {
         try {
           const allWorkspaces = await workspaceService.getAllWorkspaces();
           if (allWorkspaces && allWorkspaces.length > 0) {
@@ -293,20 +296,20 @@ export default function App() {
         setWorkspaceRole(active.myRole ?? null);
 
         // Only show picker modal for regular users with multiple workspaces if not remembered
-        if (profile.role !== 'admin' && myWorkspaces.length > 1 && !remembered) {
+        if (profile.systemRole !== 'ADMIN' && myWorkspaces.length > 1 && !remembered) {
           setWorkspaceChoices(myWorkspaces);
           return;
         }
         setWorkspaceChoices(null);
 
-        if (profile.role === 'admin') {
+        if (profile.systemRole === 'ADMIN') {
           setCurrentRole((prev) => (
             prev === 'writer' || prev === 'reviewer' || prev === 'producer' ? prev : 'admin'
           ));
         } else if (active.myRole) {
           setCurrentRole(active.myRole);
         } else {
-          setCurrentRole(profile.role);
+          setCurrentRole('dashboard');
         }
 
         const list = await projectService.getProjects();
@@ -325,7 +328,7 @@ export default function App() {
         setScript(EMPTY_SCRIPT);
         setComments([]);
         setActiveSceneId('');
-        if (profile.role === 'admin') {
+        if (profile.systemRole === 'ADMIN') {
           setCurrentRole('admin');
           showToast('Hệ thống chưa có không gian làm việc nào. Vui lòng tạo nhóm đầu tiên.', 'info');
         } else {
@@ -601,7 +604,7 @@ export default function App() {
     }
     // Roles are per workspace: the role of the active workspace decides, not the account role.
     if (!['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)
-      || !(currentRole === 'writer' || currentRole === 'producer' || currentUser.role === 'admin')) {
+      || !(currentRole === 'writer' || currentRole === 'producer' || currentUser.systemRole === 'ADMIN')) {
       warnLocked(currentRole === 'producer'
         ? 'Producer chỉ dựng và chỉnh sửa video khi kịch bản chưa khóa xuất bản.'
         : 'Kịch bản đã gửi duyệt hoặc đã được phê duyệt, Writer không thể chỉnh sửa.');
@@ -1144,10 +1147,11 @@ export default function App() {
     return (
       <LoginScreen
         onAuthenticated={(user) => {
-          setCurrentRole(user.role);
+          setProfileOpen(false);
+          setCurrentRole(user.systemRole === 'ADMIN' ? 'admin' : 'dashboard');
           setCurrentUser(user);
           setIsAuthenticated(true);
-          if (user.mustChangePassword) {
+          if (user.requiresPasswordChange) {
             setIsChangePasswordModalOpen(true);
           }
         }}
@@ -1180,10 +1184,11 @@ export default function App() {
       {/* Top Header Navigation */}
       <HeaderNav
         currentRole={currentRole}
-        accountRole={currentUser.role}
+        accountRole={currentUser.systemRole}
         isLeader={isLeader}
         userName={currentUser.name}
-        userEmail={currentUser.email}
+        userEmail={currentUser.accountLabel || currentUser.username || currentUser.googleEmail || currentUser.email}
+        onOpenProfile={() => setProfileOpen(true)}
         onLogout={async () => {
           if (!await saveBeforeLeave()) return;
           authService.logout();
@@ -1219,7 +1224,7 @@ export default function App() {
         isLibraryView={isLibraryView}
       />
 
-      {hasNoWorkspace && currentUser.role !== 'admin' && (
+      {hasNoWorkspace && currentUser.systemRole !== 'ADMIN' && (
         <main className="flex-1 bg-slate-50 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-4 shadow-sm">
             <div className="text-4xl">🏢</div>
@@ -1424,8 +1429,8 @@ export default function App() {
             (w) => w.id === (workspaceService.getCachedWorkspaceId() || workspaces[0]?.id)
           )?.name || (activeGroup.name !== 'Chưa có nhóm' ? activeGroup.name : (workspaces[0]?.name || 'Không gian làm việc'))
         }
-        isAdmin={currentUser.role === 'admin'}
-        isCurrentUserAdminOrLeader={currentUser.role === 'admin' || isLeader}
+        isAdmin={currentUser.systemRole === 'ADMIN'}
+        isCurrentUserAdminOrLeader={currentUser.systemRole === 'ADMIN' || isLeader}
         workspaces={workspaces}
         onSelectWorkspace={(newWsId) => {
           workspaceService.setActiveWorkspaceId(newWsId);
@@ -1469,7 +1474,7 @@ export default function App() {
         isOpen={isChangePasswordModalOpen}
         onSuccess={() => {
           setIsChangePasswordModalOpen(false);
-          setCurrentUser((prev) => ({ ...prev, mustChangePassword: false }));
+          setCurrentUser(authService.getCurrentUser());
           showToast('Đổi mật khẩu thành công! Chào mừng bạn đến với STEMotion.', 'success');
           // The first bootstrap was refused until the password changed; load workspaces now.
           void bootstrapFromApi();
@@ -1481,9 +1486,10 @@ export default function App() {
           setIsManageMembersModalOpen(false);
         }}
       />
+      {profileOpen && <ProfileSettingsModal onClose={() => setProfileOpen(false)} onUpdated={setCurrentUser} />}
 
       <PublishModal
-        canPublish={currentRole === 'producer' || currentUser.role === 'admin'}
+        canPublish={currentRole === 'producer' || currentUser.systemRole === 'ADMIN'}
         onPublished={async () => {
           const published = await projectService.getProjectById(script.id);
           setScript(previous => previous.id === published.id ? published : previous);

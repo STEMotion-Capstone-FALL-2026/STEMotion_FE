@@ -5,7 +5,7 @@ import type { Page } from '@playwright/test';
 
 /** The form pre-fills two members once three users exist; start every team from the leader alone. */
 async function openWorkspaceForm(page: Page) {
-  await signIn(page, ADMIN.email, ADMIN.password);
+  await signIn(page, ADMIN.username, ADMIN.password);
   await page.getByRole('button', { name: /Người Dùng & Phân Quyền/ }).click();
   await expect(page.getByLabel('Chỉ định Trưởng nhóm *')).toBeEnabled();
   const remove = page.getByRole('button', { name: /^Xóa thành viên bổ sung/ });
@@ -61,20 +61,20 @@ test.describe.serial('WF-01 team setup and onboarding', () => {
   });
 
   test('DS-01a: a new member must change the initial password at first login', async ({ page, request }) => {
-    await signIn(page, team.reviewer.email, INITIAL_PASSWORD);
+    await signIn(page, team.reviewer.username, INITIAL_PASSWORD);
     await changeFirstPassword(page, INITIAL_PASSWORD, CHANGED_PASSWORD);
     await expect(page.getByRole('button', { name: /Thành viên/ }).first()).toBeVisible();
 
     // The old password no longer works; the new one does.
     const old = await request.post(`${API_URL}/auth/login`, {
-      data: { email: team.reviewer.email, password: INITIAL_PASSWORD },
+      data: { username: team.reviewer.username, password: INITIAL_PASSWORD },
     });
     expect(old.ok()).toBeFalsy();
-    await login(request, team.reviewer.email, CHANGED_PASSWORD);
+    await login(request, team.reviewer.username, CHANGED_PASSWORD);
   });
 
   test('DS-01b: a Leader assigns roles but cannot remove members', async ({ page, request }) => {
-    await signIn(page, team.writer.email, INITIAL_PASSWORD);
+    await signIn(page, team.writer.username, INITIAL_PASSWORD);
     await changeFirstPassword(page, INITIAL_PASSWORD, CHANGED_PASSWORD);
 
     await page.getByRole('button', { name: /Thành viên/ }).first().click();
@@ -83,7 +83,7 @@ test.describe.serial('WF-01 team setup and onboarding', () => {
     await expect(page.getByRole('button', { name: /^Xóa thành viên/ })).toHaveCount(0);
 
     // Hiding the button is not the control (BR-20): the API refuses the Leader as well.
-    const token = await login(request, team.writer.email, CHANGED_PASSWORD);
+    const token = await login(request, team.writer.username, CHANGED_PASSWORD);
     const auth = { Authorization: `Bearer ${token}` };
     const mine = await (await request.get(`${API_URL}/workspaces/mine`, { headers: auth })).json();
     const workspace = (Array.isArray(mine) ? mine : mine.content).find((w: { name: string }) => w.name === workspaceName);

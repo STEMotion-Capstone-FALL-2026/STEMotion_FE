@@ -125,7 +125,7 @@ describe('workspaceService', () => {
       department: 'Vật Lý',
       membersCount: 3,
       activeProjects: 0,
-      myRole: 'ADMIN',
+      myRole: null,
       isLeader: false,
     };
     global.fetch = mockJson(201, createdRaw) as typeof fetch;

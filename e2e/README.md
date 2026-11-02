@@ -26,7 +26,12 @@ npm run e2e:report                # HTML report with traces and videos of failur
   calls are switched off, so a run costs nothing and never touches the shared database.
 - **Web**: Vite on port 5174 with `VITE_API_BASE_URL` pointing at that back end.
 
-Environment overrides: `E2E_API_URL`, `E2E_WEB_PORT`, `E2E_BE_DIR`, `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD`.
+Environment overrides: `E2E_API_URL`, `E2E_WEB_PORT`, `E2E_BE_DIR`, `E2E_ADMIN_USERNAME`, `E2E_ADMIN_PASSWORD`.
+
+Auth v2 local changes are verified with the isolated workflow suite. E2eServer uses an embedded,
+isolated PostgreSQL and a test-classpath-only schema location and Google verifier. Never add
+`classpath:db/auth-v2-e2e` to production Flyway locations. Production accepts signed Google ID
+tokens, not the E2E credential format. Real Google consent/origins still need an OAuth-configured staging run.
 Never set `E2E_API_URL` to the shared or production API: the tests create users and workspaces.
 
 ## Writing a spec

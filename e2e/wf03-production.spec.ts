@@ -35,7 +35,7 @@ test.describe.serial('WF-03 production and rendering', () => {
   });
 
   test('DS-03a: Producer opens the composition, changes the theme and syncs durations', async ({ page, request }) => {
-    await signInReady(page, ws.producer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.producer.username, CHANGED_PASSWORD);
     await openProject(page, title);
     // Wait for the composition: a theme picked before it loads is not saved.
     await expect(page.getByText(/Bản dựng (chưa chỉnh|r\d+)/)).toBeVisible();
@@ -50,7 +50,7 @@ test.describe.serial('WF-03 production and rendering', () => {
   });
 
   test('DS-03a: Producer renders the MP4; the finished clip goes to video review', async ({ page, request }) => {
-    await signInReady(page, ws.producer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.producer.username, CHANGED_PASSWORD);
     await openProject(page, title);
     await expect(page.getByText(/Bản dựng (chưa chỉnh|r\d+)/)).toBeVisible();
 
@@ -70,7 +70,7 @@ test.describe.serial('WF-03 production and rendering', () => {
   test('DS-03b: a failed render shows as failed and can be retried', async ({ page, request }) => {
     const failing = `Lỗi render [render-fail] ${run}`;
     const id = await approvedProject(request, ws, failing);
-    await signInReady(page, ws.producer.email, CHANGED_PASSWORD);
+    await signInReady(page, ws.producer.username, CHANGED_PASSWORD);
     await openProject(page, failing);
     await expect(page.getByText(/Bản dựng (chưa chỉnh|r\d+)/)).toBeVisible();
 

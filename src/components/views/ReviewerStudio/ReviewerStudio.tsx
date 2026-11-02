@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { STEMScript, SceneData, FeedbackComment } from '../../../types/stem';
 import {
-  UserRole,
+  AppView,
   reviewService,
   QaReport,
   ReviewQueueItem,
@@ -57,7 +57,7 @@ interface ReviewerStudioProps {
   setNewCommentInput: (val: string) => void;
   handleAddComment: (e: React.FormEvent) => void;
   isAddingComment?: boolean;
-  onRoleChange: (role: UserRole) => void;
+  onRoleChange: (role: AppView) => void;
   onOpenPublishModal: () => void;
   onOpenProject?: (projectId: string) => void;
   onStartRender?: () => Promise<void>;

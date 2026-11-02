@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { GoogleSignInButton } from './GoogleSignInButton';
 import { AlertCircle, Loader2, LogIn } from 'lucide-react';
 import { authService, UserProfile } from '../services';
 
@@ -9,26 +10,30 @@ interface LoginScreenProps {
 /**
  * Gate in front of the studio. The backend issues a JWT that every later
  * request carries, so nothing else in the app can run until this succeeds.
- * Accounts are strictly provisioned by system administrators.
+ * Local accounts are admin-provisioned; Google identities require the Gmail whitelist.
  */
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const busy = useRef(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (busy.current) return;
+    busy.current = true;
     setError(null);
     setIsSubmitting(true);
 
     try {
-      const user = await authService.login(email, password);
+      const user = await authService.login(username, password);
       onAuthenticated(user);
     } catch (err: any) {
-      // The API answers a wrong password with 400 and a readable message.
+      // Invalid credentials have a generic message, without revealing account existence.
       setError(err?.message || 'Không thể kết nối tới máy chủ. Kiểm tra backend đã chạy chưa.');
     } finally {
+      busy.current = false;
       setIsSubmitting(false);
     }
   };
@@ -64,13 +69,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
           )}
 
           <label className="block">
-            <span className="text-xs font-bold text-slate-600">Email</span>
+            <span className="text-xs font-bold text-slate-600">Tài khoản</span>
             <input
-              type="email"
+              type="text"
+              autoComplete="username"
+              pattern={String.raw`[A-Za-z0-9][A-Za-z0-9._\-]{2,31}`}
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="ten@stemotion.vn"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Tên tài khoản do quản trị viên cấp"
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </label>
@@ -79,6 +86,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
             <span className="text-xs font-bold text-slate-600">Mật khẩu</span>
             <input
               type="password"
+              autoComplete="current-password"
               required
               minLength={8}
               value={password}
@@ -105,6 +113,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onAuthenticated }) => 
             Tài khoản do quản trị viên cấp. Liên hệ quản trị viên nếu bạn chưa có tài khoản.
           </p>
         </form>
+        <div className="bg-white rounded-2xl p-5 mt-3 border border-slate-200 space-y-3">
+          <GoogleSignInButton disabled={isSubmitting} onCredential={async body => {
+            if (busy.current) return;
+            busy.current = true; setIsSubmitting(true); setError(null);
+            try { onAuthenticated(await authService.loginWithGoogle(body)); }
+            catch (err: any) { setError(err.message); throw err; }
+            finally { busy.current = false; setIsSubmitting(false); }
+          }} />
+          <p className="text-xs text-slate-500 text-center">Chỉ Gmail trong whitelist được đăng nhập. Nếu đã có tài khoản thường, hãy đăng nhập bằng mật khẩu và liên kết Google trong Cài đặt hồ sơ trước.</p>
+        </div>
       </div>
     </div>
   );

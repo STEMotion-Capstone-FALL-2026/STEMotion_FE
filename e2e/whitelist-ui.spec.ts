@@ -1,0 +1,32 @@
+import {test,expect} from '@playwright/test';
+import {ADMIN,runId} from './support/api';
+import {signIn} from './support/ui';
+
+test('admin opens the default whitelist, adds Gmail, searches, revokes and restores',async({page})=>{
+  const problems:string[]=[];
+  page.on('console',message=>{if(message.type()==='error')problems.push(message.text());});
+  page.on('pageerror',error=>problems.push(error.message));
+  await signIn(page,ADMIN.username,ADMIN.password);
+  await page.getByRole('button',{name:/FE-15:/}).click();
+  const username=page.getByRole('textbox',{name:/^Tài khoản/});
+  await expect(username).toBeVisible();
+  expect(await username.evaluate((input:HTMLInputElement)=>new RegExp(input.pattern,'v').test('writer-one'))).toBe(true);
+  const listed=page.waitForResponse(r=>r.url().includes('/admin/google-whitelist?')&&r.request().method()==='GET');
+  await page.getByRole('button',{name:'Whitelist Google',exact:true}).click();
+  expect((await listed).status()).toBe(200);
+  const gmail=`whitelist-ui-${runId()}@gmail.com`;
+  await page.getByLabel('Gmail được phép').fill(gmail);
+  await page.getByRole('button',{name:'Thêm Gmail',exact:true}).click();
+  await expect(page.getByText(/^Đã thêm Gmail\./)).toBeVisible();
+  await page.getByLabel('Tìm Gmail').fill(gmail);
+  await page.getByRole('button',{name:'Tìm',exact:true}).click();
+  const row=page.getByRole('listitem').filter({hasText:gmail});
+  await expect(row).toContainText('Chưa sử dụng');
+  await row.getByRole('button',{name:'Thu hồi',exact:true}).click();
+  await expect(row).toContainText('Đã thu hồi');
+  await row.getByRole('button',{name:'Khôi phục',exact:true}).click();
+  await expect(row).toContainText('Chưa sử dụng');
+  await row.getByRole('button',{name:'Thu hồi',exact:true}).click();
+  await expect(row).toContainText('Đã thu hồi');
+  expect(problems.filter(message=>/pattern|regular expression|status of 500/i.test(message))).toEqual([]);
+});

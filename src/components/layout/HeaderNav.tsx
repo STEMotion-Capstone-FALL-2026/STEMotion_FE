@@ -10,7 +10,7 @@ import {
   Library,
   FolderKanban,
 } from 'lucide-react';
-import { UserRole } from '../../services';
+import { AppView } from '../../services';
 
 /** Falls back to a question mark so the avatar is never blank. */
 const initialsOf = (fullName: string): string => {
@@ -21,14 +21,15 @@ const initialsOf = (fullName: string): string => {
 };
 
 interface HeaderNavProps {
-  currentRole: UserRole;
-  accountRole: UserRole;
+  currentRole: AppView;
+  accountRole: import('../../types/stem').SystemRole;
   isLeader?: boolean;
   /** The signed-in user, so the header shows who is actually logged in. */
   userName: string;
   userEmail: string;
   onLogout: () => void;
-  onRoleChange: (role: UserRole) => void;
+  onOpenProfile?: () => void;
+  onRoleChange: (role: AppView) => void;
   groups: { id: string; name: string; department?: string }[];
   activeGroup: { name: string; code: string };
   onSelectGroup: (workspaceId: string) => void;
@@ -48,6 +49,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   userName,
   userEmail,
   onLogout,
+  onOpenProfile,
   onRoleChange,
   groups,
   activeGroup,
@@ -61,7 +63,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 }) => {
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
 
-  const canManageMembers = accountRole === 'admin' || isLeader;
+  const canManageMembers = accountRole === 'ADMIN' || isLeader;
   const showBoardButton = isInStudio || isLibraryView || currentRole === 'admin';
 
   return (
@@ -150,7 +152,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                 ))}
               </div>
               <div className="pt-1.5 border-t border-slate-100 space-y-1">
-                {accountRole === 'admin' && onCreateWorkspace && (
+                {accountRole === 'ADMIN' && onCreateWorkspace && (
                   <button
                     onClick={() => {
                       setIsGroupDropdownOpen(false);
@@ -194,7 +196,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 
       {/* Main Navigation: Admin Portal (if admin) & Media Library */}
       <div className="flex items-center space-x-2">
-        {accountRole === 'admin' && (
+        {accountRole === 'ADMIN' && (
           <button
             onClick={() => onRoleChange('admin')}
             className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer ${
@@ -228,7 +230,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         <div className="text-xs px-2.5 py-1 rounded-full font-medium bg-blue-50 text-brand-700 border border-blue-200 flex items-center space-x-1.5">
           <span>
             Vai trò:{' '}
-            {accountRole === 'admin'
+            {accountRole === 'ADMIN'
               ? 'Admin (Quản trị)'
               : currentRole === 'producer'
               ? 'Producer (Dựng Video)'
@@ -236,12 +238,13 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
               ? 'Writer (Biên kịch)'
               : currentRole === 'reviewer'
               ? 'Reviewer (Thẩm định)'
-              : 'Khách xem'}
-            {accountRole !== 'admin' && isLeader && ' • Trưởng nhóm'}
+              : 'User (Chưa có vai trò workspace)'}
+            {accountRole !== 'ADMIN' && isLeader && ' • Trưởng nhóm'}
           </span>
         </div>
 
         <div className="flex items-center space-x-2 pl-2 border-l border-slate-200">
+          <button type="button" onClick={onOpenProfile} className="text-xs border rounded px-2 py-1">Cài đặt hồ sơ</button>
           <div className="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">
             {initialsOf(userName)}
           </div>

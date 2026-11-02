@@ -16,12 +16,12 @@ import {
   ArrowRight,
   PlayCircle
 } from 'lucide-react';
-import { STEMScript, STEMSubject, UserRole } from '../../../types/stem';
+import { STEMScript, STEMSubject, AppView } from '../../../types/stem';
 import { PIPELINE_STAGES, pipelineStage, PipelineStage, canRoleSeeProject } from '../../../lib/pipeline';
 
 interface ProjectDashboardViewProps {
   scripts: STEMScript[];
-  currentRole: UserRole;
+  currentRole: AppView;
   activeGroupName: string;
   onSelectProject: (projectId: string) => void;
   onOpenCreateProjectModal: () => void;

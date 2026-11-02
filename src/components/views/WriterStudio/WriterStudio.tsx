@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { STEMScript, SceneData, FeedbackComment } from '../../../types/stem';
 import {
-  UserRole,
+  AppView,
   projectService,
   reviewService,
   narrationService,
@@ -51,7 +51,7 @@ interface WriterStudioProps {
   onOpenCreateProjectModal: () => void;
   onOpenVersionDiffModal: () => void;
   onOpenTemplateCatalog: () => void;
-  onRoleChange: (role: UserRole) => void;
+  onRoleChange: (role: AppView) => void;
   onSetReviewerMode: (mode: 'script' | 'video') => void;
   aiAnalysisResult: {
     type: 'resegment' | 'grade' | 'extract' | 'terms' | null;

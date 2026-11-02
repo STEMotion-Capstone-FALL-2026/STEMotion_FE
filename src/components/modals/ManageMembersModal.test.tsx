@@ -56,7 +56,7 @@ describe('ManageMembersModal RBAC and error handling (M15, D10, D11)', () => {
   it('Admin view: displays candidates, add member form, and full member controls', async () => {
     vi.spyOn(workspaceService, 'getMembers').mockResolvedValue(mockMembers);
     const getCandidatesSpy = vi.spyOn(workspaceService, 'getCandidates').mockResolvedValue([
-      { id: 'u4', fullName: 'Candidate User', email: 'cand@test.com', systemRole: 'WRITER' },
+      { id: 'u4', fullName: 'Candidate User', email: 'cand@test.com' },
     ]);
     vi.spyOn(workspaceService, 'getAllWorkspaces').mockResolvedValue([
       { id: 'ws-1', name: 'Tổ Toán', membersCount: 3, activeProjects: 1 },

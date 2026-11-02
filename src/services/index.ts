@@ -13,4 +13,4 @@ export * from './adminService';
 export * from './libraryService';
 export * from './narrationService';
 export * from './compositionService';
-export type { UserRole } from '../types/stem';
+export type { AppView } from '../types/stem';

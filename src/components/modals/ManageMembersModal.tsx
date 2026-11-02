@@ -17,7 +17,6 @@ import {
   workspaceService,
   WorkspaceMemberDto,
   CandidateUser,
-  UserRole,
 } from '../../services';
 
 export interface WorkspaceItemSummary {
@@ -408,7 +407,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                     <option value="">-- Chọn thành viên / người dùng --</option>
                     {candidates.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.fullName} ({c.email})
+                        {c.fullName} ({c.username || c.googleEmail || c.email || c.id})
                       </option>
                     ))}
                   </select>
@@ -496,7 +495,7 @@ export const ManageMembersModal: React.FC<ManageMembersModalProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="text-slate-400 font-mono text-[11px]">{m.email}</div>
+                    <div className="text-slate-400 font-mono text-[11px]">{m.username || m.googleEmail || m.email || m.id}</div>
                   </div>
                 </div>
 
