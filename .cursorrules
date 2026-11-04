@@ -1,0 +1,9 @@
+# STEMotion Frontend Rules (Review 2 Context)
+# See full directives in GEMINI.md and docs/stem-review2-2026-11-03/
+
+- Core Rule: Every video project must belong to a formal Education Level (PRIMARY, LOWER_SECONDARY, UPPER_SECONDARY) and real Grade (1-12).
+- Never use legacy labels like "Đại chúng", "Cơ bản", "Nâng cao" as gradeLevel.
+- Require at least 2 STEM components (S, T, E, M) selected in CreateProjectModal.
+- Every Scene must belong to a PedagogicalRole (5 phases of CV 3089 / 4 phases of CV 909).
+- Preserve Remotion rendering logic, KaTeX css, and tailwind settings at all costs.
+- Reference docs: docs/stem-review2-2026-11-03/03_THIET_KE_REFACTOR.md

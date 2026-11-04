@@ -21,6 +21,28 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
   onSelectLegoPiece,
   disabled = false,
 }) => {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const handleSpeak = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!('speechSynthesis' in window)) return;
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const text = selectedScene?.narration?.trim();
+    if (!text) return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'vi-VN';
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
   return (
     <aside className="w-80 bg-white border-l border-slate-200 p-4 overflow-y-auto custom-scrollbar text-xs h-full min-h-0 shrink-0">
       <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
@@ -307,7 +329,19 @@ export const SceneInspector: React.FC<SceneInspectorProps> = ({
         <div>
           <label className="font-bold text-slate-700 block mb-1 flex items-center justify-between">
             <span>Lời thoại đọc (TTS Voiceover):</span>
-            <span className="text-[10px] text-slate-400">Đồng bộ giọng đọc</span>
+            <button
+              type="button"
+              onClick={handleSpeak}
+              className={`text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                isSpeaking
+                  ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                  : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+              }`}
+              title="Bấm để nghe thử giọng đọc AI tiếng Việt của phân cảnh này"
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>{isSpeaking ? 'Dừng đọc' : 'Nghe thử giọng'}</span>
+            </button>
           </label>
           <textarea
             rows={3}
