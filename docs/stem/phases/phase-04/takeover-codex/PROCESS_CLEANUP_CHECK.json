@@ -1,0 +1,14 @@
+{
+  "owned_java_ids": [
+    6232,
+    16128,
+    17788,
+    15392,
+    8280,
+    7656
+  ],
+  "alive_owned_java": [],
+  "direct_remaining_children": [],
+  "total_postgres_processes": 34,
+  "action": "read-only; no process killed by this check"
+}

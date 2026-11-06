@@ -2,6 +2,7 @@ import { useActionGuard } from '../../../hooks/useActionGuard';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   PlusCircle,
+  FileText,
   GitCompare,
   Send,
   ChevronUp,
@@ -37,6 +38,11 @@ import { sceneSaveQueue } from '../../../services/sceneSaveQueue';
 import { renderLatexToString } from '../../../utils/latex';
 import { MetaphorPanel } from './MetaphorPanel';
 import { ComposedBlocksEditor } from './ComposedBlocksEditor';
+import { useStemTarget } from '../../stem/useStemTarget';
+import { StemErrorNotice } from '../../stem/StemErrorNotice';
+import type { StemBriefHandle } from '../../stem/StemBriefPanel';
+import { StemBriefPanel } from '../../stem/StemBriefPanel';
+import { scriptService } from '../../../services/scriptService';
 
 interface WriterStudioProps {
   script: STEMScript;
@@ -87,6 +93,23 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   isAiRunning = false,
   showToast,
 }) => {
+  const [activeStudioTab, setActiveStudioTab] = useState<'SCENES' | 'STEM_BRIEF'>('SCENES');
+  const [briefEvidenceScenes, setBriefEvidenceScenes] = useState<string[]>([]);
+
+  const {target:stemTarget,error:stemTargetError}=useStemTarget(script.id,script.currentVersionNo??script.version);
+  const stemPanel=React.useRef<StemBriefHandle>(null);
+  const [stemSubmitError,setStemSubmitError]=useState<unknown>(null);
+  const onEvidenceChange=useCallback((items:import('../../../types/stem').StemEvidence[])=>setBriefEvidenceScenes(items.map(e=>e.sceneId).filter((id):id is string=>Boolean(id))),[]);
+  const handleDeleteSceneWithStemCheck = (sceneId: string) => {
+    if (briefEvidenceScenes.includes(sceneId)) {
+      const ok = window.confirm(
+        'Cảnh này có liên kết với minh chứng STEM. Xóa cảnh sẽ giữ minh chứng ở trạng thái cảnh báo mồ côi (orphan finding TECH-EVIDENCE) và không cascade xóa ngầm. Bạn có chắc muốn xóa cảnh này không?'
+      );
+      if (!ok) return;
+    }
+    handleDeleteScene(sceneId);
+  };
+
   const [draggedSceneIdx, setDraggedSceneIdx] = useState<number | null>(null);
   const [dragOverSceneIdx, setDragOverSceneIdx] = useState<number | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -477,6 +500,35 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
             Trạng thái: <b>{script.scriptStatus}</b>
           </span>
+
+          {/* Tab chuyển đổi giữa Soạn Phân Cảnh và Hồ Sơ STEM (P4-Q03) */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 ml-2">
+            <button
+              onClick={() => setActiveStudioTab('SCENES')}
+              className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition-all text-xs ${
+                activeStudioTab === 'SCENES'
+                  ? 'bg-white text-brand-700 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Phân Cảnh</span>
+            </button>
+            <button
+              onClick={() => setActiveStudioTab('STEM_BRIEF')}
+              className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition-all text-xs ${
+                activeStudioTab === 'STEM_BRIEF'
+                  ? 'bg-white text-brand-700 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Hồ Sơ STEM</span>
+              <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold border border-amber-300">
+                DRAFT
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center space-x-2 text-xs">
@@ -500,7 +552,19 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               if (isSubmitting) return;
               setIsSubmitting(true);
               try {
-                await sceneSaveQueue.saveNow(script.id, script.scenes);
+                if(!stemTarget||!stemPanel.current)throw new Error('Chưa xác định được phiên bản STEM; cần tải lại trước khi gửi.');
+                stemPanel.current.assertSubmitReady();
+                await sceneSaveQueue.saveNow(script.id,script.scenes);
+                const saved=await stemPanel.current.saveForSubmit();
+                if(saved.brief){
+                  const validation=await scriptService.validateStem(script.id,stemTarget.versionId,{
+                    expectedBriefRevision:saved.revision,
+                    expectedScriptRevision:sceneSaveQueue.getDraftRevision(script.id)??script.draftRevision??stemTarget.scriptRevision,phase:'SCRIPT',
+                  });
+                  if(validation.findings.length)showToast(`STEM ${validation.effectiveMode}: ${validation.findings.length} cảnh báo cần Reviewer xem xét.`,'info');
+                }
+                // An untouched OFF legacy record has no aggregate to validate; preserve that flow.
+                // OFF/ADVISORY findings do not become a client-only STRICT gate.
                 await projectService.submitForReview(script.id);
                 const fresh = await projectService.getProjectById(script.id);
                 if (activeProject.current !== fresh.id) return;
@@ -509,6 +573,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                 showToast('Kịch bản đã được lưu và gửi vào hàng đợi thẩm định.', 'success');
                 onSetReviewerMode('script');
               } catch (error: any) {
+                setStemSubmitError(error);
                 showToast(error.message || 'Không gửi được kịch bản. Vui lòng thử lại.', 'warn');
               } finally {
                 setIsSubmitting(false);
@@ -551,7 +616,14 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
         </div>
       )}
 
-      <div className="studio-columns flex-1 min-h-0 flex overflow-hidden">
+      <StemErrorNotice error={stemSubmitError??stemTargetError} onReload={()=>window.location.reload()} onRetryReady={()=>setStemSubmitError(null)} />
+      <div hidden={activeStudioTab!=='STEM_BRIEF'} className="flex-1 min-h-0 bg-slate-50 p-6 overflow-y-auto">
+        {stemTarget&&<StemBriefPanel key={`${script.id}:${stemTarget.versionId}`} ref={stemPanel}
+          projectId={script.id} versionId={stemTarget.versionId}
+          scriptRevision={script.draftRevision??stemTarget.scriptRevision} scenes={script.scenes}
+          isWriter={canEdit} workspaceId={stemTarget.workspaceId} showToast={showToast} onEvidenceChange={onEvidenceChange}/>}
+      </div>
+      <div hidden={activeStudioTab!=='SCENES'} className={activeStudioTab==='SCENES'?'studio-columns flex-1 min-h-0 flex overflow-hidden':'hidden'}>
         {/* Cột 1: Cấu trúc phân cảnh (Cho phép Thêm / Xóa / Đổi thứ tự) */}
         <aside className="w-72 bg-white border-r border-slate-200 p-4 flex flex-col h-full min-h-0 overflow-hidden shrink-0">
           <div className="flex items-center justify-between mb-2 text-xs">
@@ -665,7 +737,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDeleteScene(sc.id);
+                          handleDeleteSceneWithStemCheck(sc.id);
                         }}
                         className="text-slate-300 hover:text-rose-600 p-0.5"
                         title="Xóa cảnh"

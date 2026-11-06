@@ -5,6 +5,10 @@ import { AlertTriangle, Download, X, Youtube, Code } from 'lucide-react';
 import { STEMScript } from '../../types/stem';
 import { projectService } from '../../services/projectService';
 import { publicationService } from '../../services/publicationService';
+import { getArtifactStatus, artifactExpectation, stemMutationKey } from '../../services/stemClient';
+import type { StemArtifactStatus } from '../../types/stem';
+import { ApiError } from '../../services/apiClient';
+import { StemErrorNotice } from '../stem/StemErrorNotice';
 
 interface PublishModalProps {
   isOpen: boolean;
@@ -23,6 +27,15 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
   const [embedCode, setEmbedCode] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
+  const [artifact,setArtifact]=useState<StemArtifactStatus|null>(null);
+  const [acknowledged,setAcknowledged]=useState(false);
+  const [publicationError,setPublicationError]=useState<unknown>(null);
+  const publishRetry=useRef<{payload:string;key:string}|null>(null);
+  useEffect(()=>{
+    let current=true;setArtifact(null);setAcknowledged(false);setPublicationError(null);publishRetry.current=null;
+    if(isOpen&&canPublish&&script.videoStatus==='APPROVED')void getArtifactStatus(script.id).then(value=>{if(current)setArtifact(value);}).catch(()=>{});
+    return()=>{current=false;};
+  },[isOpen,canPublish,script.id,script.videoUrl,script.videoStatus]);
   const activeProject = useRef(script.id);
   activeProject.current = script.id;
   useEffect(() => { setEmbedCode(null); setPublished(false); setInlineError(null); }, [script.id]);
@@ -35,8 +48,16 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
     const projectId = script.id;
     setBusy(true);
     setInlineError(null);
+    setPublicationError(null);
     try {
-      const result = await publicationService.publishInternal(script.id, script.title);
+      if(artifact?.integrity==='MISMATCH'||artifact?.publishEligibility.route==='BLOCKED')throw new Error('Artifact không khớp nội dung đã duyệt; cần tải lại và duyệt đúng phiên bản.');
+      if(artifact?.publishEligibility.requiresLegacyAcknowledgement&&!acknowledged)throw new Error('Cần xác nhận xuất bản nội dung chưa thẩm định.');
+      const expectation=artifact?artifactExpectation(artifact):undefined;
+      const payload=JSON.stringify([script.id,script.title,acknowledged,expectation]);
+      if(publishRetry.current?.payload!==payload)publishRetry.current={payload,key:stemMutationKey()};
+      const result = artifact
+        ? await publicationService.publishInternal(script.id,script.title,{legacyUnverifiedAcknowledged:acknowledged,artifactExpectation:expectation,idempotencyKey:publishRetry.current.key})
+        : await publicationService.publishInternal(script.id, script.title);
       if (activeProject.current === projectId) {
         setEmbedCode(result.lmsEmbedCode);
         setPublished(true);
@@ -47,7 +68,9 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
       catch { onNotify('Đã xuất bản; hãy tải lại trang để cập nhật trạng thái.', 'info'); }
     } catch (error: any) {
       const msg = error.message || 'Không xuất bản được video.';
-      if (activeProject.current === projectId) setInlineError(msg);
+      if (activeProject.current === projectId) {
+        if(error instanceof ApiError)setPublicationError(error);else setInlineError(msg);
+      }
       onNotify(msg, 'warn');
     } finally { setBusy(false); }
   });
@@ -86,8 +109,15 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
           <button onClick={onClose} disabled={busy} aria-label="Đóng"><X size={20} /></button>
         </div>
         <p className="text-sm text-slate-600">Trạng thái: {script.videoStatus}. File tải xuống là video đã kết xuất trên máy chủ.</p>
+        {artifact&&<div><p>Artifact: {artifact.freshness} · {artifact.integrity} · UNVERIFIED</p>
+          {artifact.reasons.map(reason=><p key={reason}>{reason}</p>)}
+          {artifact.publishEligibility.requiresLegacyAcknowledgement&&artifact.integrity!=='MISMATCH'&&<label><input type="checkbox" checked={acknowledged} onChange={event=>setAcknowledged(event.target.checked)}/>Tôi xác nhận xuất bản nội dung chưa được thẩm định STEM (UNVERIFIED).</label>}
+        </div>}
 
         {/* Inline error banner — shown directly inside the modal on failure */}
+        <StemErrorNotice error={publicationError} onReload={()=>{
+          void getArtifactStatus(script.id).then(result=>{setArtifact(result);setAcknowledged(false);setPublicationError(null);}).catch(error=>setPublicationError(error));
+        }} onRetryReady={()=>setPublicationError(null)}/>
         {inlineError && (
           <div role="alert" className="flex items-start gap-2.5 rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-800">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
@@ -102,7 +132,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
         {!script.videoUrl && <p className="text-sm text-amber-700">Chưa có video. Dịch vụ kết xuất phải được cấu hình trước.</p>}
         <div className="border-t pt-4 text-sm text-slate-600 space-y-3">
           <p className="flex items-center gap-2"><Youtube size={18} /> Xuất YouTube chưa khả dụng; cần kết nối kênh bằng OAuth.</p>
-          <button disabled={busy || published || !canPublish || script.videoStatus !== 'APPROVED'} onClick={publish}
+          <button disabled={busy || published || !canPublish || script.videoStatus !== 'APPROVED' || Boolean(publicationError) || artifact?.integrity==='MISMATCH' || artifact?.publishEligibility.route==='BLOCKED' || Boolean(artifact?.publishEligibility.requiresLegacyAcknowledgement&&!acknowledged)} onClick={publish}
             className="bg-emerald-600 text-white rounded-lg px-4 py-2 disabled:opacity-50">
             {published || script.videoStatus === 'PUBLISHED' ? 'Đã xuất bản vào thư viện' : 'Xuất bản vào thư viện & lấy mã nhúng LMS'}
           </button>

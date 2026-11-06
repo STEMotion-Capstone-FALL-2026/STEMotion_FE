@@ -328,6 +328,8 @@ export interface STEMScript {
   draftRevision?: number;
   reviewComments?: FeedbackComment[];
   version?: string;
+  /** Read-only backend version number; never a ScriptVersion UUID. */
+  currentVersionNo?: number;
   reviewNote?: string;
   estimatedDurationSeconds?: number;
   targetAudience?: string;
@@ -374,3 +376,203 @@ export interface Workspace {
   myRole?: WorkspaceRole;
   isLeader?: boolean;
 }
+
+
+// ==========================================
+// STEM Track - Phase 4 Studio & Reviewer Types
+// Aligned with CONTRACT_DELTA.md (P3)
+// ==========================================
+
+export interface ContextEntry {
+  key: 'IN_CLASS_SCREEN' | 'GROUP_PRACTICE';
+  condition?: string | null;
+  adaptations?: string | null;
+}
+
+export interface UsageContext {
+  primary: ContextEntry | null;
+  secondary: ContextEntry[];
+}
+
+export interface StemObjective {
+  key: string;
+  outcomeId?: string | null;
+  learnerAction?: string | null;
+  observableEvidence?: string | null;
+}
+
+export interface StudentTask {
+  key: string;
+  learnerAction?: string | null;
+  teacherSupport?: string | null;
+  materials?: string | null;
+  safety?: string | null;
+  assessmentEvidence?: string | null;
+  executionContextKey?: string | null;
+}
+
+export interface StemContribution {
+  component: 'S' | 'T' | 'E' | 'M';
+  explanation?: string | null;
+  objectiveKeys: string[];
+  taskKeys: string[];
+}
+
+export interface StemEvidence {
+  id?: string | null;
+  sceneId?: string | null;
+  taskKey?: string | null;
+  objectiveKey?: string | null;
+  component: 'S' | 'T' | 'E' | 'M';
+  explanation?: string | null;
+}
+
+export interface StemValidationFinding {
+  ruleId: string;
+  field: string;
+  severity: 'ERROR' | 'WARN' | 'INFO' | string;
+  message: string;
+  basis?: string;
+}
+
+export interface LegacySuggestion {
+  primaryKey?: string | null;
+  channelKeys: string[];
+  requiresConfirmation: boolean;
+  reason: string;
+}
+
+export interface StemBrief {
+  policyVersionId?: string | null;
+  topicVersionId?: string | null;
+  gradeKey?: string | null;
+  subjectKeys: string[];
+  outcomeIds: string[];
+  scopeOfClip?: string | null;
+  context: UsageContext;
+  distributionChannels: string[];
+  objectives: StemObjective[];
+  studentTasks: StudentTask[];
+  contributions: StemContribution[];
+  safetyNotes?: string | null;
+  rawLegacy?: string | null;
+}
+
+export interface StemCreateRequest {
+  schemaVersion: 'stem.v1';
+  expectedScriptRevision: number;
+  idempotencyKey: string;
+}
+
+export interface StemSaveRequest {
+  schemaVersion: 'stem.v1';
+  baseRevision: number;
+  expectedScriptRevision: number;
+  idempotencyKey: string;
+  brief: StemBrief;
+  evidence: StemEvidence[];
+}
+
+export interface StemValidateRequest {
+  expectedBriefRevision: number;
+  expectedScriptRevision: number;
+  phase: 'SCRIPT' | 'VIDEO';
+  expectedCompositionRevision?: number | null;
+}
+
+export interface StemChangeTarget {
+  expectedVersionId: string;
+  expectedScriptRevision: number;
+  expectedBriefRevision: number;
+  idempotencyKey: string;
+}
+
+export interface StemCriterion {
+  key: string;
+  judgment: 'ADEQUATE' | 'NEEDS_CHANGES' | 'NOT_ASSESSED' | 'NOT_APPLICABLE';
+  rationale: string;
+  evidenceIds: string[];
+}
+
+export interface StemAssessment {
+  expectedBriefRevision: number;
+  expectedScriptRevision: number;
+  expectedCompositionRevision?: number | null;
+  expectedModeRevision: number;
+  rubricVersionId?: string | null;
+  criteria: StemCriterion[];
+  idempotencyKey: string;
+}
+
+export interface StemViewResponse {
+  schemaVersion: string;
+  briefId?: string | null;
+  scriptVersionId: string;
+  revision: number;
+  verificationStatus: 'UNVERIFIED' | string;
+  readiness: 'INCOMPLETE' | 'READY_FOR_REVIEW' | 'NEEDS_REVIEW' | 'LEGACY_UNMAPPED' | string;
+  effectiveMode: 'OFF' | 'ADVISORY' | string;
+  modeRevision: number;
+  brief: StemBrief | null;
+  evidence: StemEvidence[];
+  findings: StemValidationFinding[];
+  legacySuggestion?: LegacySuggestion | null;
+}
+
+/** Client name deliberately distinguishes workspace mode CAS from a brief revision. */
+export interface WorkspaceStemSettings {
+  workspaceId: string;
+  modeRevision: number;
+  mode: 'OFF' | 'ADVISORY';
+  policyVersionIds: string[];
+  defaultPolicyVersionId: string | null;
+}
+export interface WorkspaceStemSettingsRequest {
+  modeRevision: number;
+  mode: 'OFF' | 'ADVISORY';
+  policyVersionIds: string[];
+  defaultPolicyVersionId?: string | null;
+  idempotencyKey: string;
+  legacyModeSelection?: 'OFF' | 'ADVISORY' | null;
+}
+/** Exact P3 wire response. Do not confuse revision with brief/script revision. */
+export interface WorkspaceStemSettingsWire {
+  workspaceId: string;
+  revision: number;
+  mode: 'OFF' | 'ADVISORY';
+  policyIds: string[];
+  defaultPolicyId: string | null;
+}
+export interface StemTarget {
+  versionId: string;
+  scriptRevision: number;
+  workspaceId: string;
+  versionNo: number;
+}
+
+export interface CatalogVersionEntry {
+  id: string;
+  kind: 'TOPIC' | 'TOPIC_VERSION' | 'SOURCE_EDITION' | 'OUTCOME' | 'PROFILE' | 'POLICY' | 'RUBRIC' | string;
+  logicalKey: string;
+  version: number;
+  parentId?: string | null;
+  sourceId?: string | null;
+  status: 'DRAFT' | string;
+  data: Record<string, any>;
+  revision: number;
+  verificationStatus: 'UNVERIFIED' | string;
+}
+
+/** P5 server-owned technical state; CURRENT never implies expert verification. */
+export interface StemArtifactStatus {
+  schemaVersion: 'stem-artifact.v1';
+  target: {projectId:string;versionId:string;compositionRevision?:number|null;clipId?:string;jobId?:string;snapshotId?:string;inputHash?:string};
+  freshness: 'CURRENT'|'NEEDS_REVIEW'|string;
+  classification: 'CLASSIFIED'|'UNKNOWN';
+  integrity: 'MATCH'|'MISMATCH'|'UNKNOWN';
+  publishEligibility: {allowed:boolean;route:'CURRENT'|'LEGACY_UNVERIFIED'|'BLOCKED';requiresLegacyAcknowledgement:boolean};
+  snapshotOrigin: {snapshotId?:string;capturedMode?:string;effectiveMode?:string};
+  verificationStatus: 'UNVERIFIED'|'LEGACY_UNMAPPED';
+  reasons: string[];
+}
+export interface StemArtifactExpectation {clipId:string;jobId:string;snapshotId:string;inputHash:string}

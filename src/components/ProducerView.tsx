@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { StemReadOnlySummary } from './stem/StemReadOnlySummary';
 import { STEMScript } from '../types/stem';
 import { RemotionPlayerWrapper } from './RemotionPlayerWrapper';
 import { Video, Sliders, Cpu, Download, RefreshCw, CheckCircle2, Code2 } from 'lucide-react';
@@ -97,6 +98,7 @@ export const ProducerView: React.FC<ProducerViewProps> = ({
 
   return (
     <div className="space-y-6">
+      <StemReadOnlySummary script={script}/>
       {/* Top Banner */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

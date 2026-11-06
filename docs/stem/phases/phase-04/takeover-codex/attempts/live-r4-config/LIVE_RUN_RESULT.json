@@ -1,0 +1,10 @@
+{
+  "scope": "TEST_ONLY embedded PostgreSQL / E2eServer fakes",
+  "be_source_edited": false,
+  "ready": true,
+  "test_exit_code": 1,
+  "cleaned": true,
+  "pid": 8280,
+  "port": 57620,
+  "server_exit_code": 1
+}

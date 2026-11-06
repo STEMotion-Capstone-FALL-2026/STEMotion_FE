@@ -22,14 +22,24 @@ export class ApiError extends Error {
   code: string;
   status: number;
   details?: any;
+  retryAfterSeconds?: number;
 
-  constructor(message: string, code: string = 'UNKNOWN_ERROR', status: number = 500, details?: any) {
+  constructor(message: string, code: string = 'UNKNOWN_ERROR', status: number = 500, details?: any, retryAfterSeconds?: number) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
     this.details = details;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+/** Retry-After supports delta seconds and HTTP dates. Invalid/missing headers stay unknown. */
+export function parseRetryAfter(value: string | null, now = Date.now()): number | undefined {
+  if (value === null || !value.trim()) return undefined;
+  if (/^-?\d+(\.\d+)?$/.test(value.trim()) && !/^\d+$/.test(value.trim())) return undefined;
+  const seconds = /^\d+$/.test(value.trim()) ? Number(value) : (Date.parse(value) - now) / 1000;
+  return Number.isFinite(seconds) ? Math.max(0, Math.ceil(seconds)) : undefined;
 }
 
 const TOKEN_KEY = 'stemotion_access_token';
@@ -112,7 +122,8 @@ export const apiClient = {
           json.error?.message || json.message || response.statusText || 'API Request Failed',
           json.error?.code || json.code || `HTTP_${response.status}`,
           response.status,
-          json.error?.details ?? json.details
+          json.error?.details ?? json.details,
+          parseRetryAfter(response.headers?.get?.('Retry-After') ?? null)
         );
       }
 

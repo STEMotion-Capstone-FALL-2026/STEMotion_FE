@@ -1,5 +1,6 @@
+import { stemAssessmentPayload, stemChangePayload } from './stemClient';
 import { apiClient } from './apiClient';
-import { FeedbackComment, STEMScript } from '../types/stem';
+import { FeedbackComment, STEMScript, StemAssessment, StemChangeTarget } from '../types/stem';
 import { projectService } from './projectService';
 import type { CompositionSaver } from './compositionService';
 
@@ -84,6 +85,7 @@ export interface QaReport {
   failCount: number;
   warnCount: number;
   findings: QaFinding[];
+  evaluatedAgainst?: {jobId?:string;snapshotId?:string;inputHash?:string;assurance?:string}|null;
 }
 
 export interface ReviewQueueItem {
@@ -111,10 +113,22 @@ export const reviewService = {
     return Array.isArray(res) ? res : [];
   },
 
-  async submitReviewDecision(projectId: string, decision: 'APPROVED' | 'CHANGE_REQUESTED',
-    feedbackNote?: string): Promise<STEMScript> {
+  async submitReviewDecision(
+    projectId: string,
+    decision: 'APPROVED' | 'CHANGE_REQUESTED',
+    feedbackNote?: string,
+    stemAssessment?: StemAssessment,
+    changeTarget?: StemChangeTarget
+  ): Promise<STEMScript> {
     const path = decision === 'APPROVED' ? 'approve' : 'request-changes';
-    return apiClient.post<STEMScript>(`/scripts/${projectId}/${path}`, { note: feedbackNote });
+    const payload: Record<string, any> = { note: feedbackNote || undefined };
+    if (decision === 'APPROVED' && stemAssessment) {
+      payload.stemAssessment = stemAssessmentPayload(stemAssessment);
+    }
+    if (decision === 'CHANGE_REQUESTED' && changeTarget) {
+      payload.changeTarget = stemChangePayload(changeTarget);
+    }
+    return apiClient.post<STEMScript>(`/scripts/${projectId}/${path}`, payload);
   },
 
   async submitVideoForReview(projectId: string): Promise<STEMScript> {
@@ -130,8 +144,11 @@ export const reviewService = {
     return this.submitVideoForReview(projectId);
   },
 
-  async approveVideo(projectId: string): Promise<STEMScript> {
-    await apiClient.post(`/scripts/${projectId}/approve-video`, {});
+  async approveVideo(projectId: string, note?: string, stemAssessment?: StemAssessment): Promise<STEMScript> {
+    const payload: Record<string, any> = {};
+    if (note) payload.note = note;
+    if (stemAssessment) payload.stemAssessment = stemAssessmentPayload(stemAssessment);
+    await apiClient.post(`/scripts/${projectId}/approve-video`, payload);
     return projectService.getProjectById(projectId);
   },
 

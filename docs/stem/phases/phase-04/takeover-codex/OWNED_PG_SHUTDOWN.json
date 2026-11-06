@@ -1,0 +1,30 @@
+[
+  {
+    "pid": 16808,
+    "data_dir": "C:\\Users\\LeTran\\AppData\\Local\\Temp\\epg17044480225846219750",
+    "pg_ctl_exit": 0,
+    "still_alive": 0,
+    "output": "waiting for server to shut down.... done\r\nserver stopped"
+  },
+  {
+    "pid": 24132,
+    "data_dir": "C:\\Users\\LeTran\\AppData\\Local\\Temp\\epg15933035259102403644",
+    "pg_ctl_exit": 0,
+    "still_alive": 0,
+    "output": "waiting for server to shut down.... done\r\nserver stopped"
+  },
+  {
+    "pid": 19896,
+    "data_dir": "C:\\Users\\LeTran\\AppData\\Local\\Temp\\epg10157300421355604380",
+    "pg_ctl_exit": 0,
+    "still_alive": 0,
+    "output": "waiting for server to shut down.... done\r\nserver stopped"
+  },
+  {
+    "pid": 30972,
+    "data_dir": "C:\\Users\\LeTran\\AppData\\Local\\Temp\\epg11514853990031153444",
+    "pg_ctl_exit": 0,
+    "still_alive": 0,
+    "output": "waiting for server to shut down.... done\r\nserver stopped"
+  }
+]

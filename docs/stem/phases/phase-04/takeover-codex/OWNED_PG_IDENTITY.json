@@ -1,0 +1,34 @@
+[
+  {
+    "pid": 16808,
+    "data_dir": "C:\\Users\\LeTran\\AppData\\Local\\Temp\\epg17044480225846219750",
+    "created": "2026-11-05T16:02:10.287587+07:00",
+    "startup_log": "attempts/live-r3-fixture/be-live.log",
+    "verified_postmaster_pid": 16808,
+    "postgres_port": 53159
+  },
+  {
+    "pid": 24132,
+    "data_dir": "C:\\Users\\LeTran\\AppData\\Local\\Temp\\epg15933035259102403644",
+    "created": "2026-11-05T16:06:21.936096+07:00",
+    "startup_log": "attempts/live-r4-config/be-live.log",
+    "verified_postmaster_pid": 24132,
+    "postgres_port": 57626
+  },
+  {
+    "pid": 19896,
+    "data_dir": "C:\\Users\\LeTran\\AppData\\Local\\Temp\\epg10157300421355604380",
+    "created": "2026-11-05T16:07:49.946009+07:00",
+    "startup_log": "attempts/live-r5-scene-fixture/be-live.log",
+    "verified_postmaster_pid": 19896,
+    "postgres_port": 60167
+  },
+  {
+    "pid": 30972,
+    "data_dir": "C:\\Users\\LeTran\\AppData\\Local\\Temp\\epg11514853990031153444",
+    "created": "2026-11-05T16:08:51.162721+07:00",
+    "startup_log": "be-live.log",
+    "verified_postmaster_pid": 30972,
+    "postgres_port": 59733
+  }
+]

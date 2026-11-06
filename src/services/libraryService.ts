@@ -19,6 +19,8 @@ export interface LibraryItem {
   embedCode: string;
   youtubeUrl?: string | null;
   publishedAt: string;
+  verificationStatus?: 'UNVERIFIED'|'LEGACY_UNMAPPED';
+  snapshotId?: string|null;
 }
 
 export interface LibraryFilters {

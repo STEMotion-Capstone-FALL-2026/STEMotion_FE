@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient';
+import { ApiError, apiClient } from './apiClient';
 import { SAVE_DEBOUNCE_MS } from './sceneSaveQueue';
 import type { SceneData } from '../types/stem';
 
@@ -67,10 +67,12 @@ export function createCompositionSaver(
   let chain: Promise<void> = Promise.resolve();
   let disposed = false;
   let saveError: unknown;
+  let cooldownUntil=0;
 
   const flush = (): Promise<number> => {
     if (timer) clearTimeout(timer);
     timer = undefined;
+    if(cooldownUntil>Date.now())return Promise.reject(new ApiError('Autosave bản dựng tạm dừng.','FE_AUTOSAVE_PAUSED',429,undefined,Math.ceil((cooldownUntil-Date.now())/1000)));
     const current = pending;
     pending = null;
     if (current) {
@@ -86,6 +88,8 @@ export function createCompositionSaver(
           if (!disposed) handlers.onSaved(saved);
         } catch (error) {
           saveError = error;
+          if(error instanceof ApiError&&error.status===429)cooldownUntil=Date.now()+1000*(error.retryAfterSeconds??error.details?.retryAfterSeconds??60);
+          if(!pending||pending.generation<current.generation)pending=current;
           if (!disposed) handlers.onError(error);
         }
       });
@@ -103,7 +107,7 @@ export function createCompositionSaver(
       if (visualTheme !== undefined) latestTheme = visualTheme;
       pending = { scenes, visualTheme: latestTheme, generation: ++generation };
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => { void flush().catch(() => {}); }, delayMs);
+      timer = setTimeout(() => { void flush().catch(() => {}); }, Math.max(delayMs,cooldownUntil-Date.now()));
     },
     flush,
     isDirty: () => generation !== savedGeneration,

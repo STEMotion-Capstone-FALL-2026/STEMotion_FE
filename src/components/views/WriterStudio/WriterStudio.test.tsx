@@ -1,7 +1,9 @@
 import type { ComponentProps } from 'react';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { WriterStudio } from './WriterStudio';
+import { scriptService } from '../../../services/scriptService';
+import { projectService } from '../../../services/projectService';
 import { narrationService, reviewService } from '../../../services';
 import { sceneSaveQueue } from '../../../services/sceneSaveQueue';
 
@@ -54,4 +56,22 @@ it('discards audio from a preview request after switching project', async () => 
   await act(async () => finish('blob:old-audio'));
   expect(audio).not.toHaveBeenCalled();
   expect(revoke).toHaveBeenCalledWith('blob:old-audio');
+});
+
+it('P4 keeps untouched OFF legacy submission without creating or validating a missing brief',async()=>{
+  const input=props();
+  vi.spyOn(scriptService,'getStemTarget').mockResolvedValue({versionId:'TEST_ONLY_real_version',scriptRevision:0,workspaceId:'w',versionNo:1});
+  vi.spyOn(scriptService,'getStemBrief').mockResolvedValue({schemaVersion:'stem.v1',scriptVersionId:'TEST_ONLY_real_version',brief:null,revision:0,modeRevision:0,effectiveMode:'OFF',verificationStatus:'UNVERIFIED',readiness:'LEGACY_UNMAPPED',evidence:[],findings:[]});
+  vi.spyOn(scriptService,'getCatalog').mockResolvedValue([]);
+  vi.spyOn(scriptService,'getWorkspaceStemSettings').mockResolvedValue({workspaceId:'w',modeRevision:0,mode:'OFF',policyVersionIds:[],defaultPolicyVersionId:null});
+  const create=vi.spyOn(scriptService,'createStemBrief');const validate=vi.spyOn(scriptService,'validateStem');
+  vi.spyOn(sceneSaveQueue,'saveNow').mockResolvedValue(input.script);vi.spyOn(sceneSaveQueue,'getDraftRevision').mockReturnValue(0);
+  const submit=vi.spyOn(projectService,'submitForReview').mockResolvedValue({...input.script,scriptStatus:'IN_REVIEW'});
+  vi.spyOn(projectService,'getProjectById').mockResolvedValue({...input.script,scriptStatus:'IN_REVIEW'});
+  render(<WriterStudio {...input}/>);
+  fireEvent.click(screen.getByRole('button',{name:/Hồ Sơ STEM/}));
+  await waitFor(()=>expect(screen.getByLabelText('Phạm vi clip').closest('fieldset')?.disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button',{name:/Gửi Kịch Bản Cho Reviewer/}));
+  await waitFor(()=>expect(submit).toHaveBeenCalledWith('p'));
+  expect(create).not.toHaveBeenCalled();expect(validate).not.toHaveBeenCalled();
 });
