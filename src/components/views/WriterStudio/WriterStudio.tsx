@@ -1,3 +1,4 @@
+import { StemGroundedAiPanel } from '../../stem/StemGroundedAiPanel';
 import { useActionGuard } from '../../../hooks/useActionGuard';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -622,6 +623,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
           projectId={script.id} versionId={stemTarget.versionId}
           scriptRevision={script.draftRevision??stemTarget.scriptRevision} scenes={script.scenes}
           isWriter={canEdit} workspaceId={stemTarget.workspaceId} showToast={showToast} onEvidenceChange={onEvidenceChange}/>}
+        {activeStudioTab==='STEM_BRIEF'&&<StemGroundedAiPanel key={script.id} projectId={script.id} isWriter={canEdit}/> }
       </div>
       <div hidden={activeStudioTab!=='SCENES'} className={activeStudioTab==='SCENES'?'studio-columns flex-1 min-h-0 flex overflow-hidden':'hidden'}>
         {/* Cột 1: Cấu trúc phân cảnh (Cho phép Thêm / Xóa / Đổi thứ tự) */}

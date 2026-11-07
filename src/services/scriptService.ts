@@ -1,3 +1,4 @@
+import type { GroundedAiResult, GroundedAiTarget } from '../types/stem';
 /**
  * STEMotion Front-End - Script & Scene Service
  * Handles AI generation and scene mutations
@@ -73,8 +74,12 @@ const res = await apiClient.post<any>('/ai/script/action', {
     };
   },
 
-  async decideAiRequest(requestId: string, decision: 'ACCEPTED' | 'IGNORED'): Promise<void> {
-    await apiClient.put(`/ai/requests/${encodeURIComponent(requestId)}/decision`, {decision});
+  async getGroundedSuggestion(projectId: string, operation: GroundedAiResult['operation'], target: GroundedAiTarget): Promise<GroundedAiResult> {
+    return apiClient.post<GroundedAiResult>(`/ai/scripts/${encodeURIComponent(projectId)}/grounded`, {schemaVersion:'stem-ai.v1',operation,...target});
+  },
+
+  async decideAiRequest(requestId: string, decision: 'ACCEPTED' | 'IGNORED', grounding?: {projectId: string;target: GroundedAiTarget;contextDigest: string}): Promise<void> {
+    await apiClient.put(`/ai/requests/${encodeURIComponent(requestId)}/decision`, {decision, ...(grounding ? {grounding} : {})});
   },
 
   /**

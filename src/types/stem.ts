@@ -576,3 +576,10 @@ export interface StemArtifactStatus {
   reasons: string[];
 }
 export interface StemArtifactExpectation {clipId:string;jobId:string;snapshotId:string;inputHash:string}
+export interface GroundedAiTarget {
+  scriptVersionId: string; expectedScriptRevision: number; expectedBriefRevision: number; expectedModeRevision: number;
+}
+export interface GroundedAiResult {
+  operation: 'generate'|'resegment'|'grade'|'extract'|'terms'; result: unknown; model: string; requestId?: string;
+  grounding: {schemaVersion: 'stem-ai.v1'; contextDigest: string; target: GroundedAiTarget; verificationStatus: 'UNVERIFIED'; profile: string; objectiveKeys: string[]; activityKeys: string[]; warnings: unknown[]};
+}

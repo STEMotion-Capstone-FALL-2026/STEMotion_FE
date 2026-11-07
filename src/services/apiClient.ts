@@ -73,8 +73,8 @@ export const apiClient = {
     }
   },
 
-  async request<T>(endpoint: string, options: RequestInit & { anonymous?: boolean } = {}): Promise<T> {
-    const { anonymous = false, ...fetchOptions } = options;
+  async request<T>(endpoint: string, options: RequestInit & { anonymous?: boolean; onResponseHeaders?: (headers: Headers) => void } = {}): Promise<T> {
+    const { anonymous = false, onResponseHeaders, ...fetchOptions } = options;
     const url = `${this.getBaseUrl()}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
     const token = anonymous ? null : this.getAuthToken();
 
@@ -127,6 +127,7 @@ export const apiClient = {
         );
       }
 
+      onResponseHeaders?.(response.headers);
       return json.data !== undefined ? json.data : json;
     } catch (error: any) {
       if (error instanceof ApiError) {
@@ -138,6 +139,16 @@ export const apiClient = {
 
   async get<T>(endpoint: string, headers?: Record<string, string>): Promise<T> {
     return this.request<T>(endpoint, { method: 'GET', headers });
+  },
+
+  async getPage<T>(endpoint: string): Promise<{ data: T; total: number | null; page: number; size: number; pages: number | null }> {
+    const meta = { total: null as number | null, page: 0, size: 20, pages: null as number | null };
+    const data = await this.request<T>(endpoint, { method: 'GET', onResponseHeaders: headers => {
+      const count = (name: string) => { const value = headers?.get?.(name); return value != null && /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null; };
+      meta.total = count('X-Total-Count'); meta.pages = count('X-Total-Pages');
+      meta.page = count('X-Page') ?? 0; meta.size = count('X-Size') ?? 20;
+    }});
+    return { data, ...meta };
   },
 
   async postPublic<T>(endpoint: string, body?: unknown): Promise<T> {

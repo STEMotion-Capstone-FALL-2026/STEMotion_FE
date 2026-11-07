@@ -14,7 +14,8 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { STEMScript, STEMSubject } from '../../../types/stem';
-import { libraryService, LibraryItem } from '../../../services/libraryService';
+import { libraryService, LibraryItem, type LibraryQuery, type LibraryFilters } from '../../../services/libraryService';
+import { StemLearningCard } from '../../stem/StemLearningCard';
 
 interface MediaLibraryViewProps {
   script: STEMScript;
@@ -30,6 +31,13 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
   const [clips, setClips] = useState<LibraryItem[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<STEMSubject | ''>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [advanced,setAdvanced] = useState(false);
+  const [query,setQuery] = useState<LibraryQuery>({});
+  const [facets,setFacets] = useState<LibraryFilters | null>(null);
+  const [page,setPage] = useState(0);
+  const [total,setTotal] = useState<number | null>(null);
+  const [pages,setPages] = useState<number | null>(null);
+  const facetRequest = useRef(0);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const requestId = useRef(0);
@@ -42,16 +50,17 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
     setLoadError('');
     try {
       // The subject selector already contains the supported subjects; it needs no filters fetch.
-      const clipList = await libraryService.getPublishedClips(selectedSubject);
+      const clipList = await libraryService.getPublishedClips(selectedSubject, undefined, {...query, q:searchQuery, page, size:20});
       if (request !== requestId.current) return;
       setClips(clipList);
+      setTotal(clipList.pagination?.total ?? null);setPages(clipList.pagination?.pages ?? null);
     } catch (err: any) {
       if (request !== requestId.current) return;
       setLoadError(err.message || 'Không tải được kho học liệu. Vui lòng thử lại.');
     } finally {
       if (request === requestId.current) setLoading(false);
     }
-  }, [selectedSubject]);
+  }, [selectedSubject,query,searchQuery,page]);
 
   useEffect(() => {
     setClips([]);
@@ -68,17 +77,12 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
     }).catch(() => showToast?.('Chưa sao chép được mã nhúng. Hãy mở mã nhúng và sao chép thủ công.', 'warn'));
   };
 
-  // Filter in-memory by search query
-  const filteredClips = clips.filter((clip) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      clip.title?.toLowerCase().includes(q) ||
-      clip.workspaceName?.toLowerCase().includes(q) ||
-      clip.ownerName?.toLowerCase().includes(q) ||
-      clip.gradeLevel?.toLowerCase().includes(q)
-    );
-  });
+  const filteredClips = clips; // Server filters before paging and counts the same predicate.
+  const changeFilter = (key: keyof LibraryQuery,value: string) => {setPage(0);setQuery(old=>({...old,[key]:value}));};
+  const openFilters = async () => {
+    setAdvanced(v=>!v);const request=++facetRequest.current;
+    try {const value=await libraryService.getFilters({...query,q:searchQuery});if(request===facetRequest.current)setFacets(value);} catch(err:any){if(request===facetRequest.current)setLoadError(err.message || 'Không tải được bộ lọc.');}
+  };
 
   const getSubjectColor = (subj: STEMSubject) => {
     switch (subj) {
@@ -104,7 +108,7 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
               </h1>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Kho video giải thích STEM ngắn (explainer clips) đã phê duyệt, sẵn sàng nhúng vào Canvas LMS, Moodle, web EdTech hoặc kênh nội dung.
+              Học liệu đã xuất bản, kèm mục tiêu, nhiệm vụ học sinh và giới hạn sử dụng. Trạng thái xuất bản không phải xác nhận chuyên môn.
             </p>
           </div>
 
@@ -136,7 +140,7 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {setPage(0);setSearchQuery(e.target.value);}}
               placeholder="Tìm kiếm clip giải thích STEM theo tiêu đề, tác giả, bộ môn..."
               className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:border-indigo-500"
             />
@@ -147,7 +151,7 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
             <Filter className="w-3.5 h-3.5 text-slate-400" />
             <select
               value={selectedSubject}
-              onChange={(e) => setSelectedSubject(e.target.value as STEMSubject | '')}
+              onChange={(e) => {setPage(0);setSelectedSubject(e.target.value as STEMSubject | '');}}
               aria-label="Lọc theo môn học"
               className="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:border-indigo-500 font-medium text-slate-700"
             >
@@ -161,9 +165,22 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
           </div>
 
           <div className="text-xs text-slate-500 font-medium ml-auto">
-            Hiển thị: <b>{filteredClips.length}</b> video
+            Hiển thị: <b>{total ?? filteredClips.length}</b> video · Trang {page + 1}
           </div>
         </div>
+
+        <button type="button" onClick={()=>void openFilters()} aria-expanded={advanced} className="text-sm underline">Bộ lọc STEM</button>
+        {advanced && <div className="flex flex-wrap gap-3 bg-white rounded-xl p-4 border text-sm">
+          <label>Cấp học<select aria-label="Cấp học" value={query.educationLevel || ''} onChange={e=>changeFilter('educationLevel',e.target.value)}><option value="">Tất cả</option>{(facets?.educationLevels || ['PRIMARY','LOWER_SECONDARY','UPPER_SECONDARY']).map(x=><option key={x}>{x}</option>)}</select></label>
+          <label>Lớp<input aria-label="Lọc theo lớp" value={query.grade || ''} maxLength={128} onChange={e=>changeFilter('grade',e.target.value)}/></label>
+          <label>Môn trong hồ sơ<input aria-label="Môn trong hồ sơ" value={query.subjectId || ''} maxLength={128} onChange={e=>changeFilter('subjectId',e.target.value)}/></label>
+          <label>Yêu cầu cần đạt<input aria-label="Yêu cầu cần đạt" value={query.outcomeId || ''} maxLength={128} onChange={e=>changeFilter('outcomeId',e.target.value)}/></label>
+          <label>Bối cảnh<select aria-label="Bối cảnh học" value={query.usageContext || ''} onChange={e=>changeFilter('usageContext',e.target.value)}><option value="">Tất cả</option><option value="IN_CLASS_SCREEN">Chiếu trong lớp</option><option value="GROUP_PRACTICE">Thực hành nhóm</option></select></label>
+          <label>Vai trò bối cảnh<select aria-label="Vai trò bối cảnh" value={query.contextRole || 'PRIMARY'} onChange={e=>changeFilter('contextRole',e.target.value)}><option value="PRIMARY">Chính</option><option value="SECONDARY">Phụ</option><option value="ANY">Bất kỳ</option></select></label>
+          <label>Kênh<select aria-label="Kênh sử dụng" value={query.channel || ''} onChange={e=>changeFilter('channel',e.target.value)}><option value="">Tất cả</option><option value="DEPARTMENT_LIBRARY">Kho tổ chuyên môn</option></select></label>
+          <label>Hồ sơ<select aria-label="Trạng thái hồ sơ" value={query.verificationStatus || ''} onChange={e=>changeFilter('verificationStatus',e.target.value)}><option value="">Tất cả</option><option value="LEGACY_UNMAPPED">Chưa đối chiếu</option><option value="UNVERIFIED">Chưa thẩm định</option></select></label>
+        </div>}
+        <nav aria-label="Phân trang thư viện" className="flex gap-4 text-sm"><button disabled={loading || page===0} onClick={()=>setPage(v=>v-1)}>Trang trước</button><button disabled={loading || (pages!=null ? page+1>=pages : clips.length<20)} onClick={()=>setPage(v=>v+1)}>Trang sau</button></nav>
 
         {/* Video Clips Grid */}
         {loadError && (
@@ -231,6 +248,7 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
                       )}
                     </div>
 
+                    <StemLearningCard item={clip} />
                     <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
                       {clip.videoUrl ? (
                         <a
