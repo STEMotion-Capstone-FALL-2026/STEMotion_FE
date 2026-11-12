@@ -1,7 +1,7 @@
 import React from 'react';
 import {afterEach,expect,it,vi} from 'vitest';
 import {render,screen,fireEvent,waitFor,cleanup} from '@testing-library/react';
-import {readFileSync} from 'node:fs';
+import {readFileSync, existsSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {StemLearningCard} from './StemLearningCard';
 import {StemGroundedAiPanel} from './StemGroundedAiPanel';
@@ -43,7 +43,12 @@ it('accept passes binding and only records a decision',async()=>{
   render(<StemGroundedAiPanel projectId="p" isWriter/>);fireEvent.click(screen.getByRole('button',{name:'Yêu cầu gợi ý theo hồ sơ'}));fireEvent.click(await screen.findByRole('button',{name:'Chấp nhận gợi ý STEM'}));
   await waitFor(()=>expect(decide).toHaveBeenCalledWith('r','ACCEPTED',{projectId:'p',target,contextDigest:'TEST_ONLY-digest'}));await screen.findByText('Đã ghi nhận lựa chọn. Kịch bản chưa tự thay đổi.');
 });
-const specimens=JSON.parse(readFileSync(resolve(process.cwd(),'../../phase-03/STEMotion_BE/src/test/resources/stem-p6/contract-specimens.json'),'utf8'));
+const specimensPath = [
+  resolve(process.cwd(), 'src/test/fixtures/contract-specimens.json'),
+  resolve(process.cwd(), '../STEMotion_BE/src/test/resources/stem-p6/contract-specimens.json'),
+  resolve(process.cwd(), '../../phase-03/STEMotion_BE/src/test/resources/stem-p6/contract-specimens.json'),
+].find(p => existsSync(p)) || resolve(process.cwd(), 'src/test/fixtures/contract-specimens.json');
+const specimens=JSON.parse(readFileSync(specimensPath,'utf8'));
 for(const scene of specimens.scenes)it(`F09 valid DTO through FE AI scene validator: ${scene.type}`,async()=>{
   vi.spyOn(apiClient,'post').mockResolvedValue({result:{scenes:[scene]}});const result=await scriptService.generateScriptWithAI('TEST_ONLY','Math','4');expect(result.scenes).toHaveLength(1);
 });

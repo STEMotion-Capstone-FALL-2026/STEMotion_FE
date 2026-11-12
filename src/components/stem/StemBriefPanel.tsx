@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   HelpCircle,
   CheckCircle2,
+  ListOrdered,
 } from 'lucide-react';
 import {
   StemBrief,
@@ -53,8 +54,17 @@ const PRIMARY_CONTEXT_OPTIONS: { key: 'IN_CLASS_SCREEN' | 'GROUP_PRACTICE'; labe
 
 export interface StemBriefHandle { assertSubmitReady: () => void; saveForSubmit: () => Promise<StemViewResponse>; }
 
+export const STANDARD_STEM_STEPS = [
+  { key: 'OPENING_PROBLEM', label: '1. Mở đầu / Xác định vấn đề', description: 'Đặt vấn đề thực tiễn, tình huống kích thích tìm tòi (Bắt buộc)' },
+  { key: 'BACKGROUND_KNOWLEDGE', label: '2. Nghiên cứu kiến thức nền', description: 'Tiếp cận lý thuyết, bản chất khoa học' },
+  { key: 'PROPOSE_SOLUTION', label: '3. Đề xuất giải pháp', description: 'Đề xuất ý tưởng, giải pháp giải quyết vấn đề' },
+  { key: 'SELECT_SOLUTION', label: '4. Lựa chọn giải pháp / Thiết kế', description: 'Thiết kế mô hình, quy trình giải pháp tối ưu' },
+  { key: 'BUILD_TEST', label: '5. Chế tạo / Thử nghiệm / Đánh giá', description: 'Chế tạo sản phẩm mẫu, thử nghiệm và đánh giá số liệu' },
+  { key: 'CLOSING_SHARE_REFLECT', label: '6. Chia sẻ / Thảo luận / Vận dụng', description: 'Báo cáo, thảo luận và mở rộng vận dụng thực tế (Bắt buộc)' },
+] as const;
+
 export const StemBriefPanel = forwardRef<StemBriefHandle, StemBriefPanelProps>(({projectId,versionId,scriptRevision,scenes,isWriter,workspaceId,effectiveMode='ADVISORY',onBriefSaved,onEvidenceChange,showToast},ref) => {
-  const [activeTab,setActiveTab]=useState<'OVERVIEW'|'CONTEXT'|'OBJECTIVES'|'EVIDENCE'>('OVERVIEW');
+  const [activeTab,setActiveTab]=useState<'OVERVIEW'|'CONTEXT'|'OBJECTIVES'|'STEPS'|'EVIDENCE'>('OVERVIEW');
   const [brief,setBrief]=useState<StemBrief>(emptyStemBrief);
   const [evidence,setEvidence]=useState<StemEvidence[]>([]);
   const [findings,setFindings]=useState<StemValidationFinding[]>([]);
@@ -235,6 +245,42 @@ export const StemBriefPanel = forwardRef<StemBriefHandle, StemBriefPanelProps>((
     });
   };
 
+  const handleApplyDefaultSteps = () => {
+    const existing = brief.steps ?? [];
+    const stepsMap = new Map(existing.map(s => [s.stepKey, s]));
+    const newSteps = STANDARD_STEM_STEPS.map((std, idx) => {
+      const found = stepsMap.get(std.key);
+      if (found) return found;
+      const defaultScenes = idx === 0 && scenes[0]?.id ? [scenes[0].id] : (idx === STANDARD_STEM_STEPS.length - 1 && scenes.length > 1 ? [scenes[scenes.length - 1].id] : []);
+      return {
+        stepKey: std.key,
+        sceneIds: defaultScenes,
+        activityKey: null,
+        objectiveKeys: [],
+      };
+    });
+    setBrief({ ...brief, steps: newSteps });
+    setDirty(true);
+  };
+
+  const handleUpdateStep = (stepKey: string, patch: Partial<import('../../types/stem').LessonStep>) => {
+    const steps = [...(brief.steps ?? [])];
+    const idx = steps.findIndex(s => s.stepKey === stepKey);
+    if (idx >= 0) {
+      steps[idx] = { ...steps[idx], ...patch };
+    } else {
+      steps.push({
+        stepKey,
+        sceneIds: [],
+        activityKey: null,
+        objectiveKeys: [],
+        ...patch,
+      });
+    }
+    setBrief({ ...brief, steps });
+    setDirty(true);
+  };
+
   return (
     <div ref={root} className="flex flex-col h-full bg-white border-l border-slate-200 text-xs text-slate-800">
       {/* Top Header Bar */}
@@ -322,6 +368,16 @@ export const StemBriefPanel = forwardRef<StemBriefHandle, StemBriefPanelProps>((
           }`}
         >
           <Target className="w-3.5 h-3.5" /> Mục tiêu & Nhiệm vụ
+        </button>
+        <button
+          onClick={() => setActiveTab('STEPS')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-t border-t border-x text-xs ${
+            activeTab === 'STEPS'
+              ? 'bg-white border-slate-200 text-indigo-600 border-b-transparent shadow-xs'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <ListOrdered className="w-3.5 h-3.5" /> Tiến trình 6 bước
         </button>
         <button
           onClick={() => setActiveTab('EVIDENCE')}
@@ -527,6 +583,179 @@ export const StemBriefPanel = forwardRef<StemBriefHandle, StemBriefPanelProps>((
             </div>
             <StemLearningFields brief={brief} onChange={setBrief} />
             <p>Biến thể, nhiệm vụ hoặc yêu cầu an toàn mâu thuẫn: đề nghị tách brief/version để người có chuyên môn quyết định.</p>
+          </div>
+        )}
+
+        {activeTab === 'STEPS' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b">
+              <div>
+                <h3 className="font-bold text-slate-800 text-xs">Tiến trình sư phạm STEM (Mẫu 6 bước)</h3>
+                <p className="text-[10px] text-slate-500">
+                  Quy định tiến trình chuẩn theo GDPT 2018 (CV 909 / CV 3089 / TT 86). Bước 1 và Bước 6 bắt buộc phải gắn với phân cảnh hoặc nhiệm vụ.
+                </p>
+              </div>
+              {isWriter && (
+                <button
+                  type="button"
+                  onClick={handleApplyDefaultSteps}
+                  className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded font-semibold text-[10px]"
+                >
+                  Áp dụng mẫu 6 bước
+                </button>
+              )}
+            </div>
+
+            {/* Findings cảnh báo chung */}
+            {findings.filter(f => f.ruleId === 'TECH-LESSON-ORDER').map((f, i) => (
+              <div key={i} role="alert" className="p-2 bg-rose-50 border border-rose-300 text-rose-800 rounded font-semibold text-xs">
+                [LỖI THỨ TỰ] {f.message}
+              </div>
+            ))}
+            {findings.filter(f => f.ruleId === 'TECH-LESSON-STEPS').map((f, i) => (
+              <div key={i} role="status" className="p-2 bg-amber-50 border border-amber-300 text-amber-800 rounded text-xs">
+                [CẢNH BÁO TIẾN TRÌNH] {f.message}
+              </div>
+            ))}
+
+            {/* Danh sách 6 bước */}
+            <div className="space-y-3">
+              {STANDARD_STEM_STEPS.map((stdStep) => {
+                const currentStep = (brief.steps ?? []).find(s => s.stepKey === stdStep.key);
+                const isStepPresent = Boolean(currentStep);
+                const sceneIds = currentStep?.sceneIds ?? [];
+                const activityKey = currentStep?.activityKey ?? '';
+                const objectiveKeys = currentStep?.objectiveKeys ?? [];
+
+                const openingErr = stdStep.key === 'OPENING_PROBLEM' && findings.find(f => f.ruleId === 'TECH-LESSON-OPENING' || f.field?.includes('OPENING_PROBLEM'));
+                const closingErr = stdStep.key === 'CLOSING_SHARE_REFLECT' && findings.find(f => f.ruleId === 'TECH-LESSON-CLOSING' || f.field?.includes('CLOSING_SHARE_REFLECT'));
+                const stepHasError = Boolean(openingErr || closingErr);
+
+                return (
+                  <div
+                    key={stdStep.key}
+                    data-testid={`lesson-step-${stdStep.key}`}
+                    className={`p-3 rounded-lg border transition-colors ${
+                      stepHasError
+                        ? 'bg-rose-50/50 border-rose-300'
+                        : isStepPresent
+                        ? 'bg-white border-slate-200 shadow-2xs'
+                        : 'bg-slate-50 border-dashed border-slate-300 opacity-75'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-bold text-slate-900 text-xs">{stdStep.label}</span>
+                        <p className="text-[10px] text-slate-500">{stdStep.description}</p>
+                      </div>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        isStepPresent ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {stdStep.key}
+                      </span>
+                    </div>
+
+                    {/* Lỗi cụ thể từng ô */}
+                    {openingErr && (
+                      <p role="alert" className="text-rose-600 font-bold text-[10px] mt-1">
+                        [TECH-LESSON-OPENING] {openingErr.message}
+                      </p>
+                    )}
+                    {closingErr && (
+                      <p role="alert" className="text-rose-600 font-bold text-[10px] mt-1">
+                        [TECH-LESSON-CLOSING] {closingErr.message}
+                      </p>
+                    )}
+
+                    {/* Phân cảnh liên kết */}
+                    <div className="mt-2.5 space-y-1.5">
+                      <label className="block text-[10px] font-semibold text-slate-700">
+                        Phân cảnh trong kịch bản liên kết (Scene IDs):
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {scenes.map((sc) => {
+                          const isBound = sceneIds.includes(sc.id);
+                          return (
+                            <label
+                              key={sc.id}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] cursor-pointer ${
+                                isBound
+                                  ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-medium'
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                name={`step.${stdStep.key}.scene.${sc.id}`}
+                                aria-label={`Cảnh ${sc.title || sc.id}`}
+                                checked={isBound}
+                                disabled={!isWriter}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...sceneIds, sc.id]
+                                    : sceneIds.filter(id => id !== sc.id);
+                                  handleUpdateStep(stdStep.key, { sceneIds: next });
+                                }}
+                                className="w-3 h-3 text-indigo-600 rounded"
+                              />
+                              <span className="truncate max-w-[140px]">{sc.title || sc.type}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Nhiệm vụ học sinh & Mục tiêu */}
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-700 mb-0.5">
+                          Gắn nhiệm vụ học sinh (Activity):
+                        </label>
+                        <select
+                          name={`step.${stdStep.key}.activityKey`}
+                          aria-label={`Nhiệm vụ cho ${stdStep.key}`}
+                          value={activityKey}
+                          disabled={!isWriter}
+                          onChange={(e) => handleUpdateStep(stdStep.key, { activityKey: e.target.value || null })}
+                          className="w-full text-[10px] px-2 py-1 border border-slate-300 rounded bg-white"
+                        >
+                          <option value="">Không gắn nhiệm vụ</option>
+                          {brief.studentTasks.map(t => (
+                            <option key={t.key} value={t.key}>
+                              {t.key} ({t.learnerAction?.slice(0, 30) || 'Chưa ghi'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-700 mb-0.5">
+                          Mục tiêu cần đạt liên kết:
+                        </label>
+                        <select
+                          name={`step.${stdStep.key}.objectiveKeys`}
+                          aria-label={`Mục tiêu cho ${stdStep.key}`}
+                          value={objectiveKeys[0] || ''}
+                          disabled={!isWriter}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            handleUpdateStep(stdStep.key, { objectiveKeys: val ? [val] : [] });
+                          }}
+                          className="w-full text-[10px] px-2 py-1 border border-slate-300 rounded bg-white"
+                        >
+                          <option value="">Không chọn mục tiêu</option>
+                          {brief.objectives.map(o => (
+                            <option key={o.key} value={o.key}>
+                              {o.key} ({o.learnerAction?.slice(0, 30) || 'Chưa ghi'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

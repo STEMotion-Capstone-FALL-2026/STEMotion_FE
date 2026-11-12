@@ -652,8 +652,8 @@ const res = await apiClient.post<any>('/ai/script/action', {
 
   async saveWorkspaceStemSettings(workspaceId: string, request: WorkspaceStemSettingsRequest): Promise<WorkspaceStemSettings> {
     // Approved G06 alias: SAME workspace counter, never a brief/script revision.
-    const {modeRevision,mode,policyVersionIds,defaultPolicyVersionId,idempotencyKey,legacyModeSelection}=request;
-    const payload={baseRevision:modeRevision,mode,policyVersionIds:[...policyVersionIds],defaultPolicyVersionId:defaultPolicyVersionId??null,idempotencyKey,legacyModeSelection:legacyModeSelection??null};
+    const {modeRevision,baseRevision,mode,policyVersionIds,defaultPolicyVersionId,idempotencyKey,legacyModeSelection}=request;
+    const payload={baseRevision:baseRevision??modeRevision,mode,policyVersionIds:[...policyVersionIds],defaultPolicyVersionId:defaultPolicyVersionId??null,idempotencyKey,legacyModeSelection:legacyModeSelection??null};
     return workspaceModeFromWire(await apiClient.put<WorkspaceStemSettingsWire>(`/workspaces/${workspaceId}/stem-settings`,payload));
   },
 

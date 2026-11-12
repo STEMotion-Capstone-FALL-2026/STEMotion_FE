@@ -98,6 +98,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   const [briefEvidenceScenes, setBriefEvidenceScenes] = useState<string[]>([]);
 
   const {target:stemTarget,error:stemTargetError}=useStemTarget(script.id,script.currentVersionNo??script.version);
+  const isStemUnavailable = Boolean((stemTargetError as any)?.status === 404);
   const stemPanel=React.useRef<StemBriefHandle>(null);
   const [stemSubmitError,setStemSubmitError]=useState<unknown>(null);
   const onEvidenceChange=useCallback((items:import('../../../types/stem').StemEvidence[])=>setBriefEvidenceScenes(items.map(e=>e.sceneId).filter((id):id is string=>Boolean(id))),[]);
@@ -473,13 +474,13 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   });
 
   // Real-time pacing calculation
-  const wordsCount = (selectedScene.narration || '').trim().split(/\s+/).filter(Boolean).length;
+  const wordsCount = (selectedScene?.narration || '').trim().split(/\s+/).filter(Boolean).length;
   const estimatedReadSec = wordsCount > 0 ? (wordsCount / 2.5).toFixed(1) : '0';
-  const currentSceneSec = ((selectedScene.durationInFrames || 150) / 30).toFixed(1);
+  const currentSceneSec = (((selectedScene?.durationInFrames) || 150) / 30).toFixed(1);
   const recommendedSec = wordsCount > 0 ? Math.max(4, Math.ceil(wordsCount / 2.3) + 1) : 5;
   const isPacingTight = wordsCount > 0 && Number(currentSceneSec) < Number(estimatedReadSec) + 0.5;
 
-  const suggestedTemplate = getContextualTemplateSuggestion(selectedScene.narration || '', selectedScene.type);
+  const suggestedTemplate = selectedScene ? getContextualTemplateSuggestion(selectedScene.narration || '', selectedScene.type) : null;
   const canEdit = ['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)
     && !['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '');
   return (
@@ -515,20 +516,22 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               <FileText className="w-3.5 h-3.5" />
               <span>Phân Cảnh</span>
             </button>
-            <button
-              onClick={() => setActiveStudioTab('STEM_BRIEF')}
-              className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition-all text-xs ${
-                activeStudioTab === 'STEM_BRIEF'
-                  ? 'bg-white text-brand-700 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Hồ Sơ STEM</span>
-              <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold border border-amber-300">
-                DRAFT
-              </span>
-            </button>
+            {!isStemUnavailable && (
+              <button
+                onClick={() => setActiveStudioTab('STEM_BRIEF')}
+                className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition-all text-xs ${
+                  activeStudioTab === 'STEM_BRIEF'
+                    ? 'bg-white text-brand-700 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Hồ Sơ STEM</span>
+                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold border border-amber-300">
+                  DRAFT
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -553,16 +556,17 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               if (isSubmitting) return;
               setIsSubmitting(true);
               try {
-                if(!stemTarget||!stemPanel.current)throw new Error('Chưa xác định được phiên bản STEM; cần tải lại trước khi gửi.');
-                stemPanel.current.assertSubmitReady();
                 await sceneSaveQueue.saveNow(script.id,script.scenes);
-                const saved=await stemPanel.current.saveForSubmit();
-                if(saved.brief){
-                  const validation=await scriptService.validateStem(script.id,stemTarget.versionId,{
-                    expectedBriefRevision:saved.revision,
-                    expectedScriptRevision:sceneSaveQueue.getDraftRevision(script.id)??script.draftRevision??stemTarget.scriptRevision,phase:'SCRIPT',
-                  });
-                  if(validation.findings.length)showToast(`STEM ${validation.effectiveMode}: ${validation.findings.length} cảnh báo cần Reviewer xem xét.`,'info');
+                if(!isStemUnavailable&&stemTarget&&stemPanel.current){
+                  stemPanel.current.assertSubmitReady();
+                  const saved=await stemPanel.current.saveForSubmit();
+                  if(saved.brief){
+                    const validation=await scriptService.validateStem(script.id,stemTarget.versionId,{
+                      expectedBriefRevision:saved.revision,
+                      expectedScriptRevision:sceneSaveQueue.getDraftRevision(script.id)??script.draftRevision??stemTarget.scriptRevision,phase:'SCRIPT',
+                    });
+                    if(validation.findings.length)showToast(`STEM ${validation.effectiveMode}: ${validation.findings.length} cảnh báo cần Reviewer xem xét.`,'info');
+                  }
                 }
                 // An untouched OFF legacy record has no aggregate to validate; preserve that flow.
                 // OFF/ADVISORY findings do not become a client-only STRICT gate.
@@ -575,7 +579,11 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
                 onSetReviewerMode('script');
               } catch (error: any) {
                 setStemSubmitError(error);
-                showToast(error.message || 'Không gửi được kịch bản. Vui lòng thử lại.', 'warn');
+                if(error?.code==='STEM_VALIDATION_FAILED'){
+                  showToast('Không gửi được kịch bản: Kiểm định STEM không đạt yêu cầu.','warn');
+                } else {
+                  showToast(error.message || 'Không gửi được kịch bản. Vui lòng thử lại.', 'warn');
+                }
               } finally {
                 setIsSubmitting(false);
               }
@@ -617,13 +625,13 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
         </div>
       )}
 
-      <StemErrorNotice error={stemSubmitError??stemTargetError} onReload={()=>window.location.reload()} onRetryReady={()=>setStemSubmitError(null)} />
-      <div hidden={activeStudioTab!=='STEM_BRIEF'} className="flex-1 min-h-0 bg-slate-50 p-6 overflow-y-auto">
-        {stemTarget&&<StemBriefPanel key={`${script.id}:${stemTarget.versionId}`} ref={stemPanel}
+      <StemErrorNotice error={stemSubmitError??(isStemUnavailable?null:stemTargetError)} onReload={()=>window.location.reload()} onRetryReady={()=>setStemSubmitError(null)} />
+      <div hidden={activeStudioTab!=='STEM_BRIEF'||isStemUnavailable} className="flex-1 min-h-0 bg-slate-50 p-6 overflow-y-auto">
+        {stemTarget&&!isStemUnavailable&&<StemBriefPanel key={`${script.id}:${stemTarget.versionId}`} ref={stemPanel}
           projectId={script.id} versionId={stemTarget.versionId}
           scriptRevision={script.draftRevision??stemTarget.scriptRevision} scenes={script.scenes}
           isWriter={canEdit} workspaceId={stemTarget.workspaceId} showToast={showToast} onEvidenceChange={onEvidenceChange}/>}
-        {activeStudioTab==='STEM_BRIEF'&&<StemGroundedAiPanel key={script.id} projectId={script.id} isWriter={canEdit}/> }
+        {activeStudioTab==='STEM_BRIEF'&&!isStemUnavailable&&<StemGroundedAiPanel key={script.id} projectId={script.id} isWriter={canEdit}/> }
       </div>
       <div hidden={activeStudioTab!=='SCENES'} className={activeStudioTab==='SCENES'?'studio-columns flex-1 min-h-0 flex overflow-hidden':'hidden'}>
         {/* Cột 1: Cấu trúc phân cảnh (Cho phép Thêm / Xóa / Đổi thứ tự) */}
@@ -653,7 +661,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
             {script.scenes.map((sc, i) => {
               const isDragging = draggedSceneIdx === i;
               const isOver = dragOverSceneIdx === i && draggedSceneIdx !== i;
-              const isSelected = sc.id === selectedScene.id;
+              const isSelected = sc.id === selectedScene?.id;
 
               return (
                 <div
@@ -1473,7 +1481,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
             />
 
             {/* Kết quả AI hiển thị ngay dưới form */}
-            {aiAnalysisResult.type && (
+            {aiAnalysisResult?.type && (
               <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 space-y-2 animate-fade-in">
                 <div className="flex items-center gap-2 font-bold text-xs text-blue-900">
                   <Sparkles className="w-4 h-4 text-brand-600" />

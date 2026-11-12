@@ -308,7 +308,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [queueError, setQueueError] = useState('');
   const queueRequest = useRef(0);
-  const [localComments, setLocalComments] = useState<FeedbackComment[]>(comments);
+  const [localComments, setLocalComments] = useState<FeedbackComment[]>(comments || []);
   const activeProject = useRef(script.id);
   activeProject.current = script.id;
 
@@ -377,8 +377,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   }, [localComments]);
 
   const sceneComments = useMemo(() => {
-    return groupedComments.filter((c) => c.sceneId === selectedScene.id);
-  }, [groupedComments, selectedScene.id]);
+    return groupedComments.filter((c) => c.sceneId === selectedScene?.id);
+  }, [groupedComments, selectedScene?.id]);
 
   const timelineComments = useMemo(() => {
     return groupedComments.filter((c) => !c.sceneId);
@@ -445,7 +445,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   };
 
   useEffect(() => {
-    setLocalComments(comments);
+    setLocalComments(comments || []);
   }, [comments]);
 
   const fetchQaReport = async () => {
@@ -550,17 +550,28 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   const [isStemRubricOpen, setIsStemRubricOpen] = useState(false);
   const [stemAssessment, setStemAssessment] = useState<StemAssessment | null>(null);
   const [isReviewerActive,setIsReviewerActive]=useState(false);
+  const [isStrictMode, setIsStrictMode] = useState(false);
   const {target:stemTarget,error:stemTargetError}=useStemTarget(script.id,script.currentVersionNo??script.version);
+  const isStemUnavailable = Boolean((stemTargetError as any)?.status === 404);
   const [stemDecisionError,setStemDecisionError]=useState<unknown>(null);
   const [attachAssessment,setAttachAssessment]=useState(false);
   const reviewRetry=useRef<{payload:string;target:StemChangeTarget}|null>(null);
   const approvalRetry=useRef<{payload:string;key:string}|null>(null);
   useEffect(()=>{
-    let current=true;setIsReviewerActive(false);setStemAssessment(null);setAttachAssessment(false);setStemDecisionError(null);
+    let current=true;setIsReviewerActive(false);setStemAssessment(null);setAttachAssessment(false);setStemDecisionError(null);setIsStrictMode(false);
     const user=authService.getCurrentUser();
-    if(stemTarget?.workspaceId&&user.id)hasActiveReviewerSeat(stemTarget.workspaceId,user.id).then(active=>{
-      if(current)setIsReviewerActive(active);
-    }).catch(()=>{if(current)setIsReviewerActive(false);});
+    if(stemTarget?.workspaceId&&user.id){
+      hasActiveReviewerSeat(stemTarget.workspaceId,user.id).then(active=>{
+        if(current)setIsReviewerActive(active);
+      }).catch(()=>{if(current)setIsReviewerActive(false);});
+      scriptService.getWorkspaceStemSettings(stemTarget.workspaceId).then(settings=>{
+        if(current){
+          const strict = settings.mode === 'STRICT';
+          setIsStrictMode(strict);
+          if(strict)setAttachAssessment(true);
+        }
+      }).catch(()=>{});
+    }
     return()=>{current=false;};
   },[script.id,stemTarget?.versionId,stemTarget?.workspaceId,reviewerMode]);
 
@@ -606,10 +617,18 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
     decisionPendingRef.current = true;
     setDecisionPending(true);
     try {
-      let assessment=attachAssessment&&isReviewerActive?stemAssessment??undefined:undefined;
+      let assessment=(isStrictMode||attachAssessment)&&isReviewerActive&&!isStemUnavailable?stemAssessment??undefined:undefined;
+      if(isStrictMode&&(decision==='APPROVED'||decision==='VIDEO_APPROVED')){
+        if(!isReviewerActive)throw new Error('Chế độ STRICT yêu cầu ghế Reviewer active trong workspace.');
+        if(!assessment||assessment.criteria.some(c=>!c.rationale.trim()||c.judgment==='NOT_ASSESSED')||!assessment.rubricVersionId){
+          setIsStemRubricOpen(true);
+          showToast('Chế độ STRICT yêu cầu hoàn tất chấm điểm Rubric STEM trước khi phê duyệt.','warn');
+          return false;
+        }
+      }
       if((decision==='APPROVED'||decision==='VIDEO_APPROVED')&&attachAssessment&&(!isReviewerActive||!assessment||assessment.criteria.some(c=>!c.rationale.trim())))throw new Error('Assessment cần ghế Reviewer active, dữ liệu và lý do cho mọi tiêu chí.');
       let changeTarget=overrideChangeTarget;
-      if(decision==='CHANGE_REQUESTED'&&!changeTarget){
+      if(decision==='CHANGE_REQUESTED'&&!changeTarget&&!isStemUnavailable){
         if(!stemTarget)throw new Error('Chưa xác định được đúng UUID phiên bản.');
         const payload=JSON.stringify([noteToSubmit,stemTarget.versionId,script.draftRevision??stemTarget.scriptRevision]);
         if(reviewRetry.current?.payload!==payload){
@@ -639,7 +658,16 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       return true;
     } catch (error: any) {
       setStemDecisionError(error);
-      showToast(error.message || 'Chưa xác nhận được quyết định. Hãy tải lại trạng thái trước khi thử lại.', 'warn');
+      if(error?.code==='STEM_RUBRIC_REQUIRED'){
+        setIsStemRubricOpen(true);
+        showToast('Chế độ STRICT yêu cầu thẩm định Rubric STEM trước khi phê duyệt.','warn');
+      } else if(error?.code==='STEM_FINGERPRINT_STALE'){
+        showToast('Nội dung đã thay đổi sau khi chấm điểm (Fingerprint không khớp). Vui lòng tải lại và chấm lại.','warn');
+      } else if(error?.code==='STEM_VALIDATION_FAILED'){
+        showToast('Kịch bản chưa thỏa mãn quy tắc kiểm định STEM: '+(error.message||''),'warn');
+      } else {
+        showToast(error.message || 'Chưa xác nhận được quyết định. Hãy tải lại trạng thái trước khi thử lại.', 'warn');
+      }
       return false;
     } finally {
       decisionPendingRef.current = false;
@@ -648,9 +676,18 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   };
   return (
     <section className="studio-workspace flex-1 min-h-0 flex flex-col overflow-hidden">
-      <StemErrorNotice error={stemDecisionError??stemTargetError} onReload={()=>window.location.reload()} onRetryReady={()=>setStemDecisionError(null)}/>
-      {isReviewerActive&&<label className="px-6 py-2"><input type="checkbox" checked={attachAssessment} onChange={e=>{setAttachAssessment(e.target.checked);if(e.target.checked)setIsStemRubricOpen(true);}}/>Gửi kèm assessment STEM (DRAFT UI)</label>}
-      {stemTarget&&<StemRubricPanel key={`${script.id}:${stemTarget.versionId}:${reviewerMode}`} isOpen={isStemRubricOpen} onClose={()=>setIsStemRubricOpen(false)}
+      <StemErrorNotice error={stemDecisionError??(isStemUnavailable?null:stemTargetError)} onReload={()=>window.location.reload()} onRetryReady={()=>setStemDecisionError(null)}/>
+      {isReviewerActive&&!isStemUnavailable&&(
+        isStrictMode ? (
+          <div className="px-6 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between text-xs text-indigo-900 font-semibold">
+            <span>Chế độ STRICT: Thẩm định Rubric STEM là bắt buộc trước khi phê duyệt.</span>
+            <button type="button" onClick={()=>setIsStemRubricOpen(true)} className="underline text-indigo-700">Mở Rubric</button>
+          </div>
+        ) : (
+          <label className="px-6 py-2 block text-xs"><input type="checkbox" checked={attachAssessment} onChange={e=>{setAttachAssessment(e.target.checked);if(e.target.checked)setIsStemRubricOpen(true);}}/> Gửi kèm assessment STEM (DRAFT UI)</label>
+        )
+      )}
+      {stemTarget&&!isStemUnavailable&&<StemRubricPanel key={`${script.id}:${stemTarget.versionId}:${reviewerMode}`} isOpen={isStemRubricOpen} onClose={()=>setIsStemRubricOpen(false)}
         scriptId={script.id} versionId={stemTarget.versionId} scriptRevision={script.draftRevision??stemTarget.scriptRevision}
         phase={reviewerMode==='video'?'VIDEO':'SCRIPT'} compositionRevision={composition?.revision}
         isReviewerActive={isReviewerActive} assessment={stemAssessment} onAssessmentChange={setStemAssessment}
@@ -672,19 +709,21 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
             <ListOrdered className="w-3.5 h-3.5 text-amber-600" />
             <span>Hàng đợi chờ duyệt</span>
           </button>
-          <button
-            onClick={() => setIsStemRubricOpen((prev) => !prev)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border ${
-              isStemRubricOpen
-                ? 'bg-amber-100 text-amber-800 border-amber-300'
-                : 'bg-slate-100 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 border-slate-200 text-slate-700'
-            }`}
-            title="Mở bảng thẩm định Rubric STEM (Drawer)"
-          >
-            <Layers className="w-3.5 h-3.5 text-amber-600" />
-            <span>Rubric STEM</span>
-            <span className="text-[10px] px-1 py-0.2 rounded bg-amber-200 text-amber-900 font-bold">DRAFT</span>
-          </button>
+          {!isStemUnavailable && (
+            <button
+              onClick={() => setIsStemRubricOpen((prev) => !prev)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border ${
+                isStemRubricOpen
+                  ? 'bg-amber-100 text-amber-800 border-amber-300'
+                  : 'bg-slate-100 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 border-slate-200 text-slate-700'
+              }`}
+              title="Mở bảng thẩm định Rubric STEM (Drawer)"
+            >
+              <Layers className="w-3.5 h-3.5 text-amber-600" />
+              <span>Rubric STEM</span>
+              <span className={`text-[10px] px-1 py-0.2 rounded font-bold ${isStrictMode ? 'bg-indigo-200 text-indigo-900' : 'bg-amber-200 text-amber-900'}`}>{isStrictMode ? 'STRICT' : 'DRAFT'}</span>
+            </button>
+          )}
         </div>
 
         {/* 2 Tabs Chuyển Giữa: Duyệt Kịch Bản (Cấp 1) & Duyệt Video (Cấp 2) */}

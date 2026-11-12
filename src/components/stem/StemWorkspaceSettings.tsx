@@ -29,15 +29,19 @@ export function StemWorkspaceSettings({workspaceId}:{workspaceId:string}) {
     const payload=JSON.stringify(settings);
     if(retry.current?.payload!==payload)retry.current={payload,key:stemMutationKey()};
     setBusy(true);
-    try{setSettings(await scriptService.saveWorkspaceStemSettings(workspaceId,{...settings,idempotencyKey:retry.current.key}));retry.current=null;}
+    try{
+      const updated=await scriptService.saveWorkspaceStemSettings(workspaceId,{...settings,baseRevision:settings.modeRevision,idempotencyKey:retry.current.key});
+      setSettings(updated);
+      retry.current=null;
+    }
     catch(err){setError(err);}finally{setBusy(false);}
   };
   return <details className="border p-3"><summary>Workspace STEM — xem/gán policy DRAFT</summary>
     <StemErrorNotice error={error} onReload={()=>setReload(n=>n+1)} onRetryReady={()=>setError(null)}/>
     <p>modeRevision: {settings?.modeRevision??'—'} · Cùng counter workspace trên BE.</p>
-    {!admin&&<p>Chỉ Admin hệ thống được ghi settings; quyền được BE kiểm tra lại.</p>}
+    {!admin&&<p role="note" className="text-amber-800">Chỉ Admin hệ thống được ghi settings; quyền được BE kiểm tra lại.</p>}
     {settings&&<fieldset disabled={!admin||busy||Boolean(error)}>
-      <label>Mode<select value={settings.mode} onChange={e=>setSettings({...settings,mode:e.target.value as 'OFF'|'ADVISORY'})}><option>OFF</option><option>ADVISORY</option></select></label>
+      <label>Mode<select aria-label="Mode" value={settings.mode} onChange={e=>setSettings({...settings,mode:e.target.value as 'OFF'|'ADVISORY'|'STRICT'})}><option value="OFF">OFF</option><option value="ADVISORY">ADVISORY</option><option value="STRICT">STRICT</option></select></label>
       {policies.map(p=><label className="block" key={p.id}><input type="checkbox" checked={settings.policyVersionIds.includes(p.id)} onChange={e=>setSettings({...settings,policyVersionIds:e.target.checked?[...settings.policyVersionIds,p.id]:settings.policyVersionIds.filter(id=>id!==p.id),defaultPolicyVersionId:!e.target.checked&&settings.defaultPolicyVersionId===p.id?null:settings.defaultPolicyVersionId})}/>{p.logicalKey} v{p.version} — {p.status}/UNVERIFIED</label>)}
       {settings.policyVersionIds.filter(id=>!policies.some(p=>p.id===id)).map(id=><p key={id}>Policy đã pin không khả dụng: {id}. Không tự remap.</p>)}
       <label>Policy mặc định<select value={settings.defaultPolicyVersionId??''} onChange={e=>setSettings({...settings,defaultPolicyVersionId:e.target.value||null})}><option value="">Không chọn</option>{settings.policyVersionIds.map(id=><option key={id} value={id}>{policies.find(p=>p.id===id)?.logicalKey??id}</option>)}</select></label>

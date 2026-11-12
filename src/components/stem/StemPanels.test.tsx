@@ -113,13 +113,30 @@ describe('P4 conflict/settings UX',()=>{
    expect(screen.getByRole('dialog',{name:'Xung đột phiên bản STEM'})).toBeTruthy();expect(reload).not.toHaveBeenCalled();
    fireEvent.click(screen.getByRole('button',{name:'Reload dữ liệu mới nhất'}));expect(reload).toHaveBeenCalledOnce();
  });
- it('Admin Read/Assign uses modeRevision and offers no STRICT or activation control',async()=>{
+ it('Admin can enable STRICT mode with baseRevision and idempotencyKey',async()=>{
    vi.spyOn(authService,'getCurrentUser').mockReturnValue({id:'TEST_ONLY_admin',systemRole:'ADMIN'} as any);
-   const save=vi.spyOn(scriptService,'saveWorkspaceStemSettings').mockResolvedValue({workspaceId:'w',modeRevision:1,mode:'ADVISORY',policyVersionIds:[],defaultPolicyVersionId:null});
+   const save=vi.spyOn(scriptService,'saveWorkspaceStemSettings').mockResolvedValue({workspaceId:'w',modeRevision:1,mode:'STRICT',policyVersionIds:[],defaultPolicyVersionId:null});
    render(<StemWorkspaceSettings workspaceId="w"/>);fireEvent.click(screen.getByText('Workspace STEM — xem/gán policy DRAFT'));
-   const mode=await screen.findByRole('combobox',{name:'Mode'});fireEvent.change(mode,{target:{value:'ADVISORY'}});
+   const mode=await screen.findByRole('combobox',{name:'Mode'});
+   expect(screen.getByRole('option',{name:'STRICT'})).toBeTruthy();
+   fireEvent.change(mode,{target:{value:'STRICT'}});
    fireEvent.click(screen.getByRole('button',{name:'Lưu settings workspace (CAS)'}));
-   await waitFor(()=>expect(save).toHaveBeenCalledWith('w',expect.objectContaining({modeRevision:0,mode:'ADVISORY'})));
-   expect(screen.queryByRole('option',{name:'STRICT'})).toBeNull();
+   await waitFor(()=>expect(save).toHaveBeenCalledWith('w',expect.objectContaining({modeRevision:0,baseRevision:0,mode:'STRICT',idempotencyKey:expect.any(String)})));
+ });
+ it('Non-admin users cannot edit workspace stem settings and see warning',async()=>{
+   vi.spyOn(authService,'getCurrentUser').mockReturnValue({id:'TEST_ONLY_writer',systemRole:'USER'} as any);
+   render(<StemWorkspaceSettings workspaceId="w"/>);fireEvent.click(screen.getByText('Workspace STEM — xem/gán policy DRAFT'));
+   await screen.findByRole('combobox',{name:'Mode'});
+   expect(screen.getByText(/Chỉ Admin hệ thống được ghi settings/)).toBeTruthy();
+   expect((screen.getByRole('button',{name:'Lưu settings workspace (CAS)'}) as HTMLButtonElement).closest('fieldset')?.disabled).toBe(true);
+ });
+ it('Admin handling 409 stale revision during workspace mode update',async()=>{
+   vi.spyOn(authService,'getCurrentUser').mockReturnValue({id:'TEST_ONLY_admin',systemRole:'ADMIN'} as any);
+   vi.spyOn(scriptService,'saveWorkspaceStemSettings').mockRejectedValue(new ApiError('stale','STEM_STALE_REVISION',409));
+   render(<StemWorkspaceSettings workspaceId="w"/>);fireEvent.click(screen.getByText('Workspace STEM — xem/gán policy DRAFT'));
+   const mode=await screen.findByRole('combobox',{name:'Mode'});
+   fireEvent.change(mode,{target:{value:'STRICT'}});
+   fireEvent.click(screen.getByRole('button',{name:'Lưu settings workspace (CAS)'}));
+   expect(await screen.findByRole('dialog',{name:'Xung đột phiên bản STEM'})).toBeTruthy();
  });
 });

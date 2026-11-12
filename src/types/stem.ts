@@ -442,6 +442,13 @@ export interface LegacySuggestion {
   reason: string;
 }
 
+export interface LessonStep {
+  stepKey: string;
+  sceneIds: string[];
+  activityKey?: string | null;
+  objectiveKeys: string[];
+}
+
 export interface StemBrief {
   policyVersionId?: string | null;
   topicVersionId?: string | null;
@@ -454,6 +461,7 @@ export interface StemBrief {
   objectives: StemObjective[];
   studentTasks: StudentTask[];
   contributions: StemContribution[];
+  steps?: LessonStep[];
   safetyNotes?: string | null;
   rawLegacy?: string | null;
 }
@@ -502,6 +510,7 @@ export interface StemAssessment {
   rubricVersionId?: string | null;
   criteria: StemCriterion[];
   idempotencyKey: string;
+  expectedFingerprint?: string | null;
 }
 
 export interface StemViewResponse {
@@ -511,35 +520,38 @@ export interface StemViewResponse {
   revision: number;
   verificationStatus: 'UNVERIFIED' | string;
   readiness: 'INCOMPLETE' | 'READY_FOR_REVIEW' | 'NEEDS_REVIEW' | 'LEGACY_UNMAPPED' | string;
-  effectiveMode: 'OFF' | 'ADVISORY' | string;
+  effectiveMode: 'OFF' | 'ADVISORY' | 'STRICT' | string;
   modeRevision: number;
   brief: StemBrief | null;
   evidence: StemEvidence[];
   findings: StemValidationFinding[];
   legacySuggestion?: LegacySuggestion | null;
+  scriptFingerprint?: string | null;
+  compositionFingerprint?: string | null;
 }
 
 /** Client name deliberately distinguishes workspace mode CAS from a brief revision. */
 export interface WorkspaceStemSettings {
   workspaceId: string;
   modeRevision: number;
-  mode: 'OFF' | 'ADVISORY';
+  mode: 'OFF' | 'ADVISORY' | 'STRICT';
   policyVersionIds: string[];
   defaultPolicyVersionId: string | null;
 }
 export interface WorkspaceStemSettingsRequest {
   modeRevision: number;
-  mode: 'OFF' | 'ADVISORY';
+  mode: 'OFF' | 'ADVISORY' | 'STRICT';
   policyVersionIds: string[];
   defaultPolicyVersionId?: string | null;
   idempotencyKey: string;
-  legacyModeSelection?: 'OFF' | 'ADVISORY' | null;
+  baseRevision?: number;
+  legacyModeSelection?: 'OFF' | 'ADVISORY' | 'STRICT' | null;
 }
 /** Exact P3 wire response. Do not confuse revision with brief/script revision. */
 export interface WorkspaceStemSettingsWire {
   workspaceId: string;
   revision: number;
-  mode: 'OFF' | 'ADVISORY';
+  mode: 'OFF' | 'ADVISORY' | 'STRICT';
   policyIds: string[];
   defaultPolicyId: string | null;
 }

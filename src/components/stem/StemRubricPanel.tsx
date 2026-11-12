@@ -109,6 +109,7 @@ export const StemRubricPanel: React.FC<StemRubricPanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'RUBRIC' | 'BRIEF_VIEW'>('RUBRIC');
   const [stemData, setStemData] = useState<StemViewResponse | null>(null);
+  const [rubricCatalog, setRubricCatalog] = useState<import('../../types/stem').CatalogVersionEntry[]>([]);
   const [loadingStem, setLoadingStem] = useState(false);
   const [stemError, setStemError] = useState<string | null>(null);
 
@@ -124,11 +125,26 @@ export const StemRubricPanel: React.FC<StemRubricPanelProps> = ({
   useEffect(()=>{
     if(!isOpen||!scriptId||!versionId)return;
     let current=true;setLoadingStem(true);setApiError(null);setStemError(null);setStemData(null);
-    scriptService.getStemBrief(scriptId,versionId).then(data=>{
+    scriptService.getStemBrief(scriptId,versionId).then(async data=>{
       if(!current)return;setStemData(data);setLoadingStem(false);
-      if(isReviewerActive)callback.current({expectedBriefRevision:data.revision,expectedScriptRevision:scriptRevision,
-        expectedModeRevision:data.modeRevision,expectedCompositionRevision:phase==='VIDEO'?compositionRevision:null,rubricVersionId:null,
-        criteria:DEFAULT_CRITERIA_KEYS.map(c=>({key:c.key,judgment:'NOT_ASSESSED',rationale:'',evidenceIds:[]})),idempotencyKey:stemMutationKey()});
+      let rubrics: import('../../types/stem').CatalogVersionEntry[] = [];
+      try { rubrics = await scriptService.getCatalog('RUBRIC', 0, 50); } catch { /* ignore */ }
+      if(!current)return;
+      setRubricCatalog(rubrics);
+      const defaultRubricId = data.brief?.policyVersionId ?
+        (rubrics.find(r => r.id === data.brief?.policyVersionId || r.parentId === data.brief?.policyVersionId)?.id ?? rubrics[0]?.id ?? null)
+        : (rubrics[0]?.id ?? null);
+      const currentFp = phase === 'VIDEO' ? (data.compositionFingerprint ?? null) : (data.scriptFingerprint ?? null);
+      if(isReviewerActive)callback.current({
+        expectedBriefRevision:data.revision,
+        expectedScriptRevision:scriptRevision,
+        expectedModeRevision:data.modeRevision,
+        expectedCompositionRevision:phase==='VIDEO'?compositionRevision:null,
+        rubricVersionId:defaultRubricId,
+        expectedFingerprint:currentFp,
+        criteria:DEFAULT_CRITERIA_KEYS.map(c=>({key:c.key,judgment:'NOT_ASSESSED',rationale:'',evidenceIds:[]})),
+        idempotencyKey:stemMutationKey()
+      });
     }).catch(err=>{if(current){setApiError(err);setStemError(err.message);setLoadingStem(false);}});
     return()=>{current=false;};
   },[isOpen,scriptId,versionId,scriptRevision,phase,compositionRevision,isReviewerActive,reload]);
@@ -196,6 +212,31 @@ export const StemRubricPanel: React.FC<StemRubricPanelProps> = ({
 
       <StemErrorNotice error={apiError} onReload={()=>setReload(n=>n+1)} />
       {loadingStem&&<p role="status">Đang tải hồ sơ STEM…</p>}
+      {rubricCatalog.length > 0 && (
+        <div className="px-4 py-1.5 bg-slate-800 text-white flex items-center justify-between text-[10px]">
+          <span>Phiên bản Rubric:</span>
+          <select
+            aria-label="Chọn Rubric"
+            value={assessment?.rubricVersionId ?? ''}
+            disabled={!isReviewerActive}
+            onChange={e => {
+              if (assessment) onAssessmentChange({ ...assessment, rubricVersionId: e.target.value || null, idempotencyKey: stemMutationKey() });
+            }}
+            className="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-slate-200"
+          >
+            <option value="">Chưa chọn rubric</option>
+            {rubricCatalog.map(r => (
+              <option key={r.id} value={r.id}>{r.logicalKey} v{r.version}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="px-4 py-1 bg-slate-100 text-[10px] text-slate-600 flex items-center justify-between border-b">
+        <span>{phase === 'VIDEO' ? 'Composition Fingerprint:' : 'Script Fingerprint:'}</span>
+        <code className="font-mono text-[9px] bg-slate-200 px-1 rounded text-slate-800">
+          {assessment?.expectedFingerprint ? `${assessment.expectedFingerprint.slice(0, 12)}...` : 'Chờ server cấp'}
+        </code>
+      </div>
       {/* Navigation Tabs */}
       <div className="flex border-b border-slate-200 bg-slate-50 shrink-0 text-slate-600 font-semibold text-[11px]">
         <button

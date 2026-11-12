@@ -12,12 +12,13 @@ export async function hasActiveReviewerSeat(workspaceId:string,userId:string):Pr
  const rows=await apiClient.get<Array<{userId?:string;role?:string;status?:string}>>(`/workspaces/${workspaceId}/members`);
  return Array.isArray(rows)&&rows.some(row=>row.userId===userId&&row.role==='REVIEWER'&&row.status==='ACTIVE');
 }
-export const emptyStemBrief = (): StemBrief => ({policyVersionId:null,topicVersionId:null,gradeKey:null,subjectKeys:[],outcomeIds:[],scopeOfClip:'',context:{primary:null,secondary:[]},distributionChannels:[],objectives:[],studentTasks:[],contributions:[],safetyNotes:'',rawLegacy:null});
+export const emptyStemBrief = (): StemBrief => ({policyVersionId:null,topicVersionId:null,gradeKey:null,subjectKeys:[],outcomeIds:[],scopeOfClip:'',context:{primary:null,secondary:[]},distributionChannels:[],objectives:[],studentTasks:[],contributions:[],steps:[],safetyNotes:'',rawLegacy:null});
 export const stemMutationKey = () => `stem_${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`}`;
 
 export const stemAssessmentPayload=(a:StemAssessment):StemAssessment=>({
  expectedBriefRevision:a.expectedBriefRevision,expectedScriptRevision:a.expectedScriptRevision,expectedModeRevision:a.expectedModeRevision,
  expectedCompositionRevision:a.expectedCompositionRevision??null,rubricVersionId:a.rubricVersionId??null,idempotencyKey:a.idempotencyKey,
+ ...(a.expectedFingerprint !== undefined ? { expectedFingerprint: a.expectedFingerprint } : {}),
  criteria:a.criteria.map(c=>({key:c.key,judgment:c.judgment,rationale:c.rationale,evidenceIds:[...c.evidenceIds]})),
 });
 export const stemChangePayload=(t:StemChangeTarget):StemChangeTarget=>({expectedVersionId:t.expectedVersionId,expectedScriptRevision:t.expectedScriptRevision,expectedBriefRevision:t.expectedBriefRevision,idempotencyKey:t.idempotencyKey});
@@ -29,7 +30,9 @@ export function stemSavePayload(request: StemSaveRequest): StemSaveRequest {
   brief:{policyVersionId:b.policyVersionId??null,topicVersionId:b.topicVersionId??null,gradeKey:b.gradeKey??null,subjectKeys:[...b.subjectKeys],outcomeIds:[...b.outcomeIds],scopeOfClip:b.scopeOfClip??null,
    context:{primary:b.context.primary?{key:b.context.primary.key,condition:b.context.primary.condition??null,adaptations:b.context.primary.adaptations??null}:null,secondary:b.context.secondary.map(c=>({key:c.key,condition:c.condition??null,adaptations:c.adaptations??null}))},
    distributionChannels:[...b.distributionChannels],objectives:b.objectives.map(o=>({key:o.key,outcomeId:o.outcomeId??null,learnerAction:o.learnerAction??null,observableEvidence:o.observableEvidence??null})),studentTasks:b.studentTasks.map(t=>({key:t.key,learnerAction:t.learnerAction??null,teacherSupport:t.teacherSupport??null,materials:t.materials??null,safety:t.safety??null,assessmentEvidence:t.assessmentEvidence??null,executionContextKey:t.executionContextKey??null})),
-   contributions:b.contributions.map(c=>({component:c.component,explanation:c.explanation??null,objectiveKeys:[...c.objectiveKeys],taskKeys:[...c.taskKeys]})),safetyNotes:b.safetyNotes??null,rawLegacy:b.rawLegacy??null},
+   contributions:b.contributions.map(c=>({component:c.component,explanation:c.explanation??null,objectiveKeys:[...c.objectiveKeys],taskKeys:[...c.taskKeys]})),
+   steps:(b.steps??[]).map(s=>({stepKey:s.stepKey,sceneIds:[...(s.sceneIds??[])],activityKey:s.activityKey??null,objectiveKeys:[...(s.objectiveKeys??[])]})),
+   safetyNotes:b.safetyNotes??null,rawLegacy:b.rawLegacy??null},
   evidence:request.evidence.map(e=>({...e.id?{id:e.id}:{},sceneId:e.sceneId??null,taskKey:e.taskKey??null,objectiveKey:e.objectiveKey??null,component:e.component,explanation:e.explanation??null}))};
 }
 export function checkStemPayload(request: StemSaveRequest): void {
@@ -44,7 +47,7 @@ export function checkStemPayload(request: StemSaveRequest): void {
  // Completeness is returned by BE as findings; null primary is valid for draft saving.
 }
 export function workspaceModeFromWire(wire: WorkspaceStemSettingsWire): WorkspaceStemSettings {
- if(!wire||!Number.isInteger(wire.revision)||!['OFF','ADVISORY'].includes(wire.mode)||!Array.isArray(wire.policyIds))throw new ApiError('Settings workspace không đúng contract P3.','FE_STEM_RESPONSE',400);
+ if(!wire||!Number.isInteger(wire.revision)||!['OFF','ADVISORY','STRICT'].includes(wire.mode)||!Array.isArray(wire.policyIds))throw new ApiError('Settings workspace không đúng contract P3.','FE_STEM_RESPONSE',400);
  return {workspaceId:wire.workspaceId,modeRevision:wire.revision,mode:wire.mode,policyVersionIds:wire.policyIds,defaultPolicyVersionId:wire.defaultPolicyId??null};
 }
 export function stemError(error: unknown) {

@@ -81,7 +81,7 @@ export const MediaLibraryView: React.FC<MediaLibraryViewProps> = ({
   const changeFilter = (key: keyof LibraryQuery,value: string) => {setPage(0);setQuery(old=>({...old,[key]:value}));};
   const openFilters = async () => {
     setAdvanced(v=>!v);const request=++facetRequest.current;
-    try {const value=await libraryService.getFilters({...query,q:searchQuery});if(request===facetRequest.current)setFacets(value);} catch(err:any){if(request===facetRequest.current)setLoadError(err.message || 'Không tải được bộ lọc.');}
+    try {const value=await libraryService.getFilters({...query,q:searchQuery});if(request===facetRequest.current)setFacets(value);} catch(err:any){if(request===facetRequest.current && err?.status !== 404)setLoadError(err.message || 'Không tải được bộ lọc.');}
   };
 
   const getSubjectColor = (subj: STEMSubject) => {

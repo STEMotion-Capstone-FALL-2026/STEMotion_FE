@@ -21,5 +21,6 @@ export default defineConfig({
     // Remotion compositions need a browser canvas; the suite covers the
     // service layer and pure helpers instead.
     include: ['src/**/*.test.{ts,tsx}'],
+    exclude: ['**/node_modules/**', '**/e2e/**', '**/*live.test.tsx'],
   },
 });
