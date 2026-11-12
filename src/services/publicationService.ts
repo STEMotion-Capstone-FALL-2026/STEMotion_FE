@@ -9,9 +9,10 @@ export interface PublicationResponse {
 }
 
 export const publicationService = {
-  publishInternal(projectId: string, title: string): Promise<PublicationResponse> {
+  publishInternal(projectId: string, title: string, options?:{legacyUnverifiedAcknowledged:boolean;artifactExpectation?:import('../types/stem').StemArtifactExpectation;idempotencyKey:string}): Promise<PublicationResponse> {
     return apiClient.post(`/scripts/${projectId}/publish`, {
       targets: ['INTERNAL_LIBRARY', 'LMS'], title,
+      ...(options?{legacyUnverifiedAcknowledged:options.legacyUnverifiedAcknowledged,artifactExpectation:options.artifactExpectation,idempotencyKey:options.idempotencyKey}:{}),
     });
   },
 };

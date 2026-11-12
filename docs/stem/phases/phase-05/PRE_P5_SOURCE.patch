@@ -1,0 +1,2543 @@
+diff --git a/src/components/ProducerView.tsx b/src/components/ProducerView.tsx
+index 251c575..df6bdfc 100644
+--- a/src/components/ProducerView.tsx
++++ b/src/components/ProducerView.tsx
+@@ -1,4 +1,5 @@
+ import React, { useState } from 'react';
++import { StemReadOnlySummary } from './stem/StemReadOnlySummary';
+ import { STEMScript } from '../types/stem';
+ import { RemotionPlayerWrapper } from './RemotionPlayerWrapper';
+ import { Video, Sliders, Cpu, Download, RefreshCw, CheckCircle2, Code2 } from 'lucide-react';
+@@ -97,6 +98,7 @@ export const ProducerView: React.FC<ProducerViewProps> = ({
+ 
+   return (
+     <div className="space-y-6">
++      <StemReadOnlySummary script={script}/>
+       {/* Top Banner */}
+       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+         <div>
+diff --git a/src/components/views/ProducerStudio/ProducerStudio.tsx b/src/components/views/ProducerStudio/ProducerStudio.tsx
+index 1a4162f..2c457bc 100644
+--- a/src/components/views/ProducerStudio/ProducerStudio.tsx
++++ b/src/components/views/ProducerStudio/ProducerStudio.tsx
+@@ -24,6 +24,8 @@ import { STEMScript, SceneData } from '../../../types/stem';
+ import { renderService, RenderHistoryEntry, reviewService } from '../../../services';
+ import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
+ import { SceneListColumn } from './SceneListColumn';
++import { StemReadOnlySummary } from '../../stem/StemReadOnlySummary';
++import { assertPresentationIdentity, PRESENTATION_REVIEW_NOTICE } from '../../../services/stemClient';
+ import { SceneInspector } from './SceneInspector';
+ 
+ export type VisualTheme = 'default' | 'cyber' | 'emerald' | 'sunset' | 'academic';
+@@ -249,8 +251,18 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
+     }
+   });
+ 
++  const updatePresentation: typeof updateSceneProperty = updater => updateSceneProperty((before: SceneData) => {
++    const identity={...before};
++    let after:SceneData;
++    try{after=assertPresentationIdentity(identity,updater({...before}));}
++    catch(error){showToast?.((error as Error).message,'warn');return before;}
++    // Conditional/unclassified visual fields still need semantic review; no P5 proof is claimed.
++    return after;
++  });
+   return (
+     <section className="studio-workspace flex-1 min-h-0 flex flex-col overflow-hidden">
++      <StemReadOnlySummary script={script} compositionVersionNo={production?.scriptVersionNo}/>
++      <p role="note" className="px-4 py-1 text-xs text-amber-800">{PRESENTATION_REVIEW_NOTICE}</p>
+       {/* Top Bar Studio */}
+       <div className="studio-toolbar bg-white border-b px-6 py-2.5 flex justify-between items-center text-xs shrink-0 z-10 shadow-2xs">
+         <div className="flex items-center space-x-3">
+@@ -476,7 +488,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
+               script={script}
+               activeSceneId={selectedScene.id}
+               onSceneChange={(id) => setActiveSceneId(id)}
+-              updateSceneProperty={updateSceneProperty}
++              updateSceneProperty={updatePresentation}
+               activeLegoPieceId={activeLegoPieceId}
+               onSelectLegoPiece={setActiveLegoPieceId}
+               disabled={isLocked}
+@@ -506,7 +518,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
+         {/* Cột 3: LIVE PROPS INSPECTOR */}
+         <SceneInspector
+           selectedScene={selectedScene}
+-          updateSceneProperty={updateSceneProperty}
++          updateSceneProperty={updatePresentation}
+           onStartRender={startRender}
+           activeLegoPieceId={activeLegoPieceId}
+           onSelectLegoPiece={setActiveLegoPieceId}
+diff --git a/src/components/views/ReviewerStudio/ReviewerStudio.test.tsx b/src/components/views/ReviewerStudio/ReviewerStudio.test.tsx
+index 7412146..8cf69e6 100644
+--- a/src/components/views/ReviewerStudio/ReviewerStudio.test.tsx
++++ b/src/components/views/ReviewerStudio/ReviewerStudio.test.tsx
+@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
+ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import { compositionService, reviewService } from '../../../services';
+ import type { Composition } from '../../../services';
++import { scriptService } from '../../../services/scriptService';
+ import { ReviewerStudio } from './ReviewerStudio';
+ 
+ vi.mock('../../RemotionPlayerWrapper', () => ({
+@@ -27,6 +28,7 @@ const composition = (id = 'p'): Composition => ({
+ });
+ 
+ beforeEach(() => {
++  vi.spyOn(scriptService,'getStemTarget').mockResolvedValue({versionId:'TEST_ONLY_version',scriptRevision:0,workspaceId:'TEST_ONLY_workspace',versionNo:1});
+   vi.spyOn(reviewService, 'getQaReport').mockResolvedValue({ passed: true, findings: [], failCount: 0, warnCount: 0 } as any);
+ });
+ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+diff --git a/src/components/views/ReviewerStudio/ReviewerStudio.tsx b/src/components/views/ReviewerStudio/ReviewerStudio.tsx
+index dcc46da..c857c17 100644
+--- a/src/components/views/ReviewerStudio/ReviewerStudio.tsx
++++ b/src/components/views/ReviewerStudio/ReviewerStudio.tsx
+@@ -18,11 +18,18 @@ import {
+   Trash2,
+   RefreshCw,
+   ListOrdered,
++  Layers,
+   X,
+   Loader2,
+   Reply,
+ } from 'lucide-react';
+-import { STEMScript, SceneData, FeedbackComment } from '../../../types/stem';
++import { STEMScript, SceneData, FeedbackComment, StemAssessment, StemChangeTarget } from '../../../types/stem';
++import { useStemTarget } from '../../stem/useStemTarget';
++import { StemErrorNotice } from '../../stem/StemErrorNotice';
++import { stemMutationKey, hasActiveReviewerSeat } from '../../../services/stemClient';
++import { StemRubricPanel } from '../../stem/StemRubricPanel';
++import { scriptService } from '../../../services/scriptService';
++import { authService } from '../../../services';
+ import {
+   AppView,
+   reviewService,
+@@ -540,6 +547,23 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
+     }
+   }, [reviewerMode, isVideoReadyForReview, setReviewerMode]);
+ 
++  const [isStemRubricOpen, setIsStemRubricOpen] = useState(false);
++  const [stemAssessment, setStemAssessment] = useState<StemAssessment | null>(null);
++  const [isReviewerActive,setIsReviewerActive]=useState(false);
++  const {target:stemTarget,error:stemTargetError}=useStemTarget(script.id,script.currentVersionNo??script.version);
++  const [stemDecisionError,setStemDecisionError]=useState<unknown>(null);
++  const [attachAssessment,setAttachAssessment]=useState(false);
++  const reviewRetry=useRef<{payload:string;target:StemChangeTarget}|null>(null);
++  const approvalRetry=useRef<{payload:string;key:string}|null>(null);
++  useEffect(()=>{
++    let current=true;setIsReviewerActive(false);setStemAssessment(null);setAttachAssessment(false);setStemDecisionError(null);
++    const user=authService.getCurrentUser();
++    if(stemTarget?.workspaceId&&user.id)hasActiveReviewerSeat(stemTarget.workspaceId,user.id).then(active=>{
++      if(current)setIsReviewerActive(active);
++    }).catch(()=>{if(current)setIsReviewerActive(false);});
++    return()=>{current=false;};
++  },[script.id,stemTarget?.versionId,stemTarget?.workspaceId,reviewerMode]);
++
+   const [rejectModalOpen, setRejectModalOpen] = useState(false);
+   const rejectDialog = useDialog(rejectModalOpen, 'Lý do yêu cầu chỉnh sửa', () => setRejectModalOpen(false), decisionPending);
+   const [rejectTarget, setRejectTarget] = useState<'SCRIPT' | 'VIDEO' | null>(null);
+@@ -569,7 +593,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
+ 
+   const decide = async (
+     decision: 'APPROVED' | 'CHANGE_REQUESTED' | 'VIDEO_APPROVED' | 'VIDEO_RETURNED',
+-    overrideNote?: string
++    overrideNote?: string,
++    overrideChangeTarget?: StemChangeTarget
+   ) => {
+     if (decisionPendingRef.current) return;
+     if (decision === 'VIDEO_APPROVED' && videoApprovalBlocked) {
+@@ -581,13 +606,27 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
+     decisionPendingRef.current = true;
+     setDecisionPending(true);
+     try {
+-      if (decision === 'VIDEO_APPROVED') {
+-        await reviewService.approveVideo(script.id);
+-      } else if (decision === 'VIDEO_RETURNED') {
+-        await reviewService.sendBackVideo(script.id, noteToSubmit);
+-      } else {
+-        await reviewService.submitReviewDecision(script.id, decision, noteToSubmit);
++      let assessment=attachAssessment&&isReviewerActive?stemAssessment??undefined:undefined;
++      if((decision==='APPROVED'||decision==='VIDEO_APPROVED')&&attachAssessment&&(!isReviewerActive||!assessment||assessment.criteria.some(c=>!c.rationale.trim())))throw new Error('Assessment cần ghế Reviewer active, dữ liệu và lý do cho mọi tiêu chí.');
++      let changeTarget=overrideChangeTarget;
++      if(decision==='CHANGE_REQUESTED'&&!changeTarget){
++        if(!stemTarget)throw new Error('Chưa xác định được đúng UUID phiên bản.');
++        const payload=JSON.stringify([noteToSubmit,stemTarget.versionId,script.draftRevision??stemTarget.scriptRevision]);
++        if(reviewRetry.current?.payload!==payload){
++          const brief=await scriptService.getStemBrief(script.id,stemTarget.versionId);
++          reviewRetry.current={payload,target:{expectedVersionId:stemTarget.versionId,expectedScriptRevision:script.draftRevision??stemTarget.scriptRevision,expectedBriefRevision:brief.revision,idempotencyKey:stemMutationKey()}};
++        }
++        changeTarget=reviewRetry.current.target;
++      }
++      if(assessment&&(decision==='APPROVED'||decision==='VIDEO_APPROVED')){
++        const {idempotencyKey:_,...content}=assessment;
++        const payload=JSON.stringify([decision,noteToSubmit,content]);
++        if(approvalRetry.current?.payload!==payload)approvalRetry.current={payload,key:stemMutationKey()};
++        assessment={...assessment,idempotencyKey:approvalRetry.current.key};
+       }
++      if(decision==='VIDEO_APPROVED')await reviewService.approveVideo(script.id,noteToSubmit,assessment);
++      else if(decision==='VIDEO_RETURNED')await reviewService.sendBackVideo(script.id,noteToSubmit);
++      else await reviewService.submitReviewDecision(script.id,decision,noteToSubmit,decision==='APPROVED'?assessment:undefined,changeTarget);
+       const updated = await projectService.getProjectById(script.id);
+       if (activeProject.current !== projectId) return false;
+       setScript(updated);
+@@ -599,6 +638,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
+       }
+       return true;
+     } catch (error: any) {
++      setStemDecisionError(error);
+       showToast(error.message || 'Chưa xác nhận được quyết định. Hãy tải lại trạng thái trước khi thử lại.', 'warn');
+       return false;
+     } finally {
+@@ -608,6 +648,14 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
+   };
+   return (
+     <section className="studio-workspace flex-1 min-h-0 flex flex-col overflow-hidden">
++      <StemErrorNotice error={stemDecisionError??stemTargetError} onReload={()=>window.location.reload()} onRetryReady={()=>setStemDecisionError(null)}/>
++      {isReviewerActive&&<label className="px-6 py-2"><input type="checkbox" checked={attachAssessment} onChange={e=>{setAttachAssessment(e.target.checked);if(e.target.checked)setIsStemRubricOpen(true);}}/>Gửi kèm assessment STEM (DRAFT UI)</label>}
++      {stemTarget&&<StemRubricPanel key={`${script.id}:${stemTarget.versionId}:${reviewerMode}`} isOpen={isStemRubricOpen} onClose={()=>setIsStemRubricOpen(false)}
++        scriptId={script.id} versionId={stemTarget.versionId} scriptRevision={script.draftRevision??stemTarget.scriptRevision}
++        phase={reviewerMode==='video'?'VIDEO':'SCRIPT'} compositionRevision={composition?.revision}
++        isReviewerActive={isReviewerActive} assessment={stemAssessment} onAssessmentChange={setStemAssessment}
++        decisionPending={decisionPending}
++        onRequestChangesWithTarget={reviewerMode==='script'?async(target,note)=>Boolean(await decide('CHANGE_REQUESTED',note,target)):undefined}/>}
+       {/* Top Bar Reviewer với Bộ Chuyển Chế Độ Duyệt */}
+       <div className="studio-toolbar bg-white border-b px-6 py-2.5 flex justify-between items-center text-xs shrink-0 z-10 shadow-2xs">
+         <div className="flex items-center space-x-3">
+@@ -624,6 +672,19 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
+             <ListOrdered className="w-3.5 h-3.5 text-amber-600" />
+             <span>Hàng đợi chờ duyệt</span>
+           </button>
++          <button
++            onClick={() => setIsStemRubricOpen((prev) => !prev)}
++            className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border ${
++              isStemRubricOpen
++                ? 'bg-amber-100 text-amber-800 border-amber-300'
++                : 'bg-slate-100 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 border-slate-200 text-slate-700'
++            }`}
++            title="Mở bảng thẩm định Rubric STEM (Drawer)"
++          >
++            <Layers className="w-3.5 h-3.5 text-amber-600" />
++            <span>Rubric STEM</span>
++            <span className="text-[10px] px-1 py-0.2 rounded bg-amber-200 text-amber-900 font-bold">DRAFT</span>
++          </button>
+         </div>
+ 
+         {/* 2 Tabs Chuyển Giữa: Duyệt Kịch Bản (Cấp 1) & Duyệt Video (Cấp 2) */}
+diff --git a/src/components/views/WriterStudio/WriterStudio.test.tsx b/src/components/views/WriterStudio/WriterStudio.test.tsx
+index eb48c86..ec51cb3 100644
+--- a/src/components/views/WriterStudio/WriterStudio.test.tsx
++++ b/src/components/views/WriterStudio/WriterStudio.test.tsx
+@@ -1,7 +1,9 @@
+ import type { ComponentProps } from 'react';
+-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
++import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+ import { WriterStudio } from './WriterStudio';
++import { scriptService } from '../../../services/scriptService';
++import { projectService } from '../../../services/projectService';
+ import { narrationService, reviewService } from '../../../services';
+ import { sceneSaveQueue } from '../../../services/sceneSaveQueue';
+ 
+@@ -55,3 +57,21 @@ it('discards audio from a preview request after switching project', async () =>
+   expect(audio).not.toHaveBeenCalled();
+   expect(revoke).toHaveBeenCalledWith('blob:old-audio');
+ });
++
++it('P4 keeps untouched OFF legacy submission without creating or validating a missing brief',async()=>{
++  const input=props();
++  vi.spyOn(scriptService,'getStemTarget').mockResolvedValue({versionId:'TEST_ONLY_real_version',scriptRevision:0,workspaceId:'w',versionNo:1});
++  vi.spyOn(scriptService,'getStemBrief').mockResolvedValue({schemaVersion:'stem.v1',scriptVersionId:'TEST_ONLY_real_version',brief:null,revision:0,modeRevision:0,effectiveMode:'OFF',verificationStatus:'UNVERIFIED',readiness:'LEGACY_UNMAPPED',evidence:[],findings:[]});
++  vi.spyOn(scriptService,'getCatalog').mockResolvedValue([]);
++  vi.spyOn(scriptService,'getWorkspaceStemSettings').mockResolvedValue({workspaceId:'w',modeRevision:0,mode:'OFF',policyVersionIds:[],defaultPolicyVersionId:null});
++  const create=vi.spyOn(scriptService,'createStemBrief');const validate=vi.spyOn(scriptService,'validateStem');
++  vi.spyOn(sceneSaveQueue,'saveNow').mockResolvedValue(input.script);vi.spyOn(sceneSaveQueue,'getDraftRevision').mockReturnValue(0);
++  const submit=vi.spyOn(projectService,'submitForReview').mockResolvedValue({...input.script,scriptStatus:'IN_REVIEW'});
++  vi.spyOn(projectService,'getProjectById').mockResolvedValue({...input.script,scriptStatus:'IN_REVIEW'});
++  render(<WriterStudio {...input}/>);
++  fireEvent.click(screen.getByRole('button',{name:/Hồ Sơ STEM/}));
++  await waitFor(()=>expect(screen.getByLabelText('Phạm vi clip').closest('fieldset')?.disabled).toBe(false));
++  fireEvent.click(screen.getByRole('button',{name:/Gửi Kịch Bản Cho Reviewer/}));
++  await waitFor(()=>expect(submit).toHaveBeenCalledWith('p'));
++  expect(create).not.toHaveBeenCalled();expect(validate).not.toHaveBeenCalled();
++});
+diff --git a/src/components/views/WriterStudio/WriterStudio.tsx b/src/components/views/WriterStudio/WriterStudio.tsx
+index 5051201..dbed47b 100644
+--- a/src/components/views/WriterStudio/WriterStudio.tsx
++++ b/src/components/views/WriterStudio/WriterStudio.tsx
+@@ -2,6 +2,7 @@ import { useActionGuard } from '../../../hooks/useActionGuard';
+ import React, { useState, useEffect, useCallback, useMemo } from 'react';
+ import {
+   PlusCircle,
++  FileText,
+   GitCompare,
+   Send,
+   ChevronUp,
+@@ -37,6 +38,11 @@ import { sceneSaveQueue } from '../../../services/sceneSaveQueue';
+ import { renderLatexToString } from '../../../utils/latex';
+ import { MetaphorPanel } from './MetaphorPanel';
+ import { ComposedBlocksEditor } from './ComposedBlocksEditor';
++import { useStemTarget } from '../../stem/useStemTarget';
++import { StemErrorNotice } from '../../stem/StemErrorNotice';
++import type { StemBriefHandle } from '../../stem/StemBriefPanel';
++import { StemBriefPanel } from '../../stem/StemBriefPanel';
++import { scriptService } from '../../../services/scriptService';
+ 
+ interface WriterStudioProps {
+   script: STEMScript;
+@@ -87,6 +93,23 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+   isAiRunning = false,
+   showToast,
+ }) => {
++  const [activeStudioTab, setActiveStudioTab] = useState<'SCENES' | 'STEM_BRIEF'>('SCENES');
++  const [briefEvidenceScenes, setBriefEvidenceScenes] = useState<string[]>([]);
++
++  const {target:stemTarget,error:stemTargetError}=useStemTarget(script.id,script.currentVersionNo??script.version);
++  const stemPanel=React.useRef<StemBriefHandle>(null);
++  const [stemSubmitError,setStemSubmitError]=useState<unknown>(null);
++  const onEvidenceChange=useCallback((items:import('../../../types/stem').StemEvidence[])=>setBriefEvidenceScenes(items.map(e=>e.sceneId).filter((id):id is string=>Boolean(id))),[]);
++  const handleDeleteSceneWithStemCheck = (sceneId: string) => {
++    if (briefEvidenceScenes.includes(sceneId)) {
++      const ok = window.confirm(
++        'Cảnh này có liên kết với minh chứng STEM. Xóa cảnh sẽ giữ minh chứng ở trạng thái cảnh báo mồ côi (orphan finding TECH-EVIDENCE) và không cascade xóa ngầm. Bạn có chắc muốn xóa cảnh này không?'
++      );
++      if (!ok) return;
++    }
++    handleDeleteScene(sceneId);
++  };
++
+   const [draggedSceneIdx, setDraggedSceneIdx] = useState<number | null>(null);
+   const [dragOverSceneIdx, setDragOverSceneIdx] = useState<number | null>(null);
+   const [isSpeaking, setIsSpeaking] = useState(false);
+@@ -477,6 +500,35 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+           <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
+             Trạng thái: <b>{script.scriptStatus}</b>
+           </span>
++
++          {/* Tab chuyển đổi giữa Soạn Phân Cảnh và Hồ Sơ STEM (P4-Q03) */}
++          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 ml-2">
++            <button
++              onClick={() => setActiveStudioTab('SCENES')}
++              className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition-all text-xs ${
++                activeStudioTab === 'SCENES'
++                  ? 'bg-white text-brand-700 shadow-2xs'
++                  : 'text-slate-600 hover:text-slate-900'
++              }`}
++            >
++              <FileText className="w-3.5 h-3.5" />
++              <span>Phân Cảnh</span>
++            </button>
++            <button
++              onClick={() => setActiveStudioTab('STEM_BRIEF')}
++              className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition-all text-xs ${
++                activeStudioTab === 'STEM_BRIEF'
++                  ? 'bg-white text-brand-700 shadow-2xs'
++                  : 'text-slate-600 hover:text-slate-900'
++              }`}
++            >
++              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
++              <span>Hồ Sơ STEM</span>
++              <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold border border-amber-300">
++                DRAFT
++              </span>
++            </button>
++          </div>
+         </div>
+ 
+         <div className="flex items-center space-x-2 text-xs">
+@@ -500,7 +552,19 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+               if (isSubmitting) return;
+               setIsSubmitting(true);
+               try {
+-                await sceneSaveQueue.saveNow(script.id, script.scenes);
++                if(!stemTarget||!stemPanel.current)throw new Error('Chưa xác định được phiên bản STEM; cần tải lại trước khi gửi.');
++                stemPanel.current.assertSubmitReady();
++                await sceneSaveQueue.saveNow(script.id,script.scenes);
++                const saved=await stemPanel.current.saveForSubmit();
++                if(saved.brief){
++                  const validation=await scriptService.validateStem(script.id,stemTarget.versionId,{
++                    expectedBriefRevision:saved.revision,
++                    expectedScriptRevision:sceneSaveQueue.getDraftRevision(script.id)??script.draftRevision??stemTarget.scriptRevision,phase:'SCRIPT',
++                  });
++                  if(validation.findings.length)showToast(`STEM ${validation.effectiveMode}: ${validation.findings.length} cảnh báo cần Reviewer xem xét.`,'info');
++                }
++                // An untouched OFF legacy record has no aggregate to validate; preserve that flow.
++                // OFF/ADVISORY findings do not become a client-only STRICT gate.
+                 await projectService.submitForReview(script.id);
+                 const fresh = await projectService.getProjectById(script.id);
+                 if (activeProject.current !== fresh.id) return;
+@@ -509,6 +573,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+                 showToast('Kịch bản đã được lưu và gửi vào hàng đợi thẩm định.', 'success');
+                 onSetReviewerMode('script');
+               } catch (error: any) {
++                setStemSubmitError(error);
+                 showToast(error.message || 'Không gửi được kịch bản. Vui lòng thử lại.', 'warn');
+               } finally {
+                 setIsSubmitting(false);
+@@ -551,7 +616,14 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+         </div>
+       )}
+ 
+-      <div className="studio-columns flex-1 min-h-0 flex overflow-hidden">
++      <StemErrorNotice error={stemSubmitError??stemTargetError} onReload={()=>window.location.reload()} onRetryReady={()=>setStemSubmitError(null)} />
++      <div hidden={activeStudioTab!=='STEM_BRIEF'} className="flex-1 min-h-0 bg-slate-50 p-6 overflow-y-auto">
++        {stemTarget&&<StemBriefPanel key={`${script.id}:${stemTarget.versionId}`} ref={stemPanel}
++          projectId={script.id} versionId={stemTarget.versionId}
++          scriptRevision={script.draftRevision??stemTarget.scriptRevision} scenes={script.scenes}
++          isWriter={canEdit} workspaceId={stemTarget.workspaceId} showToast={showToast} onEvidenceChange={onEvidenceChange}/>}
++      </div>
++      <div hidden={activeStudioTab!=='SCENES'} className={activeStudioTab==='SCENES'?'studio-columns flex-1 min-h-0 flex overflow-hidden':'hidden'}>
+         {/* Cột 1: Cấu trúc phân cảnh (Cho phép Thêm / Xóa / Đổi thứ tự) */}
+         <aside className="w-72 bg-white border-r border-slate-200 p-4 flex flex-col h-full min-h-0 overflow-hidden shrink-0">
+           <div className="flex items-center justify-between mb-2 text-xs">
+@@ -665,7 +737,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+                       <button
+                         onClick={(e) => {
+                           e.stopPropagation();
+-                          handleDeleteScene(sc.id);
++                          handleDeleteSceneWithStemCheck(sc.id);
+                         }}
+                         className="text-slate-300 hover:text-rose-600 p-0.5"
+                         title="Xóa cảnh"
+diff --git a/src/services/apiClient.ts b/src/services/apiClient.ts
+index 27084a5..9a572db 100644
+--- a/src/services/apiClient.ts
++++ b/src/services/apiClient.ts
+@@ -22,16 +22,26 @@ export class ApiError extends Error {
+   code: string;
+   status: number;
+   details?: any;
++  retryAfterSeconds?: number;
+ 
+-  constructor(message: string, code: string = 'UNKNOWN_ERROR', status: number = 500, details?: any) {
++  constructor(message: string, code: string = 'UNKNOWN_ERROR', status: number = 500, details?: any, retryAfterSeconds?: number) {
+     super(message);
+     this.name = 'ApiError';
+     this.code = code;
+     this.status = status;
+     this.details = details;
++    this.retryAfterSeconds = retryAfterSeconds;
+   }
+ }
+ 
++/** Retry-After supports delta seconds and HTTP dates. Invalid/missing headers stay unknown. */
++export function parseRetryAfter(value: string | null, now = Date.now()): number | undefined {
++  if (value === null || !value.trim()) return undefined;
++  if (/^-?\d+(\.\d+)?$/.test(value.trim()) && !/^\d+$/.test(value.trim())) return undefined;
++  const seconds = /^\d+$/.test(value.trim()) ? Number(value) : (Date.parse(value) - now) / 1000;
++  return Number.isFinite(seconds) ? Math.max(0, Math.ceil(seconds)) : undefined;
++}
++
+ const TOKEN_KEY = 'stemotion_access_token';
+ 
+ export const apiClient = {
+@@ -112,7 +122,8 @@ export const apiClient = {
+           json.error?.message || json.message || response.statusText || 'API Request Failed',
+           json.error?.code || json.code || `HTTP_${response.status}`,
+           response.status,
+-          json.error?.details ?? json.details
++          json.error?.details ?? json.details,
++          parseRetryAfter(response.headers?.get?.('Retry-After') ?? null)
+         );
+       }
+ 
+diff --git a/src/services/compositionService.ts b/src/services/compositionService.ts
+index 93fca43..8518d31 100644
+--- a/src/services/compositionService.ts
++++ b/src/services/compositionService.ts
+@@ -1,4 +1,4 @@
+-import { apiClient } from './apiClient';
++import { ApiError, apiClient } from './apiClient';
+ import { SAVE_DEBOUNCE_MS } from './sceneSaveQueue';
+ import type { SceneData } from '../types/stem';
+ 
+@@ -67,10 +67,12 @@ export function createCompositionSaver(
+   let chain: Promise<void> = Promise.resolve();
+   let disposed = false;
+   let saveError: unknown;
++  let cooldownUntil=0;
+ 
+   const flush = (): Promise<number> => {
+     if (timer) clearTimeout(timer);
+     timer = undefined;
++    if(cooldownUntil>Date.now())return Promise.reject(new ApiError('Autosave bản dựng tạm dừng.','FE_AUTOSAVE_PAUSED',429,undefined,Math.ceil((cooldownUntil-Date.now())/1000)));
+     const current = pending;
+     pending = null;
+     if (current) {
+@@ -86,6 +88,8 @@ export function createCompositionSaver(
+           if (!disposed) handlers.onSaved(saved);
+         } catch (error) {
+           saveError = error;
++          if(error instanceof ApiError&&error.status===429)cooldownUntil=Date.now()+1000*(error.retryAfterSeconds??error.details?.retryAfterSeconds??60);
++          if(!pending||pending.generation<current.generation)pending=current;
+           if (!disposed) handlers.onError(error);
+         }
+       });
+@@ -103,7 +107,7 @@ export function createCompositionSaver(
+       if (visualTheme !== undefined) latestTheme = visualTheme;
+       pending = { scenes, visualTheme: latestTheme, generation: ++generation };
+       if (timer) clearTimeout(timer);
+-      timer = setTimeout(() => { void flush().catch(() => {}); }, delayMs);
++      timer = setTimeout(() => { void flush().catch(() => {}); }, Math.max(delayMs,cooldownUntil-Date.now()));
+     },
+     flush,
+     isDirty: () => generation !== savedGeneration,
+diff --git a/src/services/reviewService.ts b/src/services/reviewService.ts
+index 226994e..9bf1ae4 100644
+--- a/src/services/reviewService.ts
++++ b/src/services/reviewService.ts
+@@ -1,5 +1,6 @@
++import { stemAssessmentPayload, stemChangePayload } from './stemClient';
+ import { apiClient } from './apiClient';
+-import { FeedbackComment, STEMScript } from '../types/stem';
++import { FeedbackComment, STEMScript, StemAssessment, StemChangeTarget } from '../types/stem';
+ import { projectService } from './projectService';
+ import type { CompositionSaver } from './compositionService';
+ 
+@@ -111,10 +112,22 @@ export const reviewService = {
+     return Array.isArray(res) ? res : [];
+   },
+ 
+-  async submitReviewDecision(projectId: string, decision: 'APPROVED' | 'CHANGE_REQUESTED',
+-    feedbackNote?: string): Promise<STEMScript> {
++  async submitReviewDecision(
++    projectId: string,
++    decision: 'APPROVED' | 'CHANGE_REQUESTED',
++    feedbackNote?: string,
++    stemAssessment?: StemAssessment,
++    changeTarget?: StemChangeTarget
++  ): Promise<STEMScript> {
+     const path = decision === 'APPROVED' ? 'approve' : 'request-changes';
+-    return apiClient.post<STEMScript>(`/scripts/${projectId}/${path}`, { note: feedbackNote });
++    const payload: Record<string, any> = { note: feedbackNote || undefined };
++    if (decision === 'APPROVED' && stemAssessment) {
++      payload.stemAssessment = stemAssessmentPayload(stemAssessment);
++    }
++    if (decision === 'CHANGE_REQUESTED' && changeTarget) {
++      payload.changeTarget = stemChangePayload(changeTarget);
++    }
++    return apiClient.post<STEMScript>(`/scripts/${projectId}/${path}`, payload);
+   },
+ 
+   async submitVideoForReview(projectId: string): Promise<STEMScript> {
+@@ -130,8 +143,11 @@ export const reviewService = {
+     return this.submitVideoForReview(projectId);
+   },
+ 
+-  async approveVideo(projectId: string): Promise<STEMScript> {
+-    await apiClient.post(`/scripts/${projectId}/approve-video`, {});
++  async approveVideo(projectId: string, note?: string, stemAssessment?: StemAssessment): Promise<STEMScript> {
++    const payload: Record<string, any> = {};
++    if (note) payload.note = note;
++    if (stemAssessment) payload.stemAssessment = stemAssessmentPayload(stemAssessment);
++    await apiClient.post(`/scripts/${projectId}/approve-video`, payload);
+     return projectService.getProjectById(projectId);
+   },
+ 
+diff --git a/src/services/sceneSaveQueue.ts b/src/services/sceneSaveQueue.ts
+index c2e64e6..a0fb822 100644
+--- a/src/services/sceneSaveQueue.ts
++++ b/src/services/sceneSaveQueue.ts
+@@ -1,4 +1,4 @@
+-import { apiClient } from './apiClient';
++import { ApiError, apiClient } from './apiClient';
+ import { SceneData, STEMScript } from '../types/stem';
+ 
+ /**
+@@ -35,6 +35,11 @@ const listeners = new Set<(event: SaveEvent) => void>();
+ const resolveId = (scriptId: string, id: string): string => identities.get(scriptId)?.get(id) ?? id;
+ const notify = (event: SaveEvent) => listeners.forEach(listener => listener(event));
+ 
++const cooldownUntil=new Map<string,number>();
++const rateLimitError=(scriptId:string):ApiError|undefined=>{
++  const seconds=Math.ceil(((cooldownUntil.get(scriptId)??0)-Date.now())/1000);
++  return seconds>0?new ApiError('Autosave tạm dừng do giới hạn tần suất.','FE_AUTOSAVE_PAUSED',429,undefined,seconds):undefined;
++};
+ const chains = new Map<string, Promise<unknown>>();
+ 
+ /** Runs the PUT after every earlier save for the same script has settled. */
+@@ -47,6 +52,7 @@ const enqueue = (scriptId: string, scenes: SceneData[]): Promise<STEMScript> =>
+   const next = previous
+     .catch(() => undefined)
+     .then(async () => {
++      const paused=rateLimitError(scriptId);if(paused)throw paused;
+       const submitted = scenes.map(scene => ({ ...scene, id: resolveId(scriptId, scene.id) }));
+       const baseRevision = draftRevisions.get(scriptId);
+       const payload: { scenes: SceneData[]; baseRevision?: number } = { scenes: submitted };
+@@ -78,6 +84,7 @@ const enqueue = (scriptId: string, scenes: SceneData[]): Promise<STEMScript> =>
+       });
+       return saved;
+     }).catch(error => {
++      if((error as ApiError)?.status===429)cooldownUntil.set(scriptId,Date.now()+1000*((error as ApiError).retryAfterSeconds??(error as ApiError).details?.retryAfterSeconds??60));
+       if (generations.get(scriptId) === generation) lastErrors.set(scriptId, error);
+       notify({ scriptId, error });
+       throw error;
+@@ -140,7 +147,7 @@ export const sceneSaveQueue = {
+             console.warn('[sceneSaveQueue] Save failed, keeping the local edit:', error)
+           );
+         }
+-      }, SAVE_DEBOUNCE_MS)
++      }, Math.max(SAVE_DEBOUNCE_MS,(cooldownUntil.get(scriptId)??0)-Date.now()))
+     );
+   },
+ 
+diff --git a/src/services/scriptService.ts b/src/services/scriptService.ts
+index 5cce425..a455ca4 100644
+--- a/src/services/scriptService.ts
++++ b/src/services/scriptService.ts
+@@ -3,8 +3,9 @@
+  * Handles AI generation and scene mutations
+  */
+ 
+-import { apiClient } from './apiClient';
+-import { STEMScript, STEMSubject, SceneData, SceneType } from '../types/stem';
++import { apiClient, ApiError } from './apiClient';
++import { stemSavePayload, checkStemPayload, workspaceModeFromWire } from './stemClient';
++import { STEMScript, STEMSubject, SceneData, SceneType, StemBrief, StemCreateRequest, StemSaveRequest, StemValidateRequest, StemViewResponse, WorkspaceStemSettings, WorkspaceStemSettingsWire, WorkspaceStemSettingsRequest, StemTarget, CatalogVersionEntry } from '../types/stem';
+ import { sceneSaveQueue } from './sceneSaveQueue';
+ import { ComposedContentError, composedPropsFrom } from './composed';
+ 
+@@ -618,4 +619,52 @@ const res = await apiClient.post<any>('/ai/script/action', {
+ 
+     return sceneSaveQueue.saveNow(currentScript.id, filtered);
+   },
++
++  // ==========================================
++  // STEM Track API Methods (Contract Delta P3)
++  // ==========================================
++
++  async getStemBrief(projectId: string, versionId: string): Promise<StemViewResponse> {
++    return apiClient.get<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem`);
++  },
++
++  async createStemBrief(projectId: string, versionId: string, req: StemCreateRequest): Promise<StemViewResponse> {
++    return apiClient.post<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem`, {schemaVersion:req.schemaVersion,expectedScriptRevision:req.expectedScriptRevision,idempotencyKey:req.idempotencyKey});
++  },
++
++  async saveStemBrief(projectId: string, versionId: string, req: StemSaveRequest): Promise<StemViewResponse> {
++    const payload=stemSavePayload(req);checkStemPayload(payload);
++    return apiClient.put<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem`, payload);
++  },
++
++  async validateStem(projectId: string, versionId: string, req: StemValidateRequest): Promise<StemViewResponse> {
++    return apiClient.post<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem/validate`, {expectedBriefRevision:req.expectedBriefRevision,expectedScriptRevision:req.expectedScriptRevision,phase:req.phase,expectedCompositionRevision:req.expectedCompositionRevision??null});
++  },
++
++  async getWorkspaceStemSettings(workspaceId: string): Promise<WorkspaceStemSettings> {
++    return workspaceModeFromWire(await apiClient.get<WorkspaceStemSettingsWire>(`/workspaces/${workspaceId}/stem-settings`));
++  },
++
++  async saveWorkspaceStemSettings(workspaceId: string, request: WorkspaceStemSettingsRequest): Promise<WorkspaceStemSettings> {
++    // Approved G06 alias: SAME workspace counter, never a brief/script revision.
++    const {modeRevision,mode,policyVersionIds,defaultPolicyVersionId,idempotencyKey,legacyModeSelection}=request;
++    const payload={baseRevision:modeRevision,mode,policyVersionIds:[...policyVersionIds],defaultPolicyVersionId:defaultPolicyVersionId??null,idempotencyKey,legacyModeSelection:legacyModeSelection??null};
++    return workspaceModeFromWire(await apiClient.put<WorkspaceStemSettingsWire>(`/workspaces/${workspaceId}/stem-settings`,payload));
++  },
++
++  async getStemTarget(projectId: string): Promise<StemTarget> {
++    const meta=await apiClient.get<STEMScript>(`/scripts/${projectId}`);
++    const history=await apiClient.get<Array<{id:string;versionNo:number;isCurrent:boolean}>>(`/scripts/${projectId}/versions`);
++    const selected=Array.isArray(history)?history.filter(v=>v.isCurrent===true):[];
++    if(selected.length!==1||!selected[0].id||!meta.workspaceId||!Number.isInteger(meta.draftRevision))throw new ApiError('Không xác định được đúng phiên bản script hiện tại.','FE_STEM_TARGET',409);
++    return {versionId:selected[0].id,scriptRevision:meta.draftRevision!,versionNo:selected[0].versionNo,workspaceId:meta.workspaceId};
++  },
++
++  async getCatalog(kind?: string, page = 0, size = 20): Promise<CatalogVersionEntry[]> {
++    const params = new URLSearchParams();
++    if (kind) params.append('kind', kind);
++    params.append('page', String(page));
++    params.append('size', String(size));
++    return apiClient.get<CatalogVersionEntry[]>(`/stem/catalog?${params.toString()}`);
++  },
+ };
+diff --git a/src/types/stem.ts b/src/types/stem.ts
+index 8440ec6..7b11f40 100644
+--- a/src/types/stem.ts
++++ b/src/types/stem.ts
+@@ -328,6 +328,8 @@ export interface STEMScript {
+   draftRevision?: number;
+   reviewComments?: FeedbackComment[];
+   version?: string;
++  /** Read-only backend version number; never a ScriptVersion UUID. */
++  currentVersionNo?: number;
+   reviewNote?: string;
+   estimatedDurationSeconds?: number;
+   targetAudience?: string;
+@@ -374,3 +376,189 @@ export interface Workspace {
+   myRole?: WorkspaceRole;
+   isLeader?: boolean;
+ }
++
++
++// ==========================================
++// STEM Track - Phase 4 Studio & Reviewer Types
++// Aligned with CONTRACT_DELTA.md (P3)
++// ==========================================
++
++export interface ContextEntry {
++  key: 'IN_CLASS_SCREEN' | 'GROUP_PRACTICE';
++  condition?: string | null;
++  adaptations?: string | null;
++}
++
++export interface UsageContext {
++  primary: ContextEntry | null;
++  secondary: ContextEntry[];
++}
++
++export interface StemObjective {
++  key: string;
++  outcomeId?: string | null;
++  learnerAction?: string | null;
++  observableEvidence?: string | null;
++}
++
++export interface StudentTask {
++  key: string;
++  learnerAction?: string | null;
++  teacherSupport?: string | null;
++  materials?: string | null;
++  safety?: string | null;
++  assessmentEvidence?: string | null;
++  executionContextKey?: string | null;
++}
++
++export interface StemContribution {
++  component: 'S' | 'T' | 'E' | 'M';
++  explanation?: string | null;
++  objectiveKeys: string[];
++  taskKeys: string[];
++}
++
++export interface StemEvidence {
++  id?: string | null;
++  sceneId?: string | null;
++  taskKey?: string | null;
++  objectiveKey?: string | null;
++  component: 'S' | 'T' | 'E' | 'M';
++  explanation?: string | null;
++}
++
++export interface StemValidationFinding {
++  ruleId: string;
++  field: string;
++  severity: 'ERROR' | 'WARN' | 'INFO' | string;
++  message: string;
++  basis?: string;
++}
++
++export interface LegacySuggestion {
++  primaryKey?: string | null;
++  channelKeys: string[];
++  requiresConfirmation: boolean;
++  reason: string;
++}
++
++export interface StemBrief {
++  policyVersionId?: string | null;
++  topicVersionId?: string | null;
++  gradeKey?: string | null;
++  subjectKeys: string[];
++  outcomeIds: string[];
++  scopeOfClip?: string | null;
++  context: UsageContext;
++  distributionChannels: string[];
++  objectives: StemObjective[];
++  studentTasks: StudentTask[];
++  contributions: StemContribution[];
++  safetyNotes?: string | null;
++  rawLegacy?: string | null;
++}
++
++export interface StemCreateRequest {
++  schemaVersion: 'stem.v1';
++  expectedScriptRevision: number;
++  idempotencyKey: string;
++}
++
++export interface StemSaveRequest {
++  schemaVersion: 'stem.v1';
++  baseRevision: number;
++  expectedScriptRevision: number;
++  idempotencyKey: string;
++  brief: StemBrief;
++  evidence: StemEvidence[];
++}
++
++export interface StemValidateRequest {
++  expectedBriefRevision: number;
++  expectedScriptRevision: number;
++  phase: 'SCRIPT' | 'VIDEO';
++  expectedCompositionRevision?: number | null;
++}
++
++export interface StemChangeTarget {
++  expectedVersionId: string;
++  expectedScriptRevision: number;
++  expectedBriefRevision: number;
++  idempotencyKey: string;
++}
++
++export interface StemCriterion {
++  key: string;
++  judgment: 'ADEQUATE' | 'NEEDS_CHANGES' | 'NOT_ASSESSED' | 'NOT_APPLICABLE';
++  rationale: string;
++  evidenceIds: string[];
++}
++
++export interface StemAssessment {
++  expectedBriefRevision: number;
++  expectedScriptRevision: number;
++  expectedCompositionRevision?: number | null;
++  expectedModeRevision: number;
++  rubricVersionId?: string | null;
++  criteria: StemCriterion[];
++  idempotencyKey: string;
++}
++
++export interface StemViewResponse {
++  schemaVersion: string;
++  briefId?: string | null;
++  scriptVersionId: string;
++  revision: number;
++  verificationStatus: 'UNVERIFIED' | string;
++  readiness: 'INCOMPLETE' | 'READY_FOR_REVIEW' | 'NEEDS_REVIEW' | 'LEGACY_UNMAPPED' | string;
++  effectiveMode: 'OFF' | 'ADVISORY' | string;
++  modeRevision: number;
++  brief: StemBrief | null;
++  evidence: StemEvidence[];
++  findings: StemValidationFinding[];
++  legacySuggestion?: LegacySuggestion | null;
++}
++
++/** Client name deliberately distinguishes workspace mode CAS from a brief revision. */
++export interface WorkspaceStemSettings {
++  workspaceId: string;
++  modeRevision: number;
++  mode: 'OFF' | 'ADVISORY';
++  policyVersionIds: string[];
++  defaultPolicyVersionId: string | null;
++}
++export interface WorkspaceStemSettingsRequest {
++  modeRevision: number;
++  mode: 'OFF' | 'ADVISORY';
++  policyVersionIds: string[];
++  defaultPolicyVersionId?: string | null;
++  idempotencyKey: string;
++  legacyModeSelection?: 'OFF' | 'ADVISORY' | null;
++}
++/** Exact P3 wire response. Do not confuse revision with brief/script revision. */
++export interface WorkspaceStemSettingsWire {
++  workspaceId: string;
++  revision: number;
++  mode: 'OFF' | 'ADVISORY';
++  policyIds: string[];
++  defaultPolicyId: string | null;
++}
++export interface StemTarget {
++  versionId: string;
++  scriptRevision: number;
++  workspaceId: string;
++  versionNo: number;
++}
++
++export interface CatalogVersionEntry {
++  id: string;
++  kind: 'TOPIC' | 'TOPIC_VERSION' | 'SOURCE_EDITION' | 'OUTCOME' | 'PROFILE' | 'POLICY' | 'RUBRIC' | string;
++  logicalKey: string;
++  version: number;
++  parentId?: string | null;
++  sourceId?: string | null;
++  status: 'DRAFT' | string;
++  data: Record<string, any>;
++  revision: number;
++  verificationStatus: 'UNVERIFIED' | string;
++}
+diff --git a/src/components/stem/StemBriefPanel.tsx b/src/components/stem/StemBriefPanel.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/stem/StemBriefPanel.tsx
+@@ -0,0 +1,642 @@
++import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
++import {
++  BookOpen,
++  Compass,
++  Target,
++  FileCheck2,
++  AlertTriangle,
++  Info,
++  Save,
++  RefreshCw,
++  Plus,
++  Trash2,
++  Clock,
++  Sparkles,
++  ShieldAlert,
++  HelpCircle,
++  CheckCircle2,
++} from 'lucide-react';
++import {
++  StemBrief,
++  StemEvidence,
++  StemValidationFinding,
++  StemViewResponse,
++  SceneData,
++  LegacySuggestion,
++  UsageContext,
++  ContextEntry,
++} from '../../types/stem';
++import { scriptService } from '../../services/scriptService';
++import { sceneSaveQueue } from '../../services/sceneSaveQueue';
++import { emptyStemBrief, stemMutationKey, stemError } from '../../services/stemClient';
++import { StemWorkspaceSettings } from './StemWorkspaceSettings';
++import { StemErrorNotice } from './StemErrorNotice';
++import { StemLearningFields, StemCatalogFields } from './StemLearningFields';
++
++export interface StemBriefPanelProps {
++  projectId: string;
++  versionId: string;
++  scriptRevision: number;
++  scenes: SceneData[];
++  isWriter: boolean;
++  workspaceId: string;
++  effectiveMode?: string;
++  onEvidenceChange?: (evidence: StemEvidence[]) => void;
++  onBriefSaved?: (brief: StemBrief) => void;
++  showToast: (message: string, type?: 'success' | 'info' | 'warn') => void;
++}
++
++const PRIMARY_CONTEXT_OPTIONS: { key: 'IN_CLASS_SCREEN' | 'GROUP_PRACTICE'; label: string; desc: string }[] = [
++  { key: 'IN_CLASS_SCREEN', label: 'Chiếu chung trong lớp (IN_CLASS_SCREEN)', desc: 'Chiếu trên màn hình lớp học, có điểm dừng thảo luận' },
++  { key: 'GROUP_PRACTICE', label: 'Thực hành nhóm (GROUP_PRACTICE)', desc: 'Học sinh thực hành theo nhóm, có đo lường và vật liệu' },
++];
++
++export interface StemBriefHandle { assertSubmitReady: () => void; saveForSubmit: () => Promise<StemViewResponse>; }
++
++export const StemBriefPanel = forwardRef<StemBriefHandle, StemBriefPanelProps>(({projectId,versionId,scriptRevision,scenes,isWriter,workspaceId,effectiveMode='ADVISORY',onBriefSaved,onEvidenceChange,showToast},ref) => {
++  const [activeTab,setActiveTab]=useState<'OVERVIEW'|'CONTEXT'|'OBJECTIVES'|'EVIDENCE'>('OVERVIEW');
++  const [brief,setBrief]=useState<StemBrief>(emptyStemBrief);
++  const [evidence,setEvidence]=useState<StemEvidence[]>([]);
++  const [findings,setFindings]=useState<StemValidationFinding[]>([]);
++  const [revision,setRevision]=useState(0);
++  const [readiness,setReadiness]=useState('INCOMPLETE');
++  const [currentMode,setCurrentMode]=useState(effectiveMode);
++  const [legacySuggestion,setLegacySuggestion]=useState<LegacySuggestion|null>(null);
++  const [isLoading,setIsLoading]=useState(true);
++  const [isSaving,setIsSaving]=useState(false);
++  const [isValidating,setIsValidating]=useState(false);
++  const [error,setError]=useState<unknown>(null);
++  const [rateLimitCountdown,setRateLimitCountdown]=useState<number|null>(null);
++  const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
++  const [dirty,setDirty]=useState(false);
++  const [legacyPending,setLegacyPending]=useState(false);
++  const root=useRef<HTMLDivElement>(null);
++  const loaded=useRef(false);
++  const exists=useRef(false);
++  const saving=useRef<Promise<StemViewResponse>|null>(null);
++  const snapshot=useRef('');
++  const generation=useRef(0);
++  const alive=useRef(true);
++  const epoch=useRef(0);
++  const latest=useRef({brief,evidence,revision,scriptRevision});latest.current={brief,evidence,revision,scriptRevision};
++  const mutation=useRef<{body:string;key:string}|null>(null);
++  const keyFor=(body:unknown)=>{const text=JSON.stringify(body);if(mutation.current?.body!==text)mutation.current={body:text,key:stemMutationKey()};return mutation.current.key;};
++  useEffect(()=>{alive.current=true;return()=>{alive.current=false;epoch.current++;};},[]);
++  const fail=(err:unknown)=>{
++    if(!alive.current)return;
++    const parsed=stemError(err);setError(err);
++    if(parsed.status===429)setRateLimitCountdown(parsed.retryAfterSeconds);
++    if(parsed.status===400)setFieldErrors({[parsed.field??'request']:parsed.message});
++  };
++  const loadBrief=useCallback(async()=>{
++    const request=++epoch.current;loaded.current=false;setIsLoading(true);setError(null);setDirty(false);
++    try {
++      const view=await scriptService.getStemBrief(projectId,versionId);
++      if(!alive.current||request!==epoch.current)return;
++      const next=view.brief??emptyStemBrief();exists.current=Boolean(view.briefId);
++      snapshot.current=JSON.stringify([next,view.evidence]);
++      setBrief(next);setEvidence(view.evidence);setRevision(view.revision);setReadiness(view.readiness);
++      setFindings(view.findings);setCurrentMode(view.effectiveMode);setLegacySuggestion(view.legacySuggestion??null);
++      setFieldErrors({});mutation.current=null;setRateLimitCountdown(null);loaded.current=true;
++    }catch(err){if(request===epoch.current)fail(err);}finally{if(alive.current&&request===epoch.current)setIsLoading(false);}
++  },[projectId,versionId]);
++  useEffect(()=>{void loadBrief();},[loadBrief]);
++  useEffect(()=>{onEvidenceChange?.(evidence);},[evidence,onEvidenceChange]);
++  useEffect(()=>{
++    const text=JSON.stringify([brief,evidence]);
++    if(loaded.current&&text!==snapshot.current){snapshot.current=text;generation.current++;setDirty(true);}
++  },[brief,evidence]);
++  useEffect(()=>{if(rateLimitCountdown===null||rateLimitCountdown<=0)return;const timer=setTimeout(()=>setRateLimitCountdown(n=>n===null?null:Math.max(0,n-1)),1000);return()=>clearTimeout(timer);},[rateLimitCountdown]);
++
++  const persist=async():Promise<StemViewResponse>=>{
++    if(saving.current)return saving.current;
++    if(!isWriter||!loaded.current||error||rateLimitCountdown!==null)throw new Error('Hãy xử lý lỗi/tải lại hoặc tiếp tục sửa trước khi lưu.');
++    const sentGeneration=generation.current;const requestEpoch=epoch.current;
++    setIsSaving(true);setFieldErrors({});
++    const task=(async()=>{
++      await sceneSaveQueue.flush(projectId);
++      const state=latest.current;
++      const expectedScriptRevision=sceneSaveQueue.getDraftRevision(projectId)??state.scriptRevision;
++      let baseRevision=state.revision;
++      if(!exists.current){
++        const created=await scriptService.createStemBrief(projectId,versionId,{schemaVersion:'stem.v1',expectedScriptRevision,idempotencyKey:keyFor({create:true,expectedScriptRevision})});
++        exists.current=true;baseRevision=created.revision;latest.current.revision=baseRevision;
++        if(alive.current&&requestEpoch===epoch.current)setRevision(baseRevision);
++      }
++      const payload={schemaVersion:'stem.v1' as const,baseRevision,expectedScriptRevision,brief:state.brief,evidence:state.evidence.map(e=>({...e,sceneId:e.sceneId?sceneSaveQueue.resolveId(projectId,e.sceneId):null}))};
++      const result=await scriptService.saveStemBrief(projectId,versionId,{...payload,idempotencyKey:keyFor(payload)});
++      if(!alive.current||requestEpoch!==epoch.current)return result;
++      latest.current.revision=result.revision;setRevision(result.revision);setFindings(result.findings);setReadiness(result.readiness);setCurrentMode(result.effectiveMode);
++      if(generation.current===sentGeneration){
++        snapshot.current=JSON.stringify([result.brief??state.brief,result.evidence]);
++        setBrief(result.brief??state.brief);setEvidence(result.evidence);setDirty(false);
++      } else {
++        // Evidence editing is locked while saving; response order is not assumed to match request order.
++        setEvidence(result.evidence);
++      }
++      onBriefSaved?.(result.brief??state.brief);return result;
++    })();saving.current=task;
++    try{return await task;}catch(err){fail(err);throw err;}finally{saving.current=null;if(alive.current)setIsSaving(false);}
++  };
++  const assertSubmitReady=()=>{
++    if(!loaded.current)throw new Error('Hồ sơ STEM chưa tải xong.');
++    if(legacyPending)throw new Error('Gợi ý legacy mới ở form; hãy bấm Lưu hồ sơ để xác nhận.');
++    if(error||rateLimitCountdown!==null)throw new Error('Hồ sơ STEM đang có lỗi chưa xử lý.');
++  };
++  useImperativeHandle(ref,()=>({assertSubmitReady,saveForSubmit:async()=>{
++    assertSubmitReady();
++    // OFF legacy without a brief is never silently converted just by submitting.
++    if(!dirty&&!exists.current&&currentMode==='OFF')return scriptService.getStemBrief(projectId,versionId);
++    let saved:StemViewResponse;
++    for(let attempt=0;attempt<3;attempt++){
++      const sent=generation.current;saved=await persist();
++      if(generation.current===sent)return saved;
++    }
++    throw new Error('Còn thay đổi đang lưu; hãy kiểm tra và gửi lại.');
++  }}));
++  const handleSaveBrief=()=>{setLegacyPending(false);void persist().then(()=>showToast('Đã lưu dự thảo STEM.','success')).catch(()=>{});};
++  useEffect(()=>{
++    if(legacyPending||!dirty||!loaded.current||!isWriter||isSaving||error||rateLimitCountdown!==null)return;
++    const timer=setTimeout(()=>{void persist().catch(()=>{});},900);return()=>clearTimeout(timer);
++  },[brief,evidence,dirty,isSaving,error,rateLimitCountdown,isWriter,legacyPending]);
++  const handleValidate=async()=>{
++    if(isValidating||error||rateLimitCountdown!==null||!loaded.current)return;
++    setIsValidating(true);
++    try{const saved=dirty?await persist():await scriptService.getStemBrief(projectId,versionId);
++      const result=await scriptService.validateStem(projectId,versionId,{expectedBriefRevision:saved.revision,expectedScriptRevision:sceneSaveQueue.getDraftRevision(projectId)??scriptRevision,phase:'SCRIPT'});
++      setFindings(result.findings);setReadiness(result.readiness);
++    }catch(err){fail(err);}finally{setIsValidating(false);}
++  };
++  const handleAcceptLegacy=()=>{
++    if(!legacySuggestion)return;
++    setLegacyPending(true);
++    const key=legacySuggestion.primaryKey;
++    setBrief(b=>({...b,context:{...b.context,primary:key==='IN_CLASS_SCREEN'||key==='GROUP_PRACTICE'?{key,condition:'Xác nhận dữ liệu kế thừa'}:b.context.primary},distributionChannels:Array.from(new Set([...b.distributionChannels,...legacySuggestion.channelKeys.filter(c=>c==='DEPARTMENT_LIBRARY')]))}));
++    // Raw legacy is retained. Only a subsequent CAS save persists this explicit choice.
++    setLegacySuggestion(null);
++  };
++  const handleAddEvidence=()=>{if(evidence.length<200)setEvidence([...evidence,{sceneId:scenes[0]?.id??null,taskKey:null,objectiveKey:null,component:'S',explanation:''}]);};
++  const handleUpdateEvidence=(index:number,patch:Partial<StemEvidence>)=>setEvidence(current=>current.map((e,i)=>i===index?{...e,...patch}:e));
++  const handleRemoveEvidence=(index:number)=>setEvidence(current=>current.filter((_,i)=>i!==index));
++  useEffect(()=>{
++    const normalize=(field:string)=>field.replace(/^brief\./,'').replace(/\[\d+\]/g,'');
++    const aliases:Record<string,string>={'catalog.POLICY':'policyVersionId','catalog.TOPIC_VERSION':'topicVersionId','catalog.OUTCOME':'outcomeIds'};
++    root.current?.querySelectorAll<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>('[name]').forEach(control=>{
++      const name=normalize(control.name);
++      const field=Object.keys(fieldErrors).find(raw=>{
++        const f=aliases[raw]??normalize(raw);
++        return raw==='brief'||name===f||name.startsWith(f+'.')||f.startsWith(name+'.');
++      });
++      control.setAttribute('aria-invalid',String(Boolean(field)));
++      control.classList.toggle('ring-2',Boolean(field));control.classList.toggle('ring-rose-400',Boolean(field));
++      if(field)control.title=fieldErrors[field];
++    });
++  },[fieldErrors,activeTab,brief.objectives.length,brief.studentTasks.length,evidence.length]);
++
++  // Context Management
++  const handleAddSecondaryContext = () => {
++    if (brief.context.secondary.length >= 4) {
++      showToast('Tối đa 4 bối cảnh phụ', 'warn');
++      return;
++    }
++    const newEntry: ContextEntry = {
++      key: 'GROUP_PRACTICE',
++      condition: '',
++      adaptations: '',
++    };
++    setBrief({
++      ...brief,
++      context: {
++        ...brief.context,
++        secondary: [...brief.context.secondary, newEntry],
++      },
++    });
++  };
++
++  const handleUpdateSecondaryContext = (index: number, patch: Partial<ContextEntry>) => {
++    const nextSecondary = [...brief.context.secondary];
++    nextSecondary[index] = { ...nextSecondary[index], ...patch };
++    setBrief({
++      ...brief,
++      context: {
++        ...brief.context,
++        secondary: nextSecondary,
++      },
++    });
++  };
++
++  const handleRemoveSecondaryContext = (index: number) => {
++    setBrief({
++      ...brief,
++      context: {
++        ...brief.context,
++        secondary: brief.context.secondary.filter((_, i) => i !== index),
++      },
++    });
++  };
++
++  return (
++    <div ref={root} className="flex flex-col h-full bg-white border-l border-slate-200 text-xs text-slate-800">
++      {/* Top Header Bar */}
++      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
++        <div className="flex items-center gap-2">
++          <BookOpen className="w-4 h-4 text-indigo-600" />
++          <h2 className="font-bold text-slate-900 text-sm">Hồ sơ STEM (DRAFT / UNVERIFIED)</h2>
++          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800">
++            DRAFT
++          </span>
++        </div>
++        <div className="flex items-center gap-2">
++          <span className="text-[11px] text-slate-500">
++            Chế độ: <strong className="text-slate-700">{currentMode}</strong>
++          </span>
++          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
++            readiness === 'INCOMPLETE' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
++            readiness === 'READY_FOR_REVIEW' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
++            'bg-slate-100 text-slate-600'
++          }`}>
++            {readiness}
++          </span>
++        </div>
++      </div>
++
++      {/* Legacy Suggestion Banner */}
++      {legacySuggestion && (
++        <div className="p-3 bg-indigo-50 border-b border-indigo-100 flex items-start justify-between gap-3">
++          <div className="flex items-start gap-2">
++            <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
++            <div>
++              <p className="text-[11px] font-semibold text-indigo-900">Gợi ý chuyển đổi dữ liệu kế thừa</p>
++              <p className="text-[10px] text-indigo-700">{legacySuggestion.reason}</p>
++              {legacySuggestion.primaryKey && (
++                <p className="text-[10px] text-indigo-800 mt-1">
++                  Bối cảnh đề xuất: <strong>{legacySuggestion.primaryKey}</strong>
++                </p>
++              )}
++            </div>
++          </div>
++          {isWriter && (
++            <button
++              onClick={handleAcceptLegacy}
++              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-[10px] shrink-0"
++            >
++              Áp dụng gợi ý vào form (chưa lưu)
++            </button>
++          )}
++        </div>
++      )}
++
++      <StemErrorNotice error={error} onReload={()=>void loadBrief()} onRetryReady={()=>{setRateLimitCountdown(null);setError(null);setDirty(false);}} />
++      {isLoading&&<p role="status">Đang tải hồ sơ STEM…</p>}
++      {Object.entries(fieldErrors).map(([field,message])=><p role="alert" key={field}>{field}: {message}</p>)}
++      <StemWorkspaceSettings workspaceId={workspaceId}/>
++      <fieldset disabled={!isWriter||isLoading||!loaded.current} className="contents">
++      {/* Navigation Tabs */}
++      <div className="flex border-b border-slate-200 bg-slate-100/60 px-2 pt-2 gap-1">
++        <button
++          onClick={() => setActiveTab('OVERVIEW')}
++          className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-t border-t border-x text-xs ${
++            activeTab === 'OVERVIEW'
++              ? 'bg-white border-slate-200 text-indigo-600 border-b-transparent shadow-xs'
++              : 'border-transparent text-slate-600 hover:text-slate-900'
++          }`}
++        >
++          <BookOpen className="w-3.5 h-3.5" /> Tổng quan
++        </button>
++        <button
++          onClick={() => setActiveTab('CONTEXT')}
++          className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-t border-t border-x text-xs ${
++            activeTab === 'CONTEXT'
++              ? 'bg-white border-slate-200 text-indigo-600 border-b-transparent shadow-xs'
++              : 'border-transparent text-slate-600 hover:text-slate-900'
++          }`}
++        >
++          <Compass className="w-3.5 h-3.5" /> Bối cảnh
++        </button>
++        <button
++          onClick={() => setActiveTab('OBJECTIVES')}
++          className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-t border-t border-x text-xs ${
++            activeTab === 'OBJECTIVES'
++              ? 'bg-white border-slate-200 text-indigo-600 border-b-transparent shadow-xs'
++              : 'border-transparent text-slate-600 hover:text-slate-900'
++          }`}
++        >
++          <Target className="w-3.5 h-3.5" /> Mục tiêu & Nhiệm vụ
++        </button>
++        <button
++          onClick={() => setActiveTab('EVIDENCE')}
++          className={`flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-t border-t border-x text-xs ${
++            activeTab === 'EVIDENCE'
++              ? 'bg-white border-slate-200 text-indigo-600 border-b-transparent shadow-xs'
++              : 'border-transparent text-slate-600 hover:text-slate-900'
++          }`}
++        >
++          <FileCheck2 className="w-3.5 h-3.5" /> Minh chứng STEM
++        </button>
++      </div>
++
++      {/* Main Tab Content */}
++      <div className="flex-1 overflow-y-auto p-4 space-y-4">
++        {activeTab === 'OVERVIEW' && (
++          <div className="space-y-4">
++            <StemCatalogFields brief={brief} onChange={setBrief} workspaceId={workspaceId} />
++            <div>
++              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
++                Phạm vi bài giảng trong clip
++              </label>
++              <textarea
++                name="brief.scopeOfClip" aria-label="Phạm vi clip" aria-invalid={Boolean(fieldErrors['brief.scopeOfClip']||fieldErrors['scopeOfClip'])} value={brief.scopeOfClip || ''}
++                onChange={(e) => setBrief({ ...brief, scopeOfClip: e.target.value.slice(0, 4000) })}
++                disabled={!isWriter}
++                rows={3}
++                placeholder="Mô tả phạm vi nội dung clip bao phủ (tối đa 4000 ký tự)..."
++                className={`w-full p-2 text-xs border rounded focus:ring-1 focus:ring-indigo-500 ${
++                  fieldErrors['scopeOfClip'] ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
++                }`}
++              />
++              {fieldErrors['scopeOfClip'] && (
++                <p className="text-[10px] text-rose-600 mt-0.5">{fieldErrors['scopeOfClip']}</p>
++              )}
++            </div>
++
++            <div>
++              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
++                Lưu ý an toàn thực hành (Safety Notes)
++              </label>
++              <textarea
++                name="brief.safetyNotes" aria-label="Lưu ý an toàn" aria-invalid={Boolean(fieldErrors['brief.safetyNotes']||fieldErrors['safetyNotes'])} value={brief.safetyNotes || ''}
++                onChange={(e) => setBrief({ ...brief, safetyNotes: e.target.value.slice(0, 4000) })}
++                disabled={!isWriter}
++                rows={2}
++                placeholder="Lưu ý an toàn khi học sinh thực hành hoặc cảnh báo rủi ro..."
++                className="w-full p-2 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500"
++              />
++            </div>
++
++            {/* Validation Findings Box */}
++            <div className="mt-4 p-3 rounded-lg bg-slate-50 border border-slate-200">
++              <h3 className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
++                <ShieldAlert className="w-3.5 h-3.5 text-indigo-600" /> Cảnh báo quy tắc (Findings)
++              </h3>
++              {findings.length === 0 ? (
++                <p className="text-[11px] text-emerald-600 flex items-center gap-1">
++                  <CheckCircle2 className="w-3.5 h-3.5" /> Chưa có finding trả về; không đồng nghĩa đã thẩm định.
++                </p>
++              ) : (
++                <ul className="space-y-1.5">
++                  {findings.map((f, i) => (
++                    <li
++                      key={i}
++                      className={`p-2 rounded text-[11px] flex items-start gap-1.5 ${
++                        false /* OFF/ADVISORY findings stay advisory */
++                          ? 'bg-rose-50 text-rose-800 border border-rose-200'
++                          : 'bg-amber-50 text-amber-800 border border-amber-200'
++                      }`}
++                    >
++                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
++                      <div>
++                        <span className="font-semibold">[{f.ruleId}]</span> {f.message}
++                        {f.field && <span className="text-[10px] text-slate-500 block">Vị trí: {f.field}</span>}
++                      </div>
++                    </li>
++                  ))}
++                </ul>
++              )}
++            </div>
++          </div>
++        )}
++
++        {activeTab === 'CONTEXT' && (
++          <div className="space-y-4">
++            {/* Primary Learning Context */}
++            <div>
++              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
++                Bối cảnh học tập chính (Primary Context)
++              </label>
++              <select
++                aria-label="Bối cảnh học tập chính" name="brief.context.primary" value={brief.context.primary?.key || ''}
++                onChange={(e) => {
++                  const val = e.target.value as ContextEntry['key'] | '';
++                  setBrief({
++                    ...brief,
++                    context: {
++                      ...brief.context,
++                      primary: val ? { key: val, condition: '' } : null,
++                    },
++                  });
++                }}
++                disabled={!isWriter}
++                className="w-full p-2 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 bg-white"
++              >
++                <option value="">-- Chưa chọn (Draft Null) --</option>
++                {PRIMARY_CONTEXT_OPTIONS.map((opt) => (
++                  <option key={opt.key} value={opt.key}>
++                    {opt.label}
++                  </option>
++                ))}
++              </select>
++              <p className="text-[10px] text-slate-500 mt-1">
++                * Ở trạng thái Draft, bối cảnh chính có thể để trống. OFF/ADVISORY hiển thị cảnh báo khi nộp duyệt; BE quyết định cuối cùng.
++              </p>
++            </div>
++
++            {/* Distribution Channels */}
++            <div>
++              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
++                Kênh phân phối / Lưu trữ (Distribution Channels)
++              </label>
++              <div className="flex items-center gap-2">
++                <input
++                  type="checkbox"
++                  id="chan_dept" name="brief.distributionChannels"
++                  checked={brief.distributionChannels.includes('DEPARTMENT_LIBRARY')}
++                  onChange={(e) => {
++                    const next = e.target.checked
++                      ? Array.from(new Set([...brief.distributionChannels, 'DEPARTMENT_LIBRARY']))
++                      : brief.distributionChannels.filter((c) => c !== 'DEPARTMENT_LIBRARY');
++                    setBrief({ ...brief, distributionChannels: next });
++                  }}
++                  disabled={!isWriter}
++                  className="rounded text-indigo-600 focus:ring-indigo-500"
++                />
++                <label htmlFor="chan_dept" className="text-xs text-slate-700">
++                  Kho học liệu tổ chuyên môn (DEPARTMENT_LIBRARY)
++                </label>
++              </div>
++            </div>
++
++            {/* Secondary Contexts */}
++            <div>
++              <div className="flex items-center justify-between mb-2">
++                <label className="text-[11px] font-semibold text-slate-700">
++                  Bối cảnh phụ (Secondary Contexts: {brief.context.secondary.length}/4)
++                </label>
++                {isWriter && brief.context.secondary.length < 4 && (
++                  <button
++                    onClick={handleAddSecondaryContext}
++                    className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
++                  >
++                    <Plus className="w-3 h-3" /> Thêm bối cảnh phụ
++                  </button>
++                )}
++              </div>
++              <div className="space-y-2">
++                {brief.context.secondary.map((sec, idx) => (
++                  <div key={idx} className="p-2.5 rounded border border-slate-200 bg-slate-50 space-y-2">
++                    <div className="flex items-center justify-between">
++                      <span className="font-semibold text-[11px] text-slate-700">#{idx + 1}</span>
++                      {isWriter && (
++                        <button
++                          onClick={() => handleRemoveSecondaryContext(idx)}
++                          className="text-slate-400 hover:text-rose-600"
++                        >
++                          <Trash2 className="w-3.5 h-3.5" />
++                        </button>
++                      )}
++                    </div>
++                    <select name="brief.context.secondary" aria-label={`Bối cảnh phụ ${idx+1}`} value={sec.key} onChange={e=>handleUpdateSecondaryContext(idx,{key:e.target.value as ContextEntry['key']})}>
++                      {PRIMARY_CONTEXT_OPTIONS.map(option=><option key={option.key} value={option.key}>{option.label}</option>)}
++                    </select>
++                    <input
++                      type="text"
++                      placeholder="Điều kiện sử dụng (condition)..."
++                      name="brief.context.secondary.condition" value={sec.condition || ''}
++                      onChange={(e) => handleUpdateSecondaryContext(idx, { condition: e.target.value })}
++                      disabled={!isWriter}
++                      className="w-full p-1.5 text-[11px] border border-slate-300 rounded bg-white"
++                    />
++                    <input
++                      type="text"
++                      placeholder="Biến thể điều chỉnh (adaptations)..."
++                      name="brief.context.secondary.adaptations" value={sec.adaptations || ''}
++                      onChange={(e) => handleUpdateSecondaryContext(idx, { adaptations: e.target.value })}
++                      disabled={!isWriter}
++                      className="w-full p-1.5 text-[11px] border border-slate-300 rounded bg-white"
++                    />
++                  </div>
++                ))}
++              </div>
++            </div>
++          </div>
++        )}
++
++        {activeTab === 'OBJECTIVES' && (
++          <div className="space-y-4">
++            <div className="p-3 bg-amber-50 rounded border border-amber-200 text-amber-800 text-[11px]">
++              Mục tiêu học tập và nhiệm vụ của học sinh cần liên kết trực tiếp với yêu cầu cần đạt của bài học.
++            </div>
++            <StemLearningFields brief={brief} onChange={setBrief} />
++            <p>Biến thể, nhiệm vụ hoặc yêu cầu an toàn mâu thuẫn: đề nghị tách brief/version để người có chuyên môn quyết định.</p>
++          </div>
++        )}
++
++        {activeTab === 'EVIDENCE' && (
++          <fieldset disabled={isSaving} className="space-y-3">
++            <div className="flex items-center justify-between">
++              <label className="text-[11px] font-semibold text-slate-700">
++                Minh chứng thành tố STEM ({evidence.length}/200)
++              </label>
++              {isWriter && (
++                <button
++                  onClick={handleAddEvidence}
++                  className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
++                >
++                  <Plus className="w-3 h-3" /> Gán minh chứng
++                </button>
++              )}
++            </div>
++
++            {evidence.length === 0 ? (
++              <p className="text-[11px] text-slate-400 italic">Chưa có minh chứng thành tố S/T/E/M nào được gán.</p>
++            ) : (
++              <div className="space-y-2">
++                {evidence.map((ev, idx) => (
++                  <div key={ev.id || idx} className="p-2.5 rounded border border-slate-200 bg-slate-50 space-y-2">
++                    <div className="flex items-center justify-between">
++                      <div className="flex items-center gap-2">
++                        <select
++                          name="evidence.component" value={ev.component}
++                          onChange={(e) => handleUpdateEvidence(idx, { component: e.target.value as any })}
++                          disabled={!isWriter}
++                          className="px-2 py-0.5 text-xs font-bold rounded bg-indigo-100 text-indigo-900 border border-indigo-200"
++                        >
++                          <option value="S">S - Science</option>
++                          <option value="T">T - Technology</option>
++                          <option value="E">E - Engineering</option>
++                          <option value="M">M - Mathematics</option>
++                        </select>
++                        <select
++                          name="evidence.sceneId" value={ev.sceneId || ''}
++                          onChange={(e) => handleUpdateEvidence(idx, { sceneId: e.target.value || null })}
++                          disabled={!isWriter}
++                          className="p-1 text-[11px] border border-slate-300 rounded bg-white"
++                        >
++                          <option value="">-- Ngoài clip (Task) --</option>{ev.sceneId&&!scenes.some(scene=>scene.id===ev.sceneId)&&<option value={ev.sceneId}>Orphan: {ev.sceneId}</option>}
++                          {scenes.map((s, sIdx) => (
++                            <option key={s.id} value={s.id}>
++                              Cảnh #{sIdx + 1}: {s.title || s.id}
++                            </option>
++                          ))}
++                        </select>
++                      </div>
++                      {isWriter && (
++                        <button onClick={() => handleRemoveEvidence(idx)} className="text-slate-400 hover:text-rose-600">
++                          <Trash2 className="w-3.5 h-3.5" />
++                        </button>
++                      )}
++                    </div>
++                    {ev.sceneId&&!scenes.some(scene=>scene.id===ev.sceneId)&&<p role="alert">Minh chứng orphan: cảnh {ev.sceneId} không còn; cần xác nhận, không xóa ngầm.</p>}
++                    <select name="evidence.taskKey" aria-label={`Task minh chứng ${idx+1}`} value={ev.taskKey??''} onChange={e=>handleUpdateEvidence(idx,{taskKey:e.target.value||null})}>
++                      <option value="">Không gắn Task</option>{brief.studentTasks.map(t=><option key={t.key} value={t.key}>{t.key}</option>)}
++                    </select>
++                    <select name="evidence.objectiveKey" aria-label={`Mục tiêu minh chứng ${idx+1}`} value={ev.objectiveKey??''} onChange={e=>handleUpdateEvidence(idx,{objectiveKey:e.target.value||null})}>
++                      <option value="">Không gắn mục tiêu</option>{brief.objectives.map(o=><option key={o.key} value={o.key}>{o.key}</option>)}
++                    </select>
++                    <input
++                      type="text"
++                      placeholder="Giải trình minh chứng (Explanation)..."
++                      name="evidence.explanation" value={ev.explanation || ''}
++                      onChange={(e) => handleUpdateEvidence(idx, { explanation: e.target.value.slice(0, 4000) })}
++                      disabled={!isWriter}
++                      className="w-full p-1.5 text-[11px] border border-slate-300 rounded bg-white"
++                    />
++                  </div>
++                ))}
++              </div>
++            )}
++          </fieldset>
++        )}
++      </div>
++
++      </fieldset>
++      {/* Bottom Action Footer */}
++      <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
++        <button
++          onClick={handleValidate}
++          disabled={isValidating || rateLimitCountdown !== null}
++          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-medium text-xs disabled:opacity-50"
++        >
++          {rateLimitCountdown !== null ? (
++            <>
++              <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" /> Đợi {rateLimitCountdown}s
++            </>
++          ) : (
++            <>
++              <ShieldAlert className="w-3.5 h-3.5 text-indigo-600" /> Kiểm tra quy tắc
++            </>
++          )}
++        </button>
++
++        {isWriter && (
++          <button
++            onClick={handleSaveBrief}
++            disabled={isSaving || isLoading || Boolean(error) || rateLimitCountdown !== null || !loaded.current}
++            className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-xs shadow-xs disabled:opacity-50"
++          >
++            <Save className="w-3.5 h-3.5" /> {isSaving ? 'Đang lưu...' : 'Lưu hồ sơ (CAS)'}
++          </button>
++        )}
++      </div>
++    </div>
++  );
++});
+diff --git a/src/components/stem/StemErrorNotice.tsx b/src/components/stem/StemErrorNotice.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/stem/StemErrorNotice.tsx
+@@ -0,0 +1,20 @@
++import React, { useEffect, useState } from 'react';
++import { stemError } from '../../services/stemClient';
++import { useDialog } from '../../hooks/useDialog';
++
++export function StemErrorNotice({error,onReload,onDashboard,onRetryReady}: {error:unknown;onReload:()=>void;onDashboard?:()=>void;onRetryReady?:()=>void}) {
++  const e=stemError(error);
++  const [seconds,setSeconds]=useState(0);
++  useEffect(()=>{setSeconds(e.status===429?e.retryAfterSeconds:0);},[error]);
++  useEffect(()=>{if(seconds<=0)return;const timer=setTimeout(()=>setSeconds(s=>Math.max(0,s-1)),1000);return()=>clearTimeout(timer);},[seconds]);
++  const dialog=useDialog(Boolean(error)&&e.status===409,'Xung đột phiên bản STEM');
++  if(!error)return null;
++  const content=<><p>{e.status===403?'Thiếu quyền hoặc ghế workspace. ':e.status===404?'Tài nguyên không tồn tại. ':''}{e.message}</p>
++    <code>{e.code}{e.field?` — ${e.field}`:''}</code>
++    {e.findings.map((f,i)=><p key={i}>{f.field}: [{f.ruleId}] {f.message}</p>)}
++    {e.status===409&&<><p>Nội dung đang nhập được giữ lại. Reload sẽ thay bằng dữ liệu máy chủ.</p><button onClick={onReload}>Reload dữ liệu mới nhất</button></>}
++    {(e.status===400||e.status===0)&&onRetryReady&&<button onClick={onRetryReady}>Đã sửa dữ liệu / thử lại thủ công</button>}
++    {e.status===404&&<button onClick={onDashboard??(()=>{window.location.hash='';window.location.assign('/');})}>Về Dashboard</button>}
++    {e.status===429&&<p role="status">Autosave tạm dừng. {seconds>0?`Đợi ${seconds}s`:<button onClick={onRetryReady}>Tiếp tục sửa / thử lưu thủ công</button>}</p>}</>;
++  return e.status===409?<div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center"><div ref={dialog} className="bg-white p-5 rounded max-w-lg">{content}</div></div>:<div role="alert" className="p-3 bg-amber-50 border border-amber-300">{content}</div>;
++}
+diff --git a/src/components/stem/StemFlow.p4-live.test.tsx b/src/components/stem/StemFlow.p4-live.test.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/stem/StemFlow.p4-live.test.tsx
+@@ -0,0 +1,91 @@
++import React,{useState} from 'react';
++import { beforeAll,afterEach,expect,it,vi } from 'vitest';
++import { render,screen,fireEvent,waitFor,cleanup,act } from '@testing-library/react';
++import { apiClient } from '../../services/apiClient';
++import { scriptService } from '../../services/scriptService';
++import { projectService } from '../../services/projectService';
++import { reviewService } from '../../services/reviewService';
++import { emptyStemBrief,stemMutationKey } from '../../services/stemClient';
++import { StemBriefPanel } from './StemBriefPanel';
++import { StemRubricPanel } from './StemRubricPanel';
++import type { StemAssessment,STEMScript } from '../../types/stem';
++
++// No mocked HTTP, controllers, DB, catalogs or providers. URL comes only from owned runner.
++const url=process.env.P4_LIVE_API_URL;
++if(!url||!/^http:\/\/127\.0\.0\.1:\d+\/api\/v1$/.test(url))throw new Error('Owned P4 localhost runner is required.');
++let adminToken:string,writerToken:string,reviewerToken:string,workspace:string,project:STEMScript;
++const login=async(username:string,password:string)=>apiClient.post<any>('/auth/login',{username,password});
++beforeAll(async()=>{
++  vi.spyOn(apiClient,'getBaseUrl').mockReturnValue(url);
++  const admin=await login('e2e-admin','E2e-fixture-only-123');adminToken=admin.accessToken;
++  const users=[] as Array<{id:string;token:string}>;
++  for(const role of ['writer','reviewer','producer']){
++    apiClient.setAuthToken(adminToken);
++    const username=`p4${role}${Date.now()}`;
++    const user=await apiClient.post<any>('/users',{fullName:`TEST_ONLY ${role}`,username,password:'P4-fixture-only-123',systemRole:'USER'});
++    const first=await login(username,'P4-fixture-only-123');apiClient.setAuthToken(first.accessToken);
++    const changed=await apiClient.post<any>('/auth/change-password',{currentPassword:'P4-fixture-only-123',newPassword:'P4-local-changed-456'});
++    users.push({id:user.id,token:changed.accessToken});
++  }
++  writerToken=users[0].token;reviewerToken=users[1].token;apiClient.setAuthToken(adminToken);
++  const ws=await apiClient.post<any>('/workspaces',{name:'TEST_ONLY P4 disposable workspace',department:'TEST_ONLY',leaderUserId:users[0].id,leaderRole:'WRITER',members:[{userId:users[1].id,role:'REVIEWER'},{userId:users[2].id,role:'PRODUCER'}]});
++  workspace=ws.id;apiClient.setAuthToken(writerToken);
++  project=await apiClient.post<STEMScript>(`/workspaces/${workspace}/scripts`,{title:'TEST_ONLY P4 not a verified lesson',subject:'Math',gradeLevel:'4',fps:30,scenes:[{type:'TITLE_HERO',title:'TEST_ONLY scene',subtitle:'TEST_ONLY',subject:'Math',gradeLevel:'4',badgeText:'TEST_ONLY',narration:'TEST_ONLY',durationInFrames:90}]});
++},60000);
++afterEach(()=>cleanup());
++
++it('live G06: assigns DRAFT policy using workspace alias, rejects stale CAS, preserves history after OFF',async()=>{
++  apiClient.setAuthToken(adminToken);
++  const before=await scriptService.getWorkspaceStemSettings(workspace);
++  const policies=await scriptService.getCatalog('POLICY');expect(policies[0].status).toBe('DRAFT');
++  const saved=await scriptService.saveWorkspaceStemSettings(workspace,{modeRevision:before.modeRevision,mode:'ADVISORY',policyVersionIds:[policies[0].id],defaultPolicyVersionId:policies[0].id,idempotencyKey:stemMutationKey()});
++  expect(saved.modeRevision).toBe(before.modeRevision+1);
++  await expect(scriptService.saveWorkspaceStemSettings(workspace,{modeRevision:before.modeRevision,mode:'OFF',policyVersionIds:[],idempotencyKey:stemMutationKey()})).rejects.toMatchObject({status:409});
++  const off=await scriptService.saveWorkspaceStemSettings(workspace,{modeRevision:saved.modeRevision,mode:'OFF',policyVersionIds:[policies[0].id],defaultPolicyVersionId:policies[0].id,idempotencyKey:stemMutationKey()});
++  expect(off.policyVersionIds).toEqual([policies[0].id]);
++  await scriptService.saveWorkspaceStemSettings(workspace,{modeRevision:off.modeRevision,mode:'ADVISORY',policyVersionIds:off.policyVersionIds,defaultPolicyVersionId:off.defaultPolicyVersionId,idempotencyKey:stemMutationKey()});
++});
++
++it('real BE flow: incomplete draft → reference400 → corrected UI save → Submit → Reviewer atomic assessment',async()=>{
++  apiClient.setAuthToken(writerToken);
++  const target=await scriptService.getStemTarget(project.id);
++  expect(target.versionId).not.toBe(String(target.versionNo));
++  const created=await scriptService.createStemBrief(project.id,target.versionId,{schemaVersion:'stem.v1',expectedScriptRevision:target.scriptRevision,idempotencyKey:stemMutationKey()});
++  expect(created.brief?.context.primary).toBeNull();
++  // Missing completeness remains a finding in OFF/ADVISORY; structurally invalid reference is the real 400.
++  const draft=await scriptService.saveStemBrief(project.id,target.versionId,{schemaVersion:'stem.v1',baseRevision:created.revision,expectedScriptRevision:target.scriptRevision,idempotencyKey:stemMutationKey(),brief:emptyStemBrief(),evidence:[]});
++  expect(draft.readiness).toBe('INCOMPLETE');expect(draft.findings.length).toBeGreaterThan(0);
++  await expect(scriptService.saveStemBrief(project.id,target.versionId,{schemaVersion:'stem.v1',baseRevision:draft.revision,expectedScriptRevision:target.scriptRevision,idempotencyKey:stemMutationKey(),brief:{...emptyStemBrief(),policyVersionId:'40000000-0000-4000-8000-999999999999'},evidence:[]})).rejects.toMatchObject({status:400});
++  render(<StemBriefPanel projectId={project.id} versionId={target.versionId} scriptRevision={target.scriptRevision} scenes={project.scenes} isWriter workspaceId={workspace} showToast={()=>{}}/>);
++  const input=await screen.findByLabelText('Phạm vi clip');
++  await waitFor(()=>expect(input.closest('fieldset')?.disabled).toBe(false));
++  fireEvent.change(input,{target:{value:'TEST_ONLY corrected scope; not expert-reviewed'}});
++  const policy=await screen.findByRole('combobox',{name:'Policy cho brief — DRAFT/UNVERIFIED'});
++  await waitFor(()=>expect(screen.getByRole('option',{name:/TEST_ONLY_UNASSIGNED_POLICY/})).toBeTruthy());
++  fireEvent.change(policy,{target:{value:'40000000-0000-4000-8000-000000000007'}});
++  fireEvent.click(screen.getByRole('button',{name:/Lưu hồ sơ/}));
++  await screen.findAllByText(/Policy is not assigned/);
++  expect(screen.getByDisplayValue('TEST_ONLY corrected scope; not expert-reviewed')).toBeTruthy();
++  fireEvent.change(policy,{target:{value:''}});
++  fireEvent.click(screen.getByRole('button',{name:'Đã sửa dữ liệu / thử lại thủ công'}));
++  fireEvent.click(screen.getByRole('button',{name:/Lưu hồ sơ/}));
++  await waitFor(async()=>expect((await scriptService.getStemBrief(project.id,target.versionId)).brief?.scopeOfClip).toBe('TEST_ONLY corrected scope; not expert-reviewed'),{timeout:10000});
++  cleanup();
++  const submitted=await projectService.submitForReview(project.id);expect(submitted.scriptStatus).toBe('IN_REVIEW');
++  apiClient.setAuthToken(adminToken);
++  const b=await scriptService.getStemBrief(project.id,target.versionId);
++  const invalidAssessment:StemAssessment={expectedBriefRevision:b.revision,expectedScriptRevision:target.scriptRevision,expectedModeRevision:b.modeRevision,rubricVersionId:null,criteria:[{key:'TEST_ONLY',judgment:'NOT_ASSESSED',rationale:'TEST_ONLY no expert feedback',evidenceIds:[]}],idempotencyKey:stemMutationKey()};
++  await expect(reviewService.submitReviewDecision(project.id,'APPROVED','TEST_ONLY',invalidAssessment)).rejects.toMatchObject({status:403});
++  apiClient.setAuthToken(reviewerToken);
++  function Review(){
++    const [assessment,setAssessment]=useState<StemAssessment|null>(null);
++    const [done,setDone]=useState(false);
++    return <><StemRubricPanel isOpen onClose={()=>{}} scriptId={project.id} versionId={target.versionId} scriptRevision={target.scriptRevision} isReviewerActive assessment={assessment} onAssessmentChange={setAssessment} onApproveWithAssessment={async()=>{await reviewService.submitReviewDecision(project.id,'APPROVED','TEST_ONLY not expert feedback',assessment!);setDone(true);}}/>{done&&<p>TEST_ONLY approved atomically</p>}</>;
++  }
++  render(<Review/>);await waitFor(()=>expect(screen.getAllByPlaceholderText(/Nhận xét/)[0].hasAttribute('disabled')).toBe(false));
++  screen.getAllByPlaceholderText(/Nhận xét/).forEach(field=>fireEvent.change(field,{target:{value:'TEST_ONLY not a human expert review'}}));
++  fireEvent.click(screen.getByRole('button',{name:'Duyệt kèm assessment'}));
++  await screen.findByText('TEST_ONLY approved atomically',{}, {timeout:10000});
++  expect((await projectService.getProjectById(project.id)).scriptStatus).toBe('APPROVED');
++  expect((await scriptService.getStemBrief(project.id,target.versionId)).verificationStatus).toBe('UNVERIFIED');
++},30000);
+diff --git a/src/components/stem/StemLearningFields.tsx b/src/components/stem/StemLearningFields.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/stem/StemLearningFields.tsx
+@@ -0,0 +1,78 @@
++import React, { useEffect, useState } from 'react';
++import type { CatalogVersionEntry, StemBrief, StudentTask } from '../../types/stem';
++import { scriptService } from '../../services/scriptService';
++import { StemErrorNotice } from './StemErrorNotice';
++
++type Props = {brief:StemBrief;onChange:(brief:StemBrief)=>void};
++const split=(value:string)=>value.split(',').map(s=>s.trim()).filter(Boolean);
++const taskFields: Array<[keyof Omit<StudentTask,'key'>,string]> = [
++  ['learnerAction','Hành động học sinh'],['teacherSupport','Hỗ trợ của giáo viên'],['materials','Vật liệu'],
++  ['safety','An toàn nhiệm vụ'],['assessmentEvidence','Minh chứng đánh giá'],['executionContextKey','Bối cảnh thực hiện'],
++];
++export function StemLearningFields({brief:b,onChange}:Props) {
++  return <div className="space-y-4">
++    <h3>Mục tiêu ({b.objectives.length}/20)</h3>
++    {b.objectives.map((o,i)=><fieldset key={i} className="border p-2 space-y-2">
++      {(['key','learnerAction','observableEvidence'] as const).map(field=><label key={field} className="block">{field}<input name={`brief.objectives.${field}`} aria-label={`Mục tiêu ${i+1} ${field}`} maxLength={field==='key'?128:4000} value={o[field]??''} onChange={e=>onChange({...b,objectives:b.objectives.map((x,n)=>n===i?{...x,[field]:e.target.value}:x)})}/></label>)}
++      <label>Outcome mục tiêu<select name="brief.objectives.outcomeId" value={o.outcomeId??''} onChange={e=>onChange({...b,objectives:b.objectives.map((x,n)=>n===i?{...x,outcomeId:e.target.value||null}:x)})}><option value="">Chưa gắn</option>{b.outcomeIds.map(id=><option key={id}>{id}</option>)}</select></label>
++      <button onClick={()=>onChange({...b,objectives:b.objectives.filter((_,n)=>n!==i)})}>Xóa mục tiêu {i+1}</button>
++    </fieldset>)}
++    <button disabled={b.objectives.length>=20} onClick={()=>onChange({...b,objectives:[...b.objectives,{key:`objective_${Date.now()}`,learnerAction:'',observableEvidence:''}]})}>Thêm mục tiêu</button>
++    <h3>Nhiệm vụ ({b.studentTasks.length}/20)</h3>
++    {b.studentTasks.map((t,i)=><fieldset key={i} className="border p-2 space-y-2">
++      <label>Mã nhiệm vụ<input name="brief.studentTasks.key" aria-label={`Task ${i+1} key`} maxLength={128} value={t.key} onChange={e=>onChange({...b,studentTasks:b.studentTasks.map((x,n)=>n===i?{...x,key:e.target.value}:x)})}/></label>
++      {taskFields.map(([field,label])=><label key={field} className="block">{label}{field==='executionContextKey'?<select name={`brief.studentTasks.${field}`} value={t[field]??''} onChange={e=>onChange({...b,studentTasks:b.studentTasks.map((x,n)=>n===i?{...x,[field]:e.target.value||null}:x)})}><option value="">Chưa chọn</option><option>IN_CLASS_SCREEN</option><option>GROUP_PRACTICE</option></select>:<textarea maxLength={4000} name={`brief.studentTasks.${field}`} aria-label={`Task ${i+1} ${field}`} value={t[field]??''} onChange={e=>onChange({...b,studentTasks:b.studentTasks.map((x,n)=>n===i?{...x,[field]:e.target.value}:x)})}/>}</label>)}
++      <button onClick={()=>onChange({...b,studentTasks:b.studentTasks.filter((_,n)=>n!==i)})}>Xóa nhiệm vụ {i+1}</button>
++    </fieldset>)}
++    <button disabled={b.studentTasks.length>=20} onClick={()=>onChange({...b,studentTasks:[...b.studentTasks,{key:`task_${Date.now()}`,learnerAction:''}]})}>Thêm nhiệm vụ</button>
++    <h3>Đóng góp S/T/E/M — do người dùng giải trình</h3>
++    {(['S','T','E','M'] as const).map(component=>{
++      const c=b.contributions.find(x=>x.component===component);
++      const update=(patch:Partial<NonNullable<typeof c>>)=>onChange({...b,contributions:c?b.contributions.map(x=>x.component===component?{...x,...patch}:x):[...b.contributions,{component,objectiveKeys:[],taskKeys:[],...patch}]});
++      return <fieldset key={component} className="border p-2"><legend>{component}</legend>
++        <label>Giải trình {component}<textarea name="brief.contributions.explanation" maxLength={4000} value={c?.explanation??''} onChange={e=>update({explanation:e.target.value})}/></label>
++        <fieldset><legend>Mục tiêu liên kết {component}</legend>{Array.from(new Set([...b.objectives.map(o=>o.key),...(c?.objectiveKeys??[])])).map(key=><label key={key} className="block"><input name="brief.contributions.objectiveKeys" type="checkbox" checked={c?.objectiveKeys.includes(key)??false} onChange={e=>update({objectiveKeys:e.target.checked?[...(c?.objectiveKeys??[]),key]:(c?.objectiveKeys??[]).filter(k=>k!==key)})}/>{key}</label>)}</fieldset>
++        <fieldset><legend>Nhiệm vụ liên kết {component}</legend>{Array.from(new Set([...b.studentTasks.map(t=>t.key),...(c?.taskKeys??[])])).map(key=><label key={key} className="block"><input name="brief.contributions.taskKeys" type="checkbox" checked={c?.taskKeys.includes(key)??false} onChange={e=>update({taskKeys:e.target.checked?[...(c?.taskKeys??[]),key]:(c?.taskKeys??[]).filter(k=>k!==key)})}/>{key}</label>)}</fieldset>
++        {c&&<button onClick={()=>onChange({...b,contributions:b.contributions.filter(x=>x.component!==component)})}>Bỏ đóng góp {component}</button>}
++      </fieldset>;
++    })}
++  </div>;
++}
++
++/** Derive grade/subject choices only from declared catalog data, never from titles. */
++export function StemCatalogFields({brief:b,onChange,workspaceId}:{workspaceId:string}&Props) {
++  const [catalog,setCatalog]=useState<CatalogVersionEntry[]>([]);
++  const [error,setError]=useState<unknown>(null);
++  const [settings,setSettings]=useState<Awaited<ReturnType<typeof scriptService.getWorkspaceStemSettings>>|null>(null);
++  const [reload,setReload]=useState(0);
++  const [level,setLevel]=useState('');
++  useEffect(()=>{
++    let current=true;
++    const load=async()=>{
++      const rows:CatalogVersionEntry[]=[];
++      for(let page=0;;page++){const batch=await scriptService.getCatalog(undefined,page,100);rows.push(...batch);if(batch.length<100)break;if(page>=99)throw new Error('Catalog vượt giới hạn tải; chưa có đủ lựa chọn.');}
++      const mode=await scriptService.getWorkspaceStemSettings(workspaceId);
++      if(current){setCatalog(rows);setSettings(mode);setError(null);}
++    };
++    void load().catch(err=>{if(current)setError(err);});return()=>{current=false;};
++  },[workspaceId,reload]);
++  const text=(entry:CatalogVersionEntry,key:string)=>typeof entry.data[key]==='string'?String(entry.data[key]):null;
++  const levels=Array.from(new Set(catalog.map(c=>text(c,'educationLevel')).filter((s):s is string=>Boolean(s))));
++  const grades=Array.from(new Set(catalog.filter(c=>!level||text(c,'educationLevel')===level).map(c=>text(c,'gradeKey')).filter((s):s is string=>Boolean(s))));
++  const subjects=Array.from(new Set(catalog.map(c=>text(c,'subjectKey')).filter((s):s is string=>Boolean(s))));
++  const options=(kind:string)=>catalog.filter(c=>c.kind===kind&&c.status==='DRAFT');
++  const select=(label:string,kind:string,value:string|null|undefined,change:(value:string|null)=>void)=><label className="block">{label} — DRAFT/UNVERIFIED<select name={kind==='POLICY'?'brief.policyVersionId':'brief.topicVersionId'} value={value??''} onChange={e=>change(e.target.value||null)}><option value="">Chưa chọn</option>{value&&!catalog.some(c=>c.id===value)&&<option value={value}>Đã pin, không khả dụng: {value}</option>}{options(kind).map(c=><option key={c.id} value={c.id}>{c.logicalKey} v{c.version} — DRAFT/UNVERIFIED</option>)}</select></label>;
++  return <div className="border p-3 space-y-2">
++    <p>Catalog DRAFT/UNVERIFIED — chưa thẩm định chuyên môn.</p>
++    <StemErrorNotice error={error} onReload={()=>setReload(n=>n+1)}/>
++    <p>Workspace: {settings?.mode??'Chưa đọc được'} · modeRevision: {settings?.modeRevision??'—'} · policy đã pin: {settings?.policyVersionIds.join(', ')||'Chưa gán'}</p>
++    {select('Chủ đề','TOPIC_VERSION',b.topicVersionId,value=>onChange({...b,topicVersionId:value}))}
++    {select('Policy cho brief','POLICY',b.policyVersionId,value=>onChange({...b,policyVersionId:value}))}
++    <label className="block">Cấp học (lọc theo metadata catalog)<select value={level} onChange={e=>setLevel(e.target.value)}><option value="">Tất cả / chưa có metadata cấp học</option>{levels.map(l=><option key={l}>{l}</option>)}</select></label>
++    <label className="block">Cấp/lớp từ catalog<select name="brief.gradeKey" value={b.gradeKey??''} onChange={e=>onChange({...b,gradeKey:e.target.value||null})}><option value="">Chưa chọn</option>{b.gradeKey&&!grades.includes(b.gradeKey)&&<option>{b.gradeKey}</option>}{grades.map(g=><option key={g}>{g}</option>)}</select></label>
++    <label className="block">Môn chính<select name="brief.subjectKeys" value={b.subjectKeys[0]??''} onChange={e=>onChange({...b,subjectKeys:e.target.value?[e.target.value,...b.subjectKeys.slice(1).filter(s=>s!==e.target.value)]:[]})}><option value="">Chưa chọn</option>{Array.from(new Set([...subjects,...b.subjectKeys])).map(s=><option key={s}>{s}</option>)}</select></label>
++    <fieldset><legend>Môn phối hợp</legend>{subjects.filter(s=>s!==b.subjectKeys[0]).map(s=><label key={s} className="block"><input type="checkbox" name="brief.subjectKeys" checked={b.subjectKeys.slice(1).includes(s)} disabled={!b.subjectKeys.length} onChange={e=>onChange({...b,subjectKeys:e.target.checked?[...b.subjectKeys,s]:b.subjectKeys.filter(x=>x!==s)})}/>{s}</label>)}</fieldset>
++    <fieldset><legend>Yêu cầu cần đạt — DRAFT/UNVERIFIED</legend>{options('OUTCOME').filter(c=>(!text(c,'gradeKey')||text(c,'gradeKey')===b.gradeKey)&&(!text(c,'subjectKey')||b.subjectKeys.includes(text(c,'subjectKey')!))).map(c=><label key={c.id} className="block"><input type="checkbox" name="brief.outcomeIds" checked={b.outcomeIds.includes(c.id)} onChange={e=>onChange({...b,outcomeIds:e.target.checked?[...b.outcomeIds,c.id]:b.outcomeIds.filter(id=>id!==c.id)})}/>{c.logicalKey} v{c.version} · nguồn: {catalog.find(source=>source.id===c.sourceId)?.logicalKey??c.sourceId??'Chưa có nguồn'}</label>)}{b.outcomeIds.filter(id=>!catalog.some(c=>c.id===id)).map(id=><p key={id}>Outcome đã pin, không khả dụng: {id}</p>)}</fieldset>
++    {!catalog.length&&!error&&<p>Catalog chưa có dữ liệu; giữ nháp, không tạo lựa chọn chính thức giả.</p>}
++  </div>;
++}
+diff --git a/src/components/stem/StemPanels.test.tsx b/src/components/stem/StemPanels.test.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/stem/StemPanels.test.tsx
+@@ -0,0 +1,125 @@
++import React,{createRef,useState} from 'react';
++import { act,cleanup,fireEvent,render,screen,waitFor } from '@testing-library/react';
++import { beforeEach,afterEach,describe,it,expect,vi } from 'vitest';
++import { scriptService } from '../../services/scriptService';
++import { sceneSaveQueue } from '../../services/sceneSaveQueue';
++import { ApiError } from '../../services/apiClient';
++import { emptyStemBrief } from '../../services/stemClient';
++import { StemBriefPanel,type StemBriefHandle } from './StemBriefPanel';
++import { StemRubricPanel } from './StemRubricPanel';
++import { StemWorkspaceSettings } from './StemWorkspaceSettings';
++import { StemCatalogFields } from './StemLearningFields';
++import { authService } from '../../services/authService';
++import { StemErrorNotice } from './StemErrorNotice';
++import type { StemAssessment,StemViewResponse } from '../../types/stem';
++
++const view=(patch:Partial<StemViewResponse>={}):StemViewResponse=>({schemaVersion:'stem.v1',scriptVersionId:'real-version',briefId:'b',revision:0,modeRevision:0,verificationStatus:'UNVERIFIED',readiness:'INCOMPLETE',effectiveMode:'ADVISORY',brief:emptyStemBrief(),evidence:[],findings:[],...patch});
++const props=()=>({projectId:'TEST_ONLY_project',versionId:'real-version',scriptRevision:0,scenes:[{id:'s1',type:'TITLE_HERO',title:'TEST_ONLY'}] as any,isWriter:true,workspaceId:'w',showToast:vi.fn()});
++beforeEach(()=>{
++  vi.spyOn(scriptService,'getStemBrief').mockResolvedValue(view());
++  vi.spyOn(scriptService,'getCatalog').mockResolvedValue([]);
++  vi.spyOn(scriptService,'getWorkspaceStemSettings').mockResolvedValue({workspaceId:'w',modeRevision:0,mode:'OFF',policyVersionIds:[],defaultPolicyVersionId:null});
++  vi.spyOn(scriptService,'saveStemBrief').mockImplementation(async(_p,_v,r)=>view({brief:r.brief,evidence:r.evidence,revision:r.baseRevision+1}));
++  vi.spyOn(sceneSaveQueue,'flush').mockResolvedValue();vi.spyOn(sceneSaveQueue,'getDraftRevision').mockReturnValue(0);
++});
++afterEach(()=>{cleanup();vi.restoreAllMocks();vi.useRealTimers();});
++describe('P4 Writer panel',()=>{
++ it('saves nullable drafts with POST before PUT and retains channel separate from the two primary enums',async()=>{
++   vi.mocked(scriptService.getStemBrief).mockResolvedValue(view({brief:null,briefId:null}));
++   const create=vi.spyOn(scriptService,'createStemBrief').mockResolvedValue(view());
++   const ref=createRef<StemBriefHandle>();render(<StemBriefPanel {...props()} ref={ref}/>);
++   await waitFor(()=>expect(screen.getByLabelText('Phạm vi clip').hasAttribute('disabled')).toBe(false));
++   fireEvent.click(screen.getByRole('button',{name:'Bối cảnh'}));
++   const primary=screen.getByRole('combobox',{name:'Bối cảnh học tập chính'}) as HTMLSelectElement;
++   expect(Array.from(primary.options).map(o=>o.value)).toEqual(['','IN_CLASS_SCREEN','GROUP_PRACTICE']);
++   fireEvent.click(screen.getByLabelText('Kho học liệu tổ chuyên môn (DEPARTMENT_LIBRARY)'));
++   await act(async()=>{await ref.current!.saveForSubmit();});
++   expect(create).toHaveBeenCalledWith('TEST_ONLY_project','real-version',expect.objectContaining({expectedScriptRevision:0}));
++   expect(scriptService.saveStemBrief).toHaveBeenCalledWith('TEST_ONLY_project','real-version',expect.objectContaining({brief:expect.objectContaining({context:{primary:null,secondary:[]},distributionChannels:['DEPARTMENT_LIBRARY']})}));
++ });
++ it.each([400,409,429])('preserves edited input after %s and never loops autosave',async(status)=>{
++   const fail=new ApiError('TEST_ONLY failure',`TEST_ONLY_${status}`,status,{field:'brief.scopeOfClip'},status===429?2:undefined);
++   vi.mocked(scriptService.saveStemBrief).mockRejectedValue(fail);
++   render(<StemBriefPanel {...props()}/>);
++   const input=await screen.findByLabelText('Phạm vi clip');await waitFor(()=>expect(input.closest('fieldset')?.disabled).toBe(false));
++   fireEvent.change(input,{target:{value:'Giữ nguyên nội dung đang nhập'}});
++   fireEvent.click(screen.getByRole('button',{name:/Lưu hồ sơ/}));
++   await waitFor(()=>expect(scriptService.saveStemBrief).toHaveBeenCalledTimes(1));
++   await waitFor(()=>expect(screen.getByDisplayValue('Giữ nguyên nội dung đang nhập')).toBeTruthy());
++   if(status===409)expect(await screen.findByRole('dialog',{name:'Xung đột phiên bản STEM'})).toBeTruthy();
++   if(status===400)expect(input.getAttribute('aria-invalid')).toBe('true');
++   if(status===429)expect(screen.getByText(/Autosave tạm dừng/)).toBeTruthy();
++   await act(async()=>{await new Promise(resolve=>setTimeout(resolve,1100));});
++   expect(scriptService.saveStemBrief).toHaveBeenCalledTimes(1);
++ });
++ it('requires manual Save after accepting a legacy suggestion, preserves opaque rawLegacy',async()=>{
++   const b={...emptyStemBrief(),rawLegacy:'TEST_ONLY opaque legacy'};
++   vi.mocked(scriptService.getStemBrief).mockResolvedValue(view({brief:b,legacySuggestion:{channelKeys:['DEPARTMENT_LIBRARY'],primaryKey:null,reason:'TEST_ONLY',requiresConfirmation:true}}));
++   render(<StemBriefPanel {...props()}/>);
++   fireEvent.click(await screen.findByRole('button',{name:/Áp dụng gợi ý vào form/}));
++   await act(async()=>{await new Promise(resolve=>setTimeout(resolve,1100));});
++   expect(scriptService.saveStemBrief).not.toHaveBeenCalled();
++   fireEvent.click(screen.getByRole('button',{name:/Lưu hồ sơ/}));
++   await waitFor(()=>expect(scriptService.saveStemBrief).toHaveBeenCalledWith(expect.anything(),expect.anything(),expect.objectContaining({brief:expect.objectContaining({rawLegacy:'TEST_ONLY opaque legacy',context:{primary:null,secondary:[]}})})));
++ });
++ it('renders orphan evidence without silently deleting or remapping its scene',async()=>{
++   vi.mocked(scriptService.getStemBrief).mockResolvedValue(view({evidence:[{id:'e1',sceneId:'deleted',component:'E',explanation:'TEST_ONLY'}]}));
++   render(<StemBriefPanel {...props()}/>);await screen.findByLabelText('Phạm vi clip');
++   fireEvent.click(screen.getByRole('button',{name:'Minh chứng STEM'}));
++   expect(await screen.findByText(/Minh chứng orphan/)).toBeTruthy();
++   expect(scriptService.saveStemBrief).not.toHaveBeenCalled();
++ });
++});
++describe('P4 Reviewer Drawer',()=>{
++ function Drawer({active=true}:{active?:boolean}){
++   const [assessment,setAssessment]=useState<StemAssessment|null>(null);
++   return <><StemRubricPanel isOpen onClose={()=>{}} scriptId="p" versionId="real-version" scriptRevision={0} isReviewerActive={active} assessment={assessment} onAssessmentChange={setAssessment}/><output data-testid="assessment">{JSON.stringify(assessment)}</output></>;
++ }
++ it('initializes only from loaded revisions, does not invent rubric IDs and preserves zero',async()=>{
++   render(<Drawer/>);
++   await waitFor(()=>expect(screen.getByTestId('assessment').textContent).toContain('expectedModeRevision'));
++   const assessment=JSON.parse(screen.getByTestId('assessment').textContent!);
++   expect(assessment).toMatchObject({expectedBriefRevision:0,expectedScriptRevision:0,expectedModeRevision:0,rubricVersionId:null});
++   const key=assessment.idempotencyKey;
++   fireEvent.change(screen.getAllByPlaceholderText(/Nhận xét/)[0],{target:{value:'TEST_ONLY rationale'}});
++   expect(JSON.parse(screen.getByTestId('assessment').textContent!).idempotencyKey).not.toBe(key);
++   expect(screen.getByText(/chưa phải rubric P2 đã khóa/)).toBeTruthy();
++ });
++ it('does not initialize or allow assessment without an active Reviewer seat',async()=>{
++   render(<Drawer active={false}/>);await waitFor(()=>expect(scriptService.getStemBrief).toHaveBeenCalled());
++   expect(screen.getByTestId('assessment').textContent).toBe('null');
++   expect(screen.getAllByRole('radio').every(r=>(r as HTMLInputElement).disabled)).toBe(true);
++ });
++});
++describe('P4 conflict/settings UX',()=>{
++ it('uses independent TEST_ONLY/DRAFT catalog metadata for grade, subject, outcome and source labels',async()=>{
++   const rows=[
++     {id:'TEST_ONLY_profile',kind:'PROFILE',logicalKey:'TEST_ONLY_PRIMARY',version:1,status:'DRAFT',verificationStatus:'UNVERIFIED',revision:0,data:{educationLevel:'PRIMARY',gradeKey:'4',subjectKey:'TEST_ONLY_SCIENCE'}},
++     {id:'TEST_ONLY_source',kind:'SOURCE_EDITION',logicalKey:'TEST_ONLY_SOURCE_NOT_OFFICIAL',version:1,status:'DRAFT',verificationStatus:'UNVERIFIED',revision:0,data:{}},
++     {id:'TEST_ONLY_outcome',kind:'OUTCOME',logicalKey:'TEST_ONLY_OUTCOME_NOT_CURRICULUM',version:1,status:'DRAFT',verificationStatus:'UNVERIFIED',revision:0,sourceId:'TEST_ONLY_source',data:{gradeKey:'4',subjectKey:'TEST_ONLY_SCIENCE'}},
++   ];
++   vi.mocked(scriptService.getCatalog).mockResolvedValue(rows);
++   function Catalog(){const [brief,setBrief]=useState(emptyStemBrief());return <StemCatalogFields brief={brief} onChange={setBrief} workspaceId="w"/>;}
++   render(<Catalog/>);
++   await screen.findByRole('option',{name:'PRIMARY'});
++   fireEvent.change(screen.getByRole('combobox',{name:/Cấp học \(lọc/}),{target:{value:'PRIMARY'}});
++   fireEvent.change(screen.getByRole('combobox',{name:'Cấp/lớp từ catalog'}),{target:{value:'4'}});
++   fireEvent.change(screen.getByRole('combobox',{name:'Môn chính'}),{target:{value:'TEST_ONLY_SCIENCE'}});
++   expect(screen.getByText(/TEST_ONLY_OUTCOME_NOT_CURRICULUM v1 · nguồn: TEST_ONLY_SOURCE_NOT_OFFICIAL/)).toBeTruthy();
++   expect(screen.getByText('Catalog DRAFT/UNVERIFIED — chưa thẩm định chuyên môn.')).toBeTruthy();
++ });
++ it('409 reload requires an explicit user action',()=>{
++   const reload=vi.fn();render(<StemErrorNotice error={new ApiError('stale','STEM_STALE_TARGET',409)} onReload={reload}/>);
++   expect(screen.getByRole('dialog',{name:'Xung đột phiên bản STEM'})).toBeTruthy();expect(reload).not.toHaveBeenCalled();
++   fireEvent.click(screen.getByRole('button',{name:'Reload dữ liệu mới nhất'}));expect(reload).toHaveBeenCalledOnce();
++ });
++ it('Admin Read/Assign uses modeRevision and offers no STRICT or activation control',async()=>{
++   vi.spyOn(authService,'getCurrentUser').mockReturnValue({id:'TEST_ONLY_admin',systemRole:'ADMIN'} as any);
++   const save=vi.spyOn(scriptService,'saveWorkspaceStemSettings').mockResolvedValue({workspaceId:'w',modeRevision:1,mode:'ADVISORY',policyVersionIds:[],defaultPolicyVersionId:null});
++   render(<StemWorkspaceSettings workspaceId="w"/>);fireEvent.click(screen.getByText('Workspace STEM — xem/gán policy DRAFT'));
++   const mode=await screen.findByRole('combobox',{name:'Mode'});fireEvent.change(mode,{target:{value:'ADVISORY'}});
++   fireEvent.click(screen.getByRole('button',{name:'Lưu settings workspace (CAS)'}));
++   await waitFor(()=>expect(save).toHaveBeenCalledWith('w',expect.objectContaining({modeRevision:0,mode:'ADVISORY'})));
++   expect(screen.queryByRole('option',{name:'STRICT'})).toBeNull();
++ });
++});
+diff --git a/src/components/stem/StemReadOnlySummary.tsx b/src/components/stem/StemReadOnlySummary.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/stem/StemReadOnlySummary.tsx
+@@ -0,0 +1,35 @@
++import React, { useEffect, useState } from 'react';
++import type { STEMScript, StemViewResponse } from '../../types/stem';
++import { scriptService } from '../../services/scriptService';
++import { useStemTarget } from './useStemTarget';
++import { StemErrorNotice } from './StemErrorNotice';
++
++export function StemReadOnlySummary({script,compositionVersionNo}:{script:STEMScript;compositionVersionNo?:number}) {
++  const {target,error:targetError}=useStemTarget(script.id,script.currentVersionNo??script.version);
++  const [view,setView]=useState<StemViewResponse|null>(null);
++  const [error,setError]=useState<unknown>(null);
++  const [reload,setReload]=useState(0);
++  useEffect(()=>{
++    let current=true;setView(null);setError(null);
++    if(target)void scriptService.getStemBrief(script.id,target.versionId).then(result=>{if(current)setView(result);}).catch(err=>{if(current)setError(err);});
++    return()=>{current=false;};
++  },[script.id,target?.versionId,script.draftRevision,reload]);
++  return <details className="border border-amber-200 bg-amber-50 p-3 text-xs" open><summary>Hồ sơ STEM — chỉ đọc · DRAFT/UNVERIFIED</summary>
++    <StemErrorNotice error={targetError??error} onReload={()=>setReload(n=>n+1)}/>
++    {compositionVersionNo!==undefined&&target&&compositionVersionNo!==target.versionNo?<p role="alert">NEEDS_REVIEW: bản dựng v{compositionVersionNo} khác script hiện tại v{target.versionNo}; tóm tắt dưới đây chưa xác nhận cho bản dựng này.</p>:null}
++    {!view?<p>Chưa tải được trạng thái STEM.</p>:<>
++      <p>{view.readiness} · {view.effectiveMode} · brief revision {view.revision} · mode revision {view.modeRevision}</p>
++      {!view.brief?<p>Legacy/chưa có brief. Không tự suy bối cảnh.</p>:<>
++        <p>Bối cảnh chính: {view.brief.context.primary?.key??'Chưa chọn'} · {view.brief.context.primary?.condition}</p>
++        {view.brief.context.secondary.map((c,i)=><p key={i}>Phụ: {c.key} · {c.condition} · {c.adaptations}</p>)}
++        <p>Kênh: {view.brief.distributionChannels.join(', ')||'Chưa chọn'}</p>
++        <p>Phạm vi: {view.brief.scopeOfClip}</p><p>An toàn: {view.brief.safetyNotes}</p>
++        <p>Policy đã pin: {view.brief.policyVersionId??'Chưa chọn'}</p>
++        <ul>{view.brief.objectives.map(o=><li key={o.key}>{o.key}: {o.learnerAction} — {o.observableEvidence}</li>)}</ul>
++        {view.brief.contributions.map(c=><p key={c.component}>{c.component}: {c.explanation}</p>)}
++      </>}
++      <ul className={view.effectiveMode==='OFF'?'opacity-60':''}>{view.findings.map((f,i)=><li key={i}>[{f.ruleId}] {f.field}: {f.message}</li>)}</ul>
++      <p>Findings là cảnh báo OFF/ADVISORY; không chứng nhận STEM hoặc thay đổi logic duyệt video.</p>
++    </>}
++  </details>;
++}
+diff --git a/src/components/stem/StemRubricPanel.tsx b/src/components/stem/StemRubricPanel.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/stem/StemRubricPanel.tsx
+@@ -0,0 +1,426 @@
++import React, { useState, useEffect, useRef } from 'react';
++import {
++  X,
++  ShieldAlert,
++  AlertTriangle,
++  CheckCircle2,
++  FileText,
++  Sparkles,
++  Layers,
++  ChevronRight,
++  ExternalLink,
++} from 'lucide-react';
++import {
++  StemViewResponse,
++  StemAssessment,
++  StemCriterion,
++  StemChangeTarget,
++  StemEvidence,
++} from '../../types/stem';
++import { scriptService } from '../../services/scriptService';
++import { stemMutationKey } from '../../services/stemClient';
++import { StemErrorNotice } from './StemErrorNotice';
++import { useDialog } from '../../hooks/useDialog';
++
++export interface StemRubricPanelProps {
++  isOpen: boolean;
++  onClose: () => void;
++  scriptId: string;
++  versionId: string;
++  scriptRevision: number;
++  phase?: 'SCRIPT'|'VIDEO';
++  compositionRevision?: number;
++  isReviewerActive: boolean;
++  userRole?: string;
++  assessment: StemAssessment | null;
++  onAssessmentChange: (assessment: StemAssessment) => void;
++  onRequestChangesWithTarget?: (changeTarget: StemChangeTarget, note: string) => Promise<void | boolean>;
++  onApproveWithAssessment?: () => Promise<void | boolean>;
++  decisionPending?: boolean;
++}
++
++export const DEFAULT_CRITERIA_KEYS = [
++  {
++    key: 'CRIT_SCIENCE_INQUIRY',
++    label: 'Science (Khoa học): Khám phá & Bản chất hiện tượng',
++    description: 'Nội dung có làm rõ câu hỏi khoa học, dữ kiện thực nghiệm hoặc hiện tượng tự nhiên không?',
++  },
++  {
++    key: 'CRIT_TECH_APPLICATION',
++    label: 'Technology (Công nghệ): Ứng dụng & Công cụ số',
++    description: 'Có sử dụng công cụ mô phỏng số, đo đạc hoặc thiết bị công nghệ hỗ trợ bài học không?',
++  },
++  {
++    key: 'CRIT_ENG_DESIGN',
++    label: 'Engineering (Kỹ thuật): Quy trình thiết kế & Giải pháp',
++    description: 'Học sinh có được tiếp cận bước thiết kế, thử nghiệm, tối ưu hóa giải pháp kỹ thuật không?',
++  },
++  {
++    key: 'CRIT_MATH_REASONING',
++    label: 'Mathematics (Toán học): Mô hình hóa & Tính toán định lượng',
++    description: 'Có áp dụng công thức, đồ thị, ước lượng dữ liệu hoặc phân tích định lượng không?',
++  },
++  {
++    key: 'CRIT_INTERDISCIPLINARY',
++    label: 'Tích hợp liên môn & Bối cảnh thực tiễn',
++    description: 'Sự kết hợp giữa các lĩnh vực có tự nhiên, gắn với bối cảnh lớp học/thực tiễn đã khai báo không?',
++  },
++  {
++    key: 'CRIT_PEDAGOGY',
++    label: 'Tính sư phạm, Chuẩn đầu ra & Nhiệm vụ học sinh',
++    description: 'Mục tiêu học tập rõ ràng, nhiệm vụ học sinh khả thi và đo lường được.',
++  },
++];
++
++export const JUDGMENT_LABELS: Record<StemCriterion['judgment'], { label: string; badge: string }> = {
++  ADEQUATE: {
++    label: 'Đạt yêu cầu (Adequate)',
++    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
++  },
++  NEEDS_CHANGES: {
++    label: 'Cần chỉnh sửa (Needs Changes)',
++    badge: 'bg-amber-50 text-amber-700 border-amber-200',
++  },
++  NOT_ASSESSED: {
++    label: 'Chưa đánh giá (Not Assessed)',
++    badge: 'bg-slate-50 text-slate-600 border-slate-200',
++  },
++  NOT_APPLICABLE: {
++    label: 'Không áp dụng (N/A)',
++    badge: 'bg-slate-100 text-slate-500 border-slate-200',
++  },
++};
++
++export const StemRubricPanel: React.FC<StemRubricPanelProps> = ({
++  isOpen,
++  onClose,
++  scriptId,
++  versionId,
++  scriptRevision,
++  phase='SCRIPT',
++  compositionRevision,
++  isReviewerActive,
++  userRole,
++  assessment,
++  onAssessmentChange,
++  onRequestChangesWithTarget,
++  onApproveWithAssessment,
++  decisionPending = false,
++}) => {
++  const [activeTab, setActiveTab] = useState<'RUBRIC' | 'BRIEF_VIEW'>('RUBRIC');
++  const [stemData, setStemData] = useState<StemViewResponse | null>(null);
++  const [loadingStem, setLoadingStem] = useState(false);
++  const [stemError, setStemError] = useState<string | null>(null);
++
++  // Target change state for request-changes
++  const [changeTargetNote, setChangeTargetNote] = useState('');
++  const [showTargetModal, setShowTargetModal] = useState(false);
++
++  const [apiError,setApiError]=useState<unknown>(null);
++  const [reload,setReload]=useState(0);
++  const callback=useRef(onAssessmentChange);callback.current=onAssessmentChange;
++  const requestKey=useRef<{payload:string;key:string}|null>(null);
++  const targetDialog=useDialog(showTargetModal,'Chỉ định đích sửa đổi',()=>setShowTargetModal(false),decisionPending);
++  useEffect(()=>{
++    if(!isOpen||!scriptId||!versionId)return;
++    let current=true;setLoadingStem(true);setApiError(null);setStemError(null);setStemData(null);
++    scriptService.getStemBrief(scriptId,versionId).then(data=>{
++      if(!current)return;setStemData(data);setLoadingStem(false);
++      if(isReviewerActive)callback.current({expectedBriefRevision:data.revision,expectedScriptRevision:scriptRevision,
++        expectedModeRevision:data.modeRevision,expectedCompositionRevision:phase==='VIDEO'?compositionRevision:null,rubricVersionId:null,
++        criteria:DEFAULT_CRITERIA_KEYS.map(c=>({key:c.key,judgment:'NOT_ASSESSED',rationale:'',evidenceIds:[]})),idempotencyKey:stemMutationKey()});
++    }).catch(err=>{if(current){setApiError(err);setStemError(err.message);setLoadingStem(false);}});
++    return()=>{current=false;};
++  },[isOpen,scriptId,versionId,scriptRevision,phase,compositionRevision,isReviewerActive,reload]);
++
++  const updateCriterion=(key:string,patch:Partial<StemCriterion>)=>{
++    if(!isReviewerActive||!assessment||!stemData||apiError)return;
++    onAssessmentChange({...assessment,criteria:assessment.criteria.map(c=>c.key===key?{...c,...patch}:c),idempotencyKey:stemMutationKey()});
++  };
++  const handleJudgmentChange=(key:string,judgment:StemCriterion['judgment'])=>updateCriterion(key,{judgment});
++  const handleRationaleChange=(key:string,rationale:string)=>updateCriterion(key,{rationale});
++  const handleTriggerChangeRequest=async()=>{
++    if(!onRequestChangesWithTarget||!isReviewerActive||!stemData||!changeTargetNote.trim())return;
++    const target={expectedVersionId:versionId,expectedScriptRevision:scriptRevision,expectedBriefRevision:stemData.revision};
++    const payload=JSON.stringify([target,changeTargetNote.trim()]);
++    if(requestKey.current?.payload!==payload)requestKey.current={payload,key:stemMutationKey()};
++    try{const success=await onRequestChangesWithTarget({...target,idempotencyKey:requestKey.current.key},changeTargetNote.trim());if(success!==false)setShowTargetModal(false);}
++    catch(err){setApiError(err);}
++  };
++
++  if (!isOpen) return null;
++
++  const brief = stemData?.brief;
++  const evidenceList = stemData?.evidence || [];
++
++  return (
++    <aside
++      className="fixed inset-y-0 right-0 w-96 max-w-full bg-white shadow-2xl border-l border-slate-200 z-40 flex flex-col transition-transform duration-200 ease-in-out text-xs"
++      aria-label="STEM Rubric QA Drawer"
++    >
++      {/* Header */}
++      <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between shrink-0 shadow-xs">
++        <div className="flex items-center gap-2">
++          <Layers className="w-4 h-4 text-brand-400" />
++          <div>
++            <div className="flex items-center gap-1.5">
++              <span className="font-bold text-slate-100">Rubric Thẩm Định STEM</span>
++              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
++                DRAFT / UNVERIFIED
++              </span>
++            </div>
++            <p className="text-[10px] text-slate-400">Đề xuất UI DRAFT; chưa phải rubric P2 đã khóa/chuyên môn đã thẩm định</p>
++          </div>
++        </div>
++        <button
++          onClick={onClose}
++          className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
++          title="Đóng bảng thẩm định"
++        >
++          <X className="w-4 h-4" />
++        </button>
++      </div>
++
++      {/* Ranh giới phân quyền / Check ghế REVIEWER active (P4-Q04) */}
++      {!isReviewerActive && (
++        <div className="bg-rose-50 border-b border-rose-200 px-4 py-2.5 text-rose-900 flex items-start gap-2 shrink-0">
++          <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
++          <div>
++            <span className="font-bold block text-[11px]">Chặn Bypass Quản Trị Viên (Admin)</span>
++            <p className="text-[10px] text-rose-700 leading-tight">
++              Tài khoản hiện tại ({userRole || 'Không xác định'}) chưa kích hoạt ghế <b>REVIEWER</b> hợp lệ trong workspace. Form chấm điểm bị khóa chỉ đọc nhằm đảm bảo tính trung thực chuyên môn.
++            </p>
++          </div>
++        </div>
++      )}
++
++      <StemErrorNotice error={apiError} onReload={()=>setReload(n=>n+1)} />
++      {loadingStem&&<p role="status">Đang tải hồ sơ STEM…</p>}
++      {/* Navigation Tabs */}
++      <div className="flex border-b border-slate-200 bg-slate-50 shrink-0 text-slate-600 font-semibold text-[11px]">
++        <button
++          onClick={() => setActiveTab('RUBRIC')}
++          className={`flex-1 py-2 text-center border-b-2 ${
++            activeTab === 'RUBRIC'
++              ? 'border-brand-600 text-brand-700 bg-white font-bold'
++              : 'border-transparent hover:text-slate-900'
++          }`}
++        >
++          Tiêu Chí Rubric (6)
++        </button>
++        <button
++          onClick={() => setActiveTab('BRIEF_VIEW')}
++          className={`flex-1 py-2 text-center border-b-2 ${
++            activeTab === 'BRIEF_VIEW'
++              ? 'border-brand-600 text-brand-700 bg-white font-bold'
++              : 'border-transparent hover:text-slate-900'
++          }`}
++        >
++          Hồ Sơ Tác Giả Đã Khai
++        </button>
++      </div>
++
++      {/* Main Drawer Body */}
++      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
++        {activeTab === 'RUBRIC' ? (
++          <>
++            {/* Criteria Evaluation List */}
++            <div className="space-y-3.5">
++              {DEFAULT_CRITERIA_KEYS.map((crit, idx) => {
++                const current = assessment?.criteria?.find((c) => c.key === crit.key);
++                const currentJudgment = current?.judgment || 'NOT_ASSESSED';
++                const currentRationale = current?.rationale || '';
++
++                return (
++                  <div
++                    key={crit.key}
++                    className="p-3 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-2 hover:border-slate-300 transition-colors"
++                  >
++                    <div className="flex items-start justify-between gap-1">
++                      <div>
++                        <span className="text-[10px] font-mono text-slate-400 font-bold">#{idx + 1}</span>
++                        <h4 className="font-bold text-slate-800 text-[11px] leading-snug">{crit.label}</h4>
++                      </div>
++                      <span
++                        className={`text-[9px] px-1.5 py-0.5 rounded border font-semibold shrink-0 ${JUDGMENT_LABELS[currentJudgment].badge}`}
++                      >
++                        {JUDGMENT_LABELS[currentJudgment].label.split(' ')[0]}
++                      </span>
++                    </div>
++
++                    <p className="text-[10px] text-slate-500 leading-tight">{crit.description}</p>
++
++                    {/* Radio Options */}
++                    <div className="grid grid-cols-2 gap-1 pt-1">
++                      {(['ADEQUATE', 'NEEDS_CHANGES', 'NOT_ASSESSED', 'NOT_APPLICABLE'] as StemCriterion['judgment'][]).map(
++                        (judgmentOption) => (
++                          <label
++                            key={judgmentOption}
++                            className={`flex items-center gap-1.5 p-1 rounded border text-[10px] cursor-pointer transition-colors ${
++                              currentJudgment === judgmentOption
++                                ? 'bg-brand-50 border-brand-300 font-semibold text-brand-900 shadow-2xs'
++                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
++                            } ${!isReviewerActive ? 'opacity-60 cursor-not-allowed' : ''}`}
++                          >
++                            <input
++                              type="radio"
++                              name={`judgment_${crit.key}`}
++                              value={judgmentOption}
++                              checked={currentJudgment === judgmentOption}
++                              disabled={!isReviewerActive || loadingStem || Boolean(apiError) || !stemData || decisionPending}
++                              onChange={() => handleJudgmentChange(crit.key, judgmentOption)}
++                              className="text-brand-600 focus:ring-brand-500 w-3 h-3"
++                            />
++                            <span className="truncate">{JUDGMENT_LABELS[judgmentOption].label.split(' ')[0]}</span>
++                          </label>
++                        )
++                      )}
++                    </div>
++
++                    <fieldset disabled={!isReviewerActive || !stemData || Boolean(apiError) || decisionPending}><legend>Minh chứng tham chiếu</legend>
++                      {evidenceList.filter(e=>e.id).map(e=><label key={e.id} className="block"><input type="checkbox" checked={current?.evidenceIds.includes(e.id!)??false} onChange={event=>updateCriterion(crit.key,{evidenceIds:event.target.checked?[...(current?.evidenceIds??[]),e.id!]:current?.evidenceIds.filter(id=>id!==e.id)??[]})}/>[{e.component}] {e.sceneId??e.taskKey}: {e.explanation}</label>)}
++                    </fieldset>
++                    {/* Rationale input */}
++                    <div className="pt-1">
++                      <input
++                        type="text"
++                        maxLength={4000} aria-label={`Lý do ${crit.key}`} placeholder="Nhận xét / lý do đánh giá tiêu chí này..."
++                        value={currentRationale}
++                        disabled={!isReviewerActive || loadingStem || Boolean(apiError) || !stemData || decisionPending}
++                        onChange={(e) => handleRationaleChange(crit.key, e.target.value)}
++                        className="w-full text-[10px] px-2 py-1 border border-slate-200 rounded focus:ring-1 focus:ring-brand-500 focus:border-brand-500 disabled:bg-slate-100"
++                      />
++                    </div>
++                  </div>
++                );
++              })}
++            </div>
++          </>
++        ) : (
++          /* Brief View tab: Reference what the writer specified */
++          <div className="space-y-3">
++            {loadingStem ? (
++              <p className="text-slate-500 italic text-center py-4">Đang tải hồ sơ STEM của tác giả...</p>
++            ) : stemError ? (
++              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
++                <AlertTriangle className="w-4 h-4 text-amber-600 inline mr-1" />
++                {stemError}
++              </div>
++            ) : !brief ? (
++              <p className="text-slate-400 italic text-center py-4">Chưa có hồ sơ STEM được khai báo cho kịch bản này.</p>
++            ) : (
++              <div className="space-y-3 text-[11px]">
++                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
++                  <span className="font-bold text-slate-800 block mb-1">Mục tiêu & Bối cảnh</span>
++                  <p className="text-slate-600">
++                    <b>Bối cảnh chính:</b> {brief.context?.primary?.key || 'Chưa chọn'}
++                  </p>
++                  <p className="text-slate-600">
++                    <b>Kênh triển khai:</b> {brief.distributionChannels?.join(', ') || 'Chưa chọn'}
++                  </p>
++                </div>
++
++                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
++                  <span className="font-bold text-slate-800 block">Đóng góp S - T - E - M</span>
++                  <div className="space-y-1 text-slate-700">
++                    {brief.contributions?.map((c) => (
++                      <div key={c.component}>
++                        <b>{c.component}:</b> {c.explanation || '—'}
++                      </div>
++                    ))}
++                  </div>
++                </div>
++
++                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
++                  <span className="font-bold text-slate-800 block mb-1">
++                    Minh chứng phân cảnh ({evidenceList.length})
++                  </span>
++                  {evidenceList.length > 0 ? (
++                    <ul className="space-y-1">
++                      {evidenceList.map((ev, i) => (
++                        <li key={i} className="text-slate-600 border-b border-slate-200/60 pb-1">
++                          <span className="font-bold text-brand-700">[{ev.component}]</span> Cảnh {ev.sceneId}: {ev.explanation}
++                        </li>
++                      ))}
++                    </ul>
++                  ) : (
++                    <span className="text-slate-400 italic">Chưa liên kết phân cảnh nào.</span>
++                  )}
++                </div>
++              </div>
++            )}
++          </div>
++        )}
++      </div>
++
++      {/* Footer / Actions */}
++      <div className="p-3 bg-white border-t border-slate-200 shrink-0 space-y-2 shadow-2xs">
++        {onApproveWithAssessment&&isReviewerActive&&<button disabled={decisionPending||loadingStem||Boolean(apiError)||!assessment||assessment.criteria.some(c=>!c.rationale.trim())||(phase==='VIDEO'&&compositionRevision===undefined)} onClick={()=>void onApproveWithAssessment()}>Duyệt kèm assessment</button>}
++        <p>Mọi mức đánh giá cần lý do. BE kiểm tra ghế và CAS trong cùng request duyệt.</p>
++        {/* Change Target Trigger Button (P4-Q04) */}
++        {onRequestChangesWithTarget && isReviewerActive && (
++          <button
++            onClick={() => setShowTargetModal(true)}
++            disabled={decisionPending || !stemData || Boolean(apiError)}
++            className="w-full py-1.5 px-3 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
++          >
++            <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
++            <span>Yêu cầu sửa đổi kèm đích (Change Target)</span>
++          </button>
++        )}
++      </div>
++
++      {/* Modal chọn đích sửa đổi (Change Target Modal) */}
++      {showTargetModal && (
++        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
++          <div ref={targetDialog} className="bg-white rounded-xl max-w-md w-full p-4 space-y-3 shadow-2xl border border-slate-200 text-xs">
++            <div className="flex items-center justify-between border-b pb-2">
++              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
++                <AlertTriangle className="w-4 h-4 text-amber-600" />
++                Chỉ định đích sửa đổi (STEM Change Target)
++              </h3>
++              <button onClick={() => setShowTargetModal(false)} className="text-slate-400 hover:text-slate-600">
++                <X className="w-4 h-4" />
++              </button>
++            </div>
++
++            <p className="text-slate-600 leading-snug">
++              Xác định phạm vi tác giả cần chỉnh sửa kèm mã idempotencyKey phiên làm việc:
++            </p>
++
++            <div>
++              <label className="block text-[11px] font-bold text-slate-800 mb-1">
++                Lý do yêu cầu sửa đổi (sẽ gửi cho Tác giả):
++              </label>
++              <textarea
++                rows={3}
++                maxLength={4000} value={changeTargetNote}
++                onChange={(e) => setChangeTargetNote(e.target.value)}
++                placeholder="Ghi rõ nội dung tác giả cần chỉnh sửa trong kịch bản hoặc hồ sơ STEM..."
++                className="w-full text-xs p-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
++              />
++            </div>
++
++            <div className="flex justify-end gap-2 pt-2 border-t">
++              <button
++                type="button"
++                onClick={() => setShowTargetModal(false)}
++                className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 font-semibold text-slate-600"
++              >
++                Hủy
++              </button>
++              <button
++                type="button"
++                disabled={decisionPending || !stemData || Boolean(apiError)}
++                onClick={handleTriggerChangeRequest}
++                className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-xs transition-colors"
++              >
++                {decisionPending ? 'Đang gửi…' : 'Xác nhận yêu cầu sửa'}
++              </button>
++            </div>
++          </div>
++        </div>
++      )}
++    </aside>
++  );
++};
+diff --git a/src/components/stem/StemWorkspaceSettings.tsx b/src/components/stem/StemWorkspaceSettings.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/stem/StemWorkspaceSettings.tsx
+@@ -0,0 +1,47 @@
++import React, { useEffect, useState, useRef } from 'react';
++import { authService } from '../../services/authService';
++import { scriptService } from '../../services/scriptService';
++import { stemMutationKey } from '../../services/stemClient';
++import { StemErrorNotice } from './StemErrorNotice';
++import type { WorkspaceStemSettings, CatalogVersionEntry } from '../../types/stem';
++
++/** Read/Assign MVP only. Backend remains authoritative for Admin access and CAS. */
++export function StemWorkspaceSettings({workspaceId}:{workspaceId:string}) {
++  const [settings,setSettings]=useState<WorkspaceStemSettings|null>(null);
++  const [policies,setPolicies]=useState<CatalogVersionEntry[]>([]);
++  const [error,setError]=useState<unknown>(null);
++  const [busy,setBusy]=useState(false);
++  const [reload,setReload]=useState(0);
++  const retry=useRef<{payload:string;key:string}|null>(null);
++  const admin=authService.getCurrentUser().systemRole==='ADMIN';
++  useEffect(()=>{
++    let current=true;setSettings(null);setError(null);
++    const load=async()=>{
++      const mode=await scriptService.getWorkspaceStemSettings(workspaceId);
++      const rows:CatalogVersionEntry[]=[];
++      for(let page=0;;page++){const batch=await scriptService.getCatalog('POLICY',page,100);rows.push(...batch);if(batch.length<100)break;if(page>=99)throw new Error('Danh sách policy chưa đầy đủ.');}
++      if(current){setSettings(mode);setPolicies(rows);}
++    };
++    void load().catch(err=>{if(current)setError(err);});return()=>{current=false;};
++  },[workspaceId,reload]);
++  const save=async()=>{
++    if(!settings||!admin||busy||error)return;
++    const payload=JSON.stringify(settings);
++    if(retry.current?.payload!==payload)retry.current={payload,key:stemMutationKey()};
++    setBusy(true);
++    try{setSettings(await scriptService.saveWorkspaceStemSettings(workspaceId,{...settings,idempotencyKey:retry.current.key}));retry.current=null;}
++    catch(err){setError(err);}finally{setBusy(false);}
++  };
++  return <details className="border p-3"><summary>Workspace STEM — xem/gán policy DRAFT</summary>
++    <StemErrorNotice error={error} onReload={()=>setReload(n=>n+1)} onRetryReady={()=>setError(null)}/>
++    <p>modeRevision: {settings?.modeRevision??'—'} · Cùng counter workspace trên BE.</p>
++    {!admin&&<p>Chỉ Admin hệ thống được ghi settings; quyền được BE kiểm tra lại.</p>}
++    {settings&&<fieldset disabled={!admin||busy||Boolean(error)}>
++      <label>Mode<select value={settings.mode} onChange={e=>setSettings({...settings,mode:e.target.value as 'OFF'|'ADVISORY'})}><option>OFF</option><option>ADVISORY</option></select></label>
++      {policies.map(p=><label className="block" key={p.id}><input type="checkbox" checked={settings.policyVersionIds.includes(p.id)} onChange={e=>setSettings({...settings,policyVersionIds:e.target.checked?[...settings.policyVersionIds,p.id]:settings.policyVersionIds.filter(id=>id!==p.id),defaultPolicyVersionId:!e.target.checked&&settings.defaultPolicyVersionId===p.id?null:settings.defaultPolicyVersionId})}/>{p.logicalKey} v{p.version} — {p.status}/UNVERIFIED</label>)}
++      {settings.policyVersionIds.filter(id=>!policies.some(p=>p.id===id)).map(id=><p key={id}>Policy đã pin không khả dụng: {id}. Không tự remap.</p>)}
++      <label>Policy mặc định<select value={settings.defaultPolicyVersionId??''} onChange={e=>setSettings({...settings,defaultPolicyVersionId:e.target.value||null})}><option value="">Không chọn</option>{settings.policyVersionIds.map(id=><option key={id} value={id}>{policies.find(p=>p.id===id)?.logicalKey??id}</option>)}</select></label>
++      <button onClick={()=>void save()}>Lưu settings workspace (CAS)</button>
++    </fieldset>}
++  </details>;
++}
+diff --git a/src/components/stem/useStemTarget.ts b/src/components/stem/useStemTarget.ts
+new file mode 100644
+--- /dev/null
++++ b/src/components/stem/useStemTarget.ts
+@@ -0,0 +1,15 @@
++import { useEffect, useState } from 'react';
++import { scriptService } from '../../services/scriptService';
++import type { StemTarget } from '../../types/stem';
++
++export function useStemTarget(projectId: string, version?: string | number) {
++  const [state, setState] = useState<{target: StemTarget | null; error: unknown}>({target:null,error:null});
++  useEffect(() => {
++    let current=true;
++    setState({target:null,error:null});
++    scriptService.getStemTarget(projectId).then(target=>{if(current)setState({target,error:null});})
++      .catch(error=>{if(current)setState({target:null,error});});
++    return ()=>{current=false;};
++  },[projectId,version]);
++  return state;
++}
+diff --git a/src/services/stemAutosave.test.ts b/src/services/stemAutosave.test.ts
+new file mode 100644
+--- /dev/null
++++ b/src/services/stemAutosave.test.ts
+@@ -0,0 +1,38 @@
++import {it,expect,vi,afterEach} from 'vitest';
++import {ApiError,apiClient} from './apiClient';
++import {sceneSaveQueue} from './sceneSaveQueue';
++import {createCompositionSaver} from './compositionService';
++import {hasActiveReviewerSeat} from './stemClient';
++afterEach(()=>{vi.restoreAllMocks();vi.useRealTimers();});
++it('scene autosave pauses for Retry-After, keeps latest edits and performs one save after a new edit',async()=>{
++ vi.useFakeTimers();
++ const scenes=[{id:'s',title:'TEST_ONLY latest'}] as any;
++ const put=vi.spyOn(apiClient,'put').mockRejectedValueOnce(new ApiError('limited','STEM_RATE_LIMIT',429,undefined,5)).mockResolvedValue({draftRevision:1,scenes});
++ await expect(sceneSaveQueue.saveNow('TEST_ONLY_429',scenes)).rejects.toMatchObject({status:429});
++ sceneSaveQueue.schedule('TEST_ONLY_429',scenes);
++ await vi.advanceTimersByTimeAsync(4000);expect(put).toHaveBeenCalledTimes(1);
++ await vi.advanceTimersByTimeAsync(1001);expect(put).toHaveBeenCalledTimes(2);
++ await vi.advanceTimersByTimeAsync(10000);expect(put).toHaveBeenCalledTimes(2);
++ expect(sceneSaveQueue.isDirty('TEST_ONLY_429')).toBe(false);
++});
++it('composition autosave preserves the failed payload, waits for the cooldown and never loops retries',async()=>{
++ vi.useFakeTimers();
++ const scenes=[{id:'s',title:'TEST_ONLY latest'}] as any;
++ const save=vi.fn().mockRejectedValueOnce(new ApiError('limited','STEM_RATE_LIMIT',429,undefined,5)).mockResolvedValue({revision:1});
++ const saver=createCompositionSaver('TEST_ONLY_p',0,{onSaved:vi.fn(),onError:vi.fn()},{save});
++ saver.schedule(scenes);await expect(saver.flush()).rejects.toMatchObject({status:429});
++ expect(saver.isDirty?.()).toBe(true);
++ await expect(saver.flush()).rejects.toMatchObject({status:429});expect(save).toHaveBeenCalledTimes(1);
++ await vi.advanceTimersByTimeAsync(5000);expect(save).toHaveBeenCalledTimes(1);
++ await expect(saver.flush()).resolves.toBe(1);expect(save).toHaveBeenLastCalledWith('TEST_ONLY_p',0,scenes);
++ saver.dispose();
++});
++it.each([undefined,'INACTIVE'])('Reviewer seat fails closed for status %s, even with a matching role/user',async(status)=>{
++ vi.spyOn(apiClient,'get').mockResolvedValue([{userId:'u',role:'REVIEWER',status}]);
++ expect(await hasActiveReviewerSeat('w','u')).toBe(false);
++});
++it('Reviewer seat uses the target workspace, exact active status and the current user',async()=>{
++ const get=vi.spyOn(apiClient,'get').mockResolvedValue([{userId:'u',role:'REVIEWER',status:'ACTIVE'}]);
++ expect(await hasActiveReviewerSeat('target-w','u')).toBe(true);
++ expect(get).toHaveBeenCalledWith('/workspaces/target-w/members');
++});
+diff --git a/src/services/stemClient.test.ts b/src/services/stemClient.test.ts
+new file mode 100644
+--- /dev/null
++++ b/src/services/stemClient.test.ts
+@@ -0,0 +1,59 @@
++import { describe,it,expect,vi,afterEach } from 'vitest';
++import { apiClient,ApiError,parseRetryAfter } from './apiClient';
++import { scriptService } from './scriptService';
++import { reviewService } from './reviewService';
++import { emptyStemBrief,stemSavePayload,checkStemPayload,workspaceModeFromWire,stemError,assertPresentationIdentity } from './stemClient';
++import type { StemSaveRequest,SceneData,StemAssessment } from '../types/stem';
++const request=():StemSaveRequest=>({schemaVersion:'stem.v1',baseRevision:0,expectedScriptRevision:0,idempotencyKey:'TEST_ONLY_key',brief:emptyStemBrief(),evidence:[]});
++afterEach(()=>vi.restoreAllMocks());
++describe('P4 wire and validation',()=>{
++ it('whitelists aggregate and strips UI/server-owned properties including evidence originalSceneId',()=>{
++   const input={...request(),effectiveMode:'STRICT',verified:true,brief:{...emptyStemBrief(),approvedBy:'fake'},evidence:[{component:'S',originalSceneId:'old',uiKey:'local'}]} as any;
++   const result=stemSavePayload(input);
++   expect(result).not.toHaveProperty('verified');expect(result.brief).not.toHaveProperty('approvedBy');
++   expect(result.evidence[0]).not.toHaveProperty('id');expect(result.evidence[0]).not.toHaveProperty('originalSceneId');
++ });
++ it('accepts null primary and zero CAS for a draft without inventing readiness',()=>expect(()=>checkStemPayload(request())).not.toThrow());
++ it.each([['context',()=>({...request(),brief:{...emptyStemBrief(),context:{primary:{key:'DEPARTMENT_LIBRARY'},secondary:[]}}})],['text',()=>({...request(),brief:{...emptyStemBrief(),scopeOfClip:'x'.repeat(4001)}})],['tasks',()=>({...request(),brief:{...emptyStemBrief(),studentTasks:Array.from({length:21},(_,i)=>({key:String(i)}))}})],['evidence',()=>({...request(),evidence:Array.from({length:201},()=>({component:'S'}))})]] as const)('rejects invalid %s locally with 400 details',(_,make)=>{
++   expect(()=>checkStemPayload(make() as StemSaveRequest)).toThrow(ApiError);
++   try{checkStemPayload(make() as StemSaveRequest);}catch(e){expect(stemError(e)).toMatchObject({status:400});expect(stemError(e).field).toBeTruthy();}
++ });
++ it('parses exact workspace counter response as the same modeRevision alias',()=>expect(workspaceModeFromWire({workspaceId:'w',revision:0,mode:'OFF',policyIds:[],defaultPolicyId:null})).toMatchObject({modeRevision:0,policyVersionIds:[]}));
++ it('approved G06 adapter sends only workspace baseRevision, never modeRevision',async()=>{
++   const put=vi.spyOn(apiClient,'put').mockResolvedValue({workspaceId:'w',revision:8,mode:'ADVISORY',policyIds:['p'],defaultPolicyId:'p'});
++   const result=await scriptService.saveWorkspaceStemSettings('w',{modeRevision:7,mode:'ADVISORY',policyVersionIds:['p'],defaultPolicyVersionId:'p',idempotencyKey:'TEST_ONLY_key'});
++   expect(put.mock.calls[0][1]).toEqual({baseRevision:7,mode:'ADVISORY',policyVersionIds:['p'],defaultPolicyVersionId:'p',idempotencyKey:'TEST_ONLY_key',legacyModeSelection:null});expect(result.modeRevision).toBe(8);
++ });
++ it('resolves real current version UUID and preserves draft revision zero',async()=>{
++   vi.spyOn(apiClient,'get').mockResolvedValueOnce({workspaceId:'w',draftRevision:0}).mockResolvedValueOnce([{id:'real-uuid',versionNo:3,isCurrent:true}]);
++   expect(await scriptService.getStemTarget('p')).toEqual({versionId:'real-uuid',versionNo:3,workspaceId:'w',scriptRevision:0});
++ });
++ it('fails closed when the current version cannot be identified',async()=>{
++   vi.spyOn(apiClient,'get').mockResolvedValueOnce({workspaceId:'w',draftRevision:0}).mockResolvedValueOnce([]);
++   await expect(scriptService.getStemTarget('p')).rejects.toMatchObject({status:409});
++ });
++ it('keeps approval assessment atomic and excludes it from request-changes',async()=>{
++   const post=vi.spyOn(apiClient,'post').mockResolvedValue({});const a={expectedBriefRevision:0,expectedScriptRevision:0,expectedModeRevision:0,expectedCompositionRevision:null,rubricVersionId:null,criteria:[],idempotencyKey:'TEST_ONLY_key'} as StemAssessment;
++   await reviewService.submitReviewDecision('p','APPROVED','note',a);
++   expect(post).toHaveBeenLastCalledWith('/scripts/p/approve',{note:'note',stemAssessment:a});
++   const target={expectedVersionId:'uuid',expectedBriefRevision:0,expectedScriptRevision:0,idempotencyKey:'TEST_ONLY_key'};
++   await reviewService.submitReviewDecision('p','CHANGE_REQUESTED','note',a,target);
++   expect(post).toHaveBeenLastCalledWith('/scripts/p/request-changes',{note:'note',changeTarget:target});
++ });
++ it('accepts layout updates preserving ID/type and rejects replacement identities',()=>{
++   const scene={id:'s1',type:'TITLE_HERO'} as SceneData;
++   expect(assertPresentationIdentity(scene,{...scene,dx:4} as unknown as SceneData).id).toBe('s1');
++   expect(()=>assertPresentationIdentity(scene,{...scene,id:'s2'})).toThrow();
++ });
++});
++describe('P4 error parsing',()=>{
++ it('reads Retry-After seconds and HTTP dates, rejecting malformed values',()=>{
++   expect(parseRetryAfter('12')).toBe(12);expect(parseRetryAfter('Thu, 05 Nov 2026 00:00:03 GMT',Date.UTC(2026,10,5))).toBe(3);
++   expect(parseRetryAfter('invalid')).toBeUndefined();expect(parseRetryAfter('-1')).toBeUndefined();expect(parseRetryAfter('1.5')).toBeUndefined();expect(parseRetryAfter(null)).toBeUndefined();
++ });
++ it('preserves server field/findings and uses Retry-After header before body',()=>{
++   const err=new ApiError('bad','STEM_RATE_LIMIT',429,{field:'brief.scopeOfClip',retryAfterSeconds:99,findings:[{ruleId:'BE_RAW',field:'brief',message:'m',severity:'WARN'}]},3);
++   expect(stemError(err)).toMatchObject({status:429,retryAfterSeconds:3,field:'brief.scopeOfClip'});expect(stemError(err).findings[0].ruleId).toBe('BE_RAW');
++ });
++ it('keeps revision conflicts separate from validation errors',()=>expect(stemError(new ApiError('stale','STEM_STALE_TARGET',409))).toMatchObject({status:409,code:'STEM_STALE_TARGET'}));
++});
+diff --git a/src/services/stemClient.ts b/src/services/stemClient.ts
+new file mode 100644
+--- /dev/null
++++ b/src/services/stemClient.ts
+@@ -0,0 +1,55 @@
++import { ApiError, apiClient } from './apiClient';
++import type { StemBrief, StemEvidence, StemSaveRequest, StemValidationFinding, WorkspaceStemSettings, WorkspaceStemSettingsWire, SceneData, StemAssessment, StemChangeTarget } from '../types/stem';
++
++export const STEM_CONTEXT_KEYS = ['IN_CLASS_SCREEN', 'GROUP_PRACTICE'] as const;
++export async function hasActiveReviewerSeat(workspaceId:string,userId:string):Promise<boolean> {
++ if(!workspaceId||!userId)return false;
++ const rows=await apiClient.get<Array<{userId?:string;role?:string;status?:string}>>(`/workspaces/${workspaceId}/members`);
++ return Array.isArray(rows)&&rows.some(row=>row.userId===userId&&row.role==='REVIEWER'&&row.status==='ACTIVE');
++}
++export const emptyStemBrief = (): StemBrief => ({policyVersionId:null,topicVersionId:null,gradeKey:null,subjectKeys:[],outcomeIds:[],scopeOfClip:'',context:{primary:null,secondary:[]},distributionChannels:[],objectives:[],studentTasks:[],contributions:[],safetyNotes:'',rawLegacy:null});
++export const stemMutationKey = () => `stem_${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`}`;
++
++export const stemAssessmentPayload=(a:StemAssessment):StemAssessment=>({
++ expectedBriefRevision:a.expectedBriefRevision,expectedScriptRevision:a.expectedScriptRevision,expectedModeRevision:a.expectedModeRevision,
++ expectedCompositionRevision:a.expectedCompositionRevision??null,rubricVersionId:a.rubricVersionId??null,idempotencyKey:a.idempotencyKey,
++ criteria:a.criteria.map(c=>({key:c.key,judgment:c.judgment,rationale:c.rationale,evidenceIds:[...c.evidenceIds]})),
++});
++export const stemChangePayload=(t:StemChangeTarget):StemChangeTarget=>({expectedVersionId:t.expectedVersionId,expectedScriptRevision:t.expectedScriptRevision,expectedBriefRevision:t.expectedBriefRevision,idempotencyKey:t.idempotencyKey});
++
++/** Explicit wire whitelist: UI state and server-owned response fields never leak into mutations. */
++export function stemSavePayload(request: StemSaveRequest): StemSaveRequest {
++ const b=request.brief;
++ return {schemaVersion:'stem.v1',baseRevision:request.baseRevision,expectedScriptRevision:request.expectedScriptRevision,idempotencyKey:request.idempotencyKey,
++  brief:{policyVersionId:b.policyVersionId??null,topicVersionId:b.topicVersionId??null,gradeKey:b.gradeKey??null,subjectKeys:[...b.subjectKeys],outcomeIds:[...b.outcomeIds],scopeOfClip:b.scopeOfClip??null,
++   context:{primary:b.context.primary?{key:b.context.primary.key,condition:b.context.primary.condition??null,adaptations:b.context.primary.adaptations??null}:null,secondary:b.context.secondary.map(c=>({key:c.key,condition:c.condition??null,adaptations:c.adaptations??null}))},
++   distributionChannels:[...b.distributionChannels],objectives:b.objectives.map(o=>({key:o.key,outcomeId:o.outcomeId??null,learnerAction:o.learnerAction??null,observableEvidence:o.observableEvidence??null})),studentTasks:b.studentTasks.map(t=>({key:t.key,learnerAction:t.learnerAction??null,teacherSupport:t.teacherSupport??null,materials:t.materials??null,safety:t.safety??null,assessmentEvidence:t.assessmentEvidence??null,executionContextKey:t.executionContextKey??null})),
++   contributions:b.contributions.map(c=>({component:c.component,explanation:c.explanation??null,objectiveKeys:[...c.objectiveKeys],taskKeys:[...c.taskKeys]})),safetyNotes:b.safetyNotes??null,rawLegacy:b.rawLegacy??null},
++  evidence:request.evidence.map(e=>({...e.id?{id:e.id}:{},sceneId:e.sceneId??null,taskKey:e.taskKey??null,objectiveKey:e.objectiveKey??null,component:e.component,explanation:e.explanation??null}))};
++}
++export function checkStemPayload(request: StemSaveRequest): void {
++ const b=request.brief; const invalid=(field:string,message:string):never=>{throw new ApiError(message,'FE_STEM_INPUT',400,{field});};
++ const keys=(list:string[],field:string)=>{if(list.some(x=>!x||x.length>128))invalid(field,'Mã phải có từ 1 đến 128 ký tự.');};
++ if(b.context.primary&&!STEM_CONTEXT_KEYS.includes(b.context.primary.key))invalid('brief.context.primary','Bối cảnh không được hỗ trợ.');
++ for(const c of b.context.secondary)if(!STEM_CONTEXT_KEYS.includes(c.key))invalid('brief.context.secondary','Bối cảnh phụ không được hỗ trợ.');
++ for(const [items,max,field] of [[b.subjectKeys,20,'brief.subjectKeys'],[b.outcomeIds,20,'brief.outcomeIds'],[b.objectives,20,'brief.objectives'],[b.studentTasks,20,'brief.studentTasks'],[b.contributions,4,'brief.contributions'],[b.context.secondary,4,'brief.context.secondary'],[request.evidence,200,'evidence']] as const)if(items.length>max)invalid(field,`Tối đa ${max} mục.`);
++ keys(b.subjectKeys,'brief.subjectKeys');keys(b.outcomeIds,'brief.outcomeIds');keys(b.objectives.map(x=>x.key),'brief.objectives');keys(b.studentTasks.map(x=>x.key),'brief.studentTasks');
++ const walk=(value:unknown,depth=0):void=>{if(depth>16)invalid('request','Cấu trúc quá sâu.');if(typeof value==='string'&&value.length>4000)invalid('request','Nội dung tối đa 4000 ký tự.');if(value&&typeof value==='object')Object.values(value).forEach(v=>walk(v,depth+1));};walk(request);
++ if(new TextEncoder().encode(JSON.stringify(request)).length>262144)invalid('request','Nội dung vượt giới hạn 262144 byte.');
++ // Completeness is returned by BE as findings; null primary is valid for draft saving.
++}
++export function workspaceModeFromWire(wire: WorkspaceStemSettingsWire): WorkspaceStemSettings {
++ if(!wire||!Number.isInteger(wire.revision)||!['OFF','ADVISORY'].includes(wire.mode)||!Array.isArray(wire.policyIds))throw new ApiError('Settings workspace không đúng contract P3.','FE_STEM_RESPONSE',400);
++ return {workspaceId:wire.workspaceId,modeRevision:wire.revision,mode:wire.mode,policyVersionIds:wire.policyIds,defaultPolicyVersionId:wire.defaultPolicyId??null};
++}
++export function stemError(error: unknown) {
++ const e=error as ApiError;const details=e?.details as {field?:string;findings?:StemValidationFinding[];retryAfterSeconds?:number}|undefined;
++ const retry=e?.retryAfterSeconds??details?.retryAfterSeconds??60;
++ return {status:e?.status??0,code:e?.code??'NETWORK_ERROR',message:e?.message??'Không kết nối được máy chủ.',field:details?.field,findings:Array.isArray(details?.findings)?details.findings:[],retryAfterSeconds:Number.isFinite(Number(retry))?Math.max(0,Math.ceil(Number(retry))):60};
++}
++export function assertPresentationIdentity(before: SceneData,after: SceneData): SceneData {
++ if(after.id!==before.id||after.type!==before.type)throw new ApiError('Chỉnh bố cục phải giữ nguyên Scene ID và loại cảnh.','FE_SCENE_IDENTITY',409);
++ return after;
++}
++/** P2 classifies these layout fields as conditional; no timing/semantic invariance is claimed. */
++export const PRESENTATION_REVIEW_NOTICE='Thay đổi bố cục cần rà soát ý nghĩa (NEEDS_REVIEW). Projector/AT21 được kiểm chứng ở P5.';

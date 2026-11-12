@@ -24,6 +24,8 @@ import { STEMScript, SceneData } from '../../../types/stem';
 import { renderService, RenderHistoryEntry, reviewService } from '../../../services';
 import { RemotionPlayerWrapper } from '../../RemotionPlayerWrapper';
 import { SceneListColumn } from './SceneListColumn';
+import { StemReadOnlySummary } from '../../stem/StemReadOnlySummary';
+import { assertPresentationIdentity, PRESENTATION_REVIEW_NOTICE } from '../../../services/stemClient';
 import { SceneInspector } from './SceneInspector';
 
 export type VisualTheme = 'default' | 'cyber' | 'emerald' | 'sunset' | 'academic';
@@ -249,8 +251,18 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
     }
   });
 
+  const updatePresentation: typeof updateSceneProperty = updater => updateSceneProperty((before: SceneData) => {
+    const identity={...before};
+    let after:SceneData;
+    try{after=assertPresentationIdentity(identity,updater({...before}));}
+    catch(error){showToast?.((error as Error).message,'warn');return before;}
+    // Conditional/unclassified visual fields still need semantic review; no P5 proof is claimed.
+    return after;
+  });
   return (
     <section className="studio-workspace flex-1 min-h-0 flex flex-col overflow-hidden">
+      <StemReadOnlySummary script={script} compositionVersionNo={production?.scriptVersionNo} compositionRevision={production?.revision}/>
+      <p role="note" className="px-4 py-1 text-xs text-amber-800">{PRESENTATION_REVIEW_NOTICE}</p>
       {/* Top Bar Studio */}
       <div className="studio-toolbar bg-white border-b px-6 py-2.5 flex justify-between items-center text-xs shrink-0 z-10 shadow-2xs">
         <div className="flex items-center space-x-3">
@@ -476,7 +488,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
               script={script}
               activeSceneId={selectedScene.id}
               onSceneChange={(id) => setActiveSceneId(id)}
-              updateSceneProperty={updateSceneProperty}
+              updateSceneProperty={updatePresentation}
               activeLegoPieceId={activeLegoPieceId}
               onSelectLegoPiece={setActiveLegoPieceId}
               disabled={isLocked}
@@ -506,7 +518,7 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
         {/* Cột 3: LIVE PROPS INSPECTOR */}
         <SceneInspector
           selectedScene={selectedScene}
-          updateSceneProperty={updateSceneProperty}
+          updateSceneProperty={updatePresentation}
           onStartRender={startRender}
           activeLegoPieceId={activeLegoPieceId}
           onSelectLegoPiece={setActiveLegoPieceId}

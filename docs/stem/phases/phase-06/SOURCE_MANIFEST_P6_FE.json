@@ -1,0 +1,72 @@
+[
+  {
+    "relative": "src/components/stem/StemFlow.p6-live.test.tsx",
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\components\\stem\\StemFlow.p6-live.test.tsx",
+    "before_sha256": null,
+    "sha256": "4841650c77cece07a658fa158e8d4a3112b169416a0d3dd37a37e2cd3c8a67df",
+    "change": "NEW"
+  },
+  {
+    "relative": "src/components/stem/StemGroundedAiPanel.tsx",
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\components\\stem\\StemGroundedAiPanel.tsx",
+    "before_sha256": null,
+    "sha256": "8191202daea07d1250245015c2e66a35db46ce4ce189e1eb0a4b47c476bd8671",
+    "change": "NEW"
+  },
+  {
+    "relative": "src/components/stem/StemLearningCard.tsx",
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\components\\stem\\StemLearningCard.tsx",
+    "before_sha256": null,
+    "sha256": "117c1427d4e48b13fab5e80e4563e65014a3be75e226c2a9f776c48210d47d8c",
+    "change": "NEW"
+  },
+  {
+    "relative": "src/components/stem/StemP6.test.tsx",
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\components\\stem\\StemP6.test.tsx",
+    "before_sha256": null,
+    "sha256": "c5f84848718d1de1000bd37055d4d3a41ce45d95e36b5d4739b5903f35a1611b",
+    "change": "NEW"
+  },
+  {
+    "relative": "src/components/views/MediaLibrary/MediaLibraryView.tsx",
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\components\\views\\MediaLibrary\\MediaLibraryView.tsx",
+    "before_sha256": "a73e5b135d1390bf83a040b505a56dc62f6327b9dcddb04e38aab0d258c10a62",
+    "sha256": "fc1b9f3787215ef33ea1d150333932e73e90de578d9c86df29197afd4db824d3",
+    "change": "MODIFIED"
+  },
+  {
+    "relative": "src/components/views/WriterStudio/WriterStudio.tsx",
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\components\\views\\WriterStudio\\WriterStudio.tsx",
+    "before_sha256": "8c72fc534f3ec00f5142c3625f1c19c2e66fb85bdde510e51d05900e0493f34c",
+    "sha256": "6e86657411ff31da552accf7dfbe29e6e6e773974701a7c5b23b7b16cf4525e5",
+    "change": "MODIFIED"
+  },
+  {
+    "relative": "src/services/apiClient.ts",
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\services\\apiClient.ts",
+    "before_sha256": "9269d3047eecb9312125578f9dc0352a1ea44255b13dde5cfdd60cfed0dd182b",
+    "sha256": "2f756b2abb5ed18f8334faabb618418341065974da2f800059ab618b48392129",
+    "change": "MODIFIED"
+  },
+  {
+    "relative": "src/services/libraryService.ts",
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\services\\libraryService.ts",
+    "before_sha256": "ded3b1638a5f3545ae1e4a752658e55c7a8217ff063197ca380a44689dcec8c8",
+    "sha256": "033f6f2f759b1475aa41d10ea6d9c7ae718939b684951ce6406dbab6ec640231",
+    "change": "MODIFIED"
+  },
+  {
+    "relative": "src/services/scriptService.ts",
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\services\\scriptService.ts",
+    "before_sha256": "2a18c03b472b5dcee612d419274ed21f3e9b875b6bab0c7835d22d9859a56fef",
+    "sha256": "fde341f1475280aac20d977b7d4dcd091df87148b28233c3dc64e2b9073fb301",
+    "change": "MODIFIED"
+  },
+  {
+    "relative": "src/types/stem.ts",
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\types\\stem.ts",
+    "before_sha256": "5be236a657b7c0d4aa4160d79448d21c4b3662055e876d1bfdd3687e18bc94c0",
+    "sha256": "d17a140f9cbd51573aa7485da932f0a2ec9d01a0425168273bce5675b4b681b1",
+    "change": "MODIFIED"
+  }
+]

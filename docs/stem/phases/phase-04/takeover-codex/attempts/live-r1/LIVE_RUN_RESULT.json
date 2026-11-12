@@ -1,0 +1,11 @@
+{
+  "scope": "TEST_ONLY embedded PostgreSQL / E2eServer fakes",
+  "be_source_edited": false,
+  "ready": false,
+  "test_exit_code": null,
+  "cleaned": true,
+  "pid": 16128,
+  "port": 56815,
+  "blocker": "BE clone could not start in 90s; see be-live.log",
+  "server_exit_code": 1
+}

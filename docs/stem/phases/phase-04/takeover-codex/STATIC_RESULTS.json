@@ -1,0 +1,13 @@
+[
+  {
+    "name": "typecheck",
+    "exit_code": 0,
+    "seconds": 8.86,
+    "rechecked_after_final_catalog_test_exit_code": 0
+  },
+  {
+    "name": "build",
+    "exit_code": 0,
+    "seconds": 4.55
+  }
+]

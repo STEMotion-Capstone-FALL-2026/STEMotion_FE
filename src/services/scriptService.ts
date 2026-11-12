@@ -1,10 +1,12 @@
+import type { GroundedAiResult, GroundedAiTarget } from '../types/stem';
 /**
  * STEMotion Front-End - Script & Scene Service
  * Handles AI generation and scene mutations
  */
 
-import { apiClient } from './apiClient';
-import { STEMScript, STEMSubject, SceneData, SceneType } from '../types/stem';
+import { apiClient, ApiError } from './apiClient';
+import { stemSavePayload, checkStemPayload, workspaceModeFromWire } from './stemClient';
+import { STEMScript, STEMSubject, SceneData, SceneType, StemBrief, StemCreateRequest, StemSaveRequest, StemValidateRequest, StemViewResponse, WorkspaceStemSettings, WorkspaceStemSettingsWire, WorkspaceStemSettingsRequest, StemTarget, CatalogVersionEntry } from '../types/stem';
 import { sceneSaveQueue } from './sceneSaveQueue';
 import { ComposedContentError, composedPropsFrom } from './composed';
 
@@ -72,8 +74,12 @@ const res = await apiClient.post<any>('/ai/script/action', {
     };
   },
 
-  async decideAiRequest(requestId: string, decision: 'ACCEPTED' | 'IGNORED'): Promise<void> {
-    await apiClient.put(`/ai/requests/${encodeURIComponent(requestId)}/decision`, {decision});
+  async getGroundedSuggestion(projectId: string, operation: GroundedAiResult['operation'], target: GroundedAiTarget): Promise<GroundedAiResult> {
+    return apiClient.post<GroundedAiResult>(`/ai/scripts/${encodeURIComponent(projectId)}/grounded`, {schemaVersion:'stem-ai.v1',operation,...target});
+  },
+
+  async decideAiRequest(requestId: string, decision: 'ACCEPTED' | 'IGNORED', grounding?: {projectId: string;target: GroundedAiTarget;contextDigest: string}): Promise<void> {
+    await apiClient.put(`/ai/requests/${encodeURIComponent(requestId)}/decision`, {decision, ...(grounding ? {grounding} : {})});
   },
 
   /**
@@ -617,5 +623,53 @@ const res = await apiClient.post<any>('/ai/script/action', {
     };
 
     return sceneSaveQueue.saveNow(currentScript.id, filtered);
+  },
+
+  // ==========================================
+  // STEM Track API Methods (Contract Delta P3)
+  // ==========================================
+
+  async getStemBrief(projectId: string, versionId: string): Promise<StemViewResponse> {
+    return apiClient.get<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem`);
+  },
+
+  async createStemBrief(projectId: string, versionId: string, req: StemCreateRequest): Promise<StemViewResponse> {
+    return apiClient.post<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem`, {schemaVersion:req.schemaVersion,expectedScriptRevision:req.expectedScriptRevision,idempotencyKey:req.idempotencyKey});
+  },
+
+  async saveStemBrief(projectId: string, versionId: string, req: StemSaveRequest): Promise<StemViewResponse> {
+    const payload=stemSavePayload(req);checkStemPayload(payload);
+    return apiClient.put<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem`, payload);
+  },
+
+  async validateStem(projectId: string, versionId: string, req: StemValidateRequest): Promise<StemViewResponse> {
+    return apiClient.post<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem/validate`, {expectedBriefRevision:req.expectedBriefRevision,expectedScriptRevision:req.expectedScriptRevision,phase:req.phase,expectedCompositionRevision:req.expectedCompositionRevision??null});
+  },
+
+  async getWorkspaceStemSettings(workspaceId: string): Promise<WorkspaceStemSettings> {
+    return workspaceModeFromWire(await apiClient.get<WorkspaceStemSettingsWire>(`/workspaces/${workspaceId}/stem-settings`));
+  },
+
+  async saveWorkspaceStemSettings(workspaceId: string, request: WorkspaceStemSettingsRequest): Promise<WorkspaceStemSettings> {
+    // Approved G06 alias: SAME workspace counter, never a brief/script revision.
+    const {modeRevision,mode,policyVersionIds,defaultPolicyVersionId,idempotencyKey,legacyModeSelection}=request;
+    const payload={baseRevision:modeRevision,mode,policyVersionIds:[...policyVersionIds],defaultPolicyVersionId:defaultPolicyVersionId??null,idempotencyKey,legacyModeSelection:legacyModeSelection??null};
+    return workspaceModeFromWire(await apiClient.put<WorkspaceStemSettingsWire>(`/workspaces/${workspaceId}/stem-settings`,payload));
+  },
+
+  async getStemTarget(projectId: string): Promise<StemTarget> {
+    const meta=await apiClient.get<STEMScript>(`/scripts/${projectId}`);
+    const history=await apiClient.get<Array<{id:string;versionNo:number;isCurrent:boolean}>>(`/scripts/${projectId}/versions`);
+    const selected=Array.isArray(history)?history.filter(v=>v.isCurrent===true):[];
+    if(selected.length!==1||!selected[0].id||!meta.workspaceId||!Number.isInteger(meta.draftRevision))throw new ApiError('Không xác định được đúng phiên bản script hiện tại.','FE_STEM_TARGET',409);
+    return {versionId:selected[0].id,scriptRevision:meta.draftRevision!,versionNo:selected[0].versionNo,workspaceId:meta.workspaceId};
+  },
+
+  async getCatalog(kind?: string, page = 0, size = 20): Promise<CatalogVersionEntry[]> {
+    const params = new URLSearchParams();
+    if (kind) params.append('kind', kind);
+    params.append('page', String(page));
+    params.append('size', String(size));
+    return apiClient.get<CatalogVersionEntry[]>(`/stem/catalog?${params.toString()}`);
   },
 };

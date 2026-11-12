@@ -22,14 +22,24 @@ export class ApiError extends Error {
   code: string;
   status: number;
   details?: any;
+  retryAfterSeconds?: number;
 
-  constructor(message: string, code: string = 'UNKNOWN_ERROR', status: number = 500, details?: any) {
+  constructor(message: string, code: string = 'UNKNOWN_ERROR', status: number = 500, details?: any, retryAfterSeconds?: number) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
     this.details = details;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+/** Retry-After supports delta seconds and HTTP dates. Invalid/missing headers stay unknown. */
+export function parseRetryAfter(value: string | null, now = Date.now()): number | undefined {
+  if (value === null || !value.trim()) return undefined;
+  if (/^-?\d+(\.\d+)?$/.test(value.trim()) && !/^\d+$/.test(value.trim())) return undefined;
+  const seconds = /^\d+$/.test(value.trim()) ? Number(value) : (Date.parse(value) - now) / 1000;
+  return Number.isFinite(seconds) ? Math.max(0, Math.ceil(seconds)) : undefined;
 }
 
 const TOKEN_KEY = 'stemotion_access_token';
@@ -63,8 +73,8 @@ export const apiClient = {
     }
   },
 
-  async request<T>(endpoint: string, options: RequestInit & { anonymous?: boolean } = {}): Promise<T> {
-    const { anonymous = false, ...fetchOptions } = options;
+  async request<T>(endpoint: string, options: RequestInit & { anonymous?: boolean; onResponseHeaders?: (headers: Headers) => void } = {}): Promise<T> {
+    const { anonymous = false, onResponseHeaders, ...fetchOptions } = options;
     const url = `${this.getBaseUrl()}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
     const token = anonymous ? null : this.getAuthToken();
 
@@ -112,10 +122,12 @@ export const apiClient = {
           json.error?.message || json.message || response.statusText || 'API Request Failed',
           json.error?.code || json.code || `HTTP_${response.status}`,
           response.status,
-          json.error?.details ?? json.details
+          json.error?.details ?? json.details,
+          parseRetryAfter(response.headers?.get?.('Retry-After') ?? null)
         );
       }
 
+      onResponseHeaders?.(response.headers);
       return json.data !== undefined ? json.data : json;
     } catch (error: any) {
       if (error instanceof ApiError) {
@@ -127,6 +139,16 @@ export const apiClient = {
 
   async get<T>(endpoint: string, headers?: Record<string, string>): Promise<T> {
     return this.request<T>(endpoint, { method: 'GET', headers });
+  },
+
+  async getPage<T>(endpoint: string): Promise<{ data: T; total: number | null; page: number; size: number; pages: number | null }> {
+    const meta = { total: null as number | null, page: 0, size: 20, pages: null as number | null };
+    const data = await this.request<T>(endpoint, { method: 'GET', onResponseHeaders: headers => {
+      const count = (name: string) => { const value = headers?.get?.(name); return value != null && /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null; };
+      meta.total = count('X-Total-Count'); meta.pages = count('X-Total-Pages');
+      meta.page = count('X-Page') ?? 0; meta.size = count('X-Size') ?? 20;
+    }});
+    return { data, ...meta };
   },
 
   async postPublic<T>(endpoint: string, body?: unknown): Promise<T> {

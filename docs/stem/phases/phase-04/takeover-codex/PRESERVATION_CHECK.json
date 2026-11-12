@@ -1,0 +1,128 @@
+{
+  "original_fe": {
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\STEMotion_FE",
+    "head": "9fe67cf7801b3e971b3c852c80f68214fd13bba7",
+    "branch": "main",
+    "head_unchanged": true,
+    "status_unchanged": true,
+    "baseline_files_checked": 201,
+    "hash_changes": [],
+    "missing": [],
+    "status": " M src/remotion/director/CinematicScene.tsx\n M src/remotion/lego/catalog.ts\n?? src/components/assets/AssetPreview.tsx\n?? src/components/modals/AssetCatalogModal.tsx\n?? src/remotion/assets/catalog.ts\n?? src/remotion/director/assetComponents.ts\n?? src/remotion/lego/presets.ts\n"
+  },
+  "p3_be": {
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-03\\STEMotion_BE",
+    "head": "f6c6f0bdcdcc6bbaf1f1246f86678d3249dea8e1",
+    "branch": "feat/stem-p3-isolated-20261105",
+    "head_unchanged": true,
+    "status_unchanged": true,
+    "baseline_files_checked": 738,
+    "hash_changes": [],
+    "missing": [],
+    "status": " M src/main/java/com/stemotion/core/exception/GlobalExceptionHandler.java\n M src/main/java/com/stemotion/core/security/WorkspaceAccess.java\n M src/main/java/com/stemotion/domain/review/controller/FeedbackController.java\n M src/main/java/com/stemotion/domain/review/service/FeedbackService.java\n M src/main/java/com/stemotion/domain/script/dto/ScriptDtos.java\n M src/main/java/com/stemotion/domain/script/service/ScriptService.java\n?? .build-p3/classes/application-cloud.yml\n?? .build-p3/classes/application.yml\n?? .build-p3/classes/db/migration/V10__clip_artifacts.sql\n?? .build-p3/classes/db/migration/V11__explicit_review_decisions.sql\n?? .build-p3/classes/db/migration/V12__ai_request_tracking.sql\n?? .build-p3/classes/db/migration/V13__publication_transition.sql\n?? .build-p3/classes/db/migration/V14__director_template_metadata.sql\n?? .build-p3/classes/db/migration/V15__composed_scene.sql\n?? .build-p3/classes/db/migration/V16__member_status_inactive_value.sql\n?? .build-p3/classes/db/migration/V17__admin_provisioned_membership.sql\n?? .build-p3/classes/db/migration/V18__ai_pricing_provenance.sql\n?? .build-p3/classes/db/migration/V19__production_composition.sql\n?? .build-p3/classes/db/migration/V1__initial_schema.sql\n?? .build-p3/classes/db/migration/V20__review_loop_and_theme.sql\n?? .build-p3/classes/db/migration/V21__restore_v1_indexes.sql\n?? .build-p3/classes/db/migration/V22__script_draft_revision.sql\n?? .build-p3/classes/db/migration/V2__promote_longtri_to_admin.sql\n?? .build-p3/classes/db/migration/V3__illustrated_explainer_scene.sql\n?? .build-p3/classes/db/migration/V4__render_resolution_1440p.sql\n?? .build-p3/classes/db/migration/V5__user_display_name.sql\n?? .build-p3/classes/db/migration/V6__align_shared_scene_order.sql\n?? .build-p3/classes/db/migration/V7__align_feedback_targets.sql\n?? .build-p3/classes/db/migration/V8__align_subject_and_user_status.sql\n?? .build-p3/classes/db/migration/V9__workspace_invitation_tokens.sql\n?? .build-p3/classes/director-registry.json\n?? .build-p3/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst\n?? .build-p3/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst\n?? .build-p3/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst\n?? .build-p3/maven-status/maven-compiler-plugin/testCompile/default-testCompile/inputFiles.lst\n?? .build-p3/surefire-reports/TEST-com.stemotion.core.enums.RenderResolutionTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.core.enums.StemSubjectConverterTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.core.exception.GlobalExceptionHandlerTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.core.security.AuthRateLimiterTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.core.security.AuthSessionVersionTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.core.security.JwtServiceTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.core.security.ProjectAndNoteGuardsTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.core.security.ResourceAccessInterceptorTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.core.security.WorkspaceAccessTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.admin.controller.AdminPortalAccessTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.admin.controller.AiUsageAccessTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.admin.service.AdminMetricsServiceTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.ai.controller.AiAlignmentAccessTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.ai.service.AiApproachTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.ai.service.AiConfiguredPricingTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.ai.service.AiCostCalculatorTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.ai.service.AiMetaphorTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.ai.service.AiScriptServiceTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.ai.service.ProposalAlignmentTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.ai.service.VideoStoryboardAccessTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.ai.service.VideoStoryboardServiceTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.controller.AccountProvisioningAccessTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.controller.AuthControllerTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.service.AuthMigrationRehearsalTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.service.GoogleAuthPolicyTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.service.RegistrationPolicyTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.service.RoleContractTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.service.RolesAndNotificationsPostgresTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.service.RolesMigrationRehearsalTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.service.SupabaseRegistrationTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.service.SupabaseSchemaValidationTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.service.SupabaseScriptFlowTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.service.UserProvisioningTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.auth.service.UsernameLoginTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.notification.ConfiguredNotificationSenderTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.production.controller.CompositionAccessTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.production.service.ClipArtifactServiceTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.production.service.CompositionServiceTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.production.service.FrozenCompositionRenderTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.production.service.NarrationToolsServiceTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.production.service.PublicationFlowTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.production.service.PublishAvailabilityTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.production.service.RenderContractTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.production.service.RenderRetryTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.production.service.TemplateMetadataTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.project.entity.ClipProjectPipelineStatusTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.project.service.ReviewDecisionEventTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.project.service.StatusHistoryServiceTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.review.service.ClipQaServiceTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.review.service.ReviewHistoryServiceTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.review.service.WebFirstReviewTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.script.controller.ScriptDraftAccessTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.script.mapper.ComposedSceneValidatorTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.script.mapper.DirectorPlanValidatorTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.script.mapper.SceneMapperTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.script.mapper.ScenePropsValidatorTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.script.service.DraftRevisionTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.script.service.ProjectArchiveTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.script.service.ReviewQueueScopeTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.script.service.ReviewReasonTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.script.service.SceneIdentityTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.script.service.SubmittedScriptTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.stem.StemPostgresTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.stem.StemValidatorTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.workspace.controller.WorkspaceMemberAccessTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.domain.workspace.service.WorkspaceServiceTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.e2e.E2eServerArgumentsTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.e2e.LocalAiDecisionE2eTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.e2e.LocalAiUsageE2eTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.e2e.LocalStudioE2eTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.integration.client.AiAlignmentClientTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.integration.client.AiGatewayTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.integration.client.GoogleSignInTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.integration.client.GoogleSignatureVerifierTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.integration.client.RenderServiceClientTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.integration.config.AiSharedKeyConfigurationTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.perf.PageParamsTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.perf.PostgresConcurrencyTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.perf.QueryShapeJpaTest.xml\n?? .build-p3/surefire-reports/TEST-com.stemotion.perf.WriteTransactionsTest.xml\n?? .build-p3/surefire-reports/com.stemotion.core.enums.RenderResolutionTest.txt\n?? .build-p3/surefire-reports/com.stemotion.core.enums.StemSubjectConverterTest.txt\n?? .build-p3/surefire-reports/com.stemotion.core.exception.GlobalExceptionHandlerTest.txt\n?? .build-p3/surefire-reports/com.stemotion.core.security.AuthRateLimiterTest.txt\n?? .build-p3/surefire-reports/com.stemotion.core.security.AuthSessionVersionTest.txt\n?? .build-p3/surefire-reports/com.stemotion.core.security.JwtServiceTest.txt\n?? .build-p3/surefire-reports/com.stemotion.core.security.ProjectAndNoteGuardsTest.txt\n?? .build-p3/surefire-reports/com.stemotion.core.security.ResourceAccessInterceptorTest.txt\n?? .build-p3/surefire-reports/com.stemotion.core.security.WorkspaceAccessTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.admin.controller.AdminPortalAccessTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.admin.controller.AiUsageAccessTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.admin.service.AdminMetricsServiceTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.ai.controller.AiAlignmentAccessTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.ai.service.AiApproachTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.ai.service.AiConfiguredPricingTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.ai.service.AiCostCalculatorTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.ai.service.AiMetaphorTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.ai.service.AiScriptServiceTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.ai.service.ProposalAlignmentTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.ai.service.VideoStoryboardAccessTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.ai.service.VideoStoryboardServiceTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.controller.AccountProvisioningAccessTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.controller.AuthControllerTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.service.AuthMigrationRehearsalTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.service.GoogleAuthPolicyTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.service.RegistrationPolicyTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.service.RoleContractTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.service.RolesAndNotificationsPostgresTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.service.RolesMigrationRehearsalTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.service.SupabaseRegistrationTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.service.SupabaseSchemaValidationTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.service.SupabaseScriptFlowTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.service.UserProvisioningTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.auth.service.UsernameLoginTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.notification.ConfiguredNotificationSenderTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.production.controller.CompositionAccessTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.production.service.ClipArtifactServiceTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.production.service.CompositionServiceTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.production.service.FrozenCompositionRenderTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.production.service.NarrationToolsServiceTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.production.service.PublicationFlowTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.production.service.PublishAvailabilityTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.production.service.RenderContractTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.production.service.RenderRetryTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.production.service.TemplateMetadataTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.project.entity.ClipProjectPipelineStatusTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.project.service.ReviewDecisionEventTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.project.service.StatusHistoryServiceTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.review.service.ClipQaServiceTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.review.service.ReviewHistoryServiceTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.review.service.WebFirstReviewTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.script.controller.ScriptDraftAccessTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.script.mapper.ComposedSceneValidatorTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.script.mapper.DirectorPlanValidatorTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.script.mapper.SceneMapperTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.script.mapper.ScenePropsValidatorTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.script.service.DraftRevisionTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.script.service.ProjectArchiveTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.script.service.ReviewQueueScopeTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.script.service.ReviewReasonTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.script.service.SceneIdentityTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.script.service.SubmittedScriptTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.stem.StemPostgresTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.stem.StemValidatorTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.workspace.controller.WorkspaceMemberAccessTest.txt\n?? .build-p3/surefire-reports/com.stemotion.domain.workspace.service.WorkspaceServiceTest.txt\n?? .build-p3/surefire-reports/com.stemotion.e2e.E2eServerArgumentsTest.txt\n?? .build-p3/surefire-reports/com.stemotion.e2e.LocalAiDecisionE2eTest.txt\n?? .build-p3/surefire-reports/com.stemotion.e2e.LocalAiUsageE2eTest.txt\n?? .build-p3/surefire-reports/com.stemotion.e2e.LocalStudioE2eTest.txt\n?? .build-p3/surefire-reports/com.stemotion.integration.client.AiAlignmentClientTest.txt\n?? .build-p3/surefire-reports/com.stemotion.integration.client.AiGatewayTest.txt\n?? .build-p3/surefire-reports/com.stemotion.integration.client.GoogleSignInTest.txt\n?? .build-p3/surefire-reports/com.stemotion.integration.client.GoogleSignatureVerifierTest.txt\n?? .build-p3/surefire-reports/com.stemotion.integration.client.RenderServiceClientTest.txt\n?? .build-p3/surefire-reports/com.stemotion.integration.config.AiSharedKeyConfigurationTest.txt\n?? .build-p3/surefire-reports/com.stemotion.perf.PageParamsTest.txt\n?? .build-p3/surefire-reports/com.stemotion.perf.PostgresConcurrencyTest.txt\n?? .build-p3/surefire-reports/com.stemotion.perf.QueryShapeJpaTest.txt\n?? .build-p3/surefire-reports/com.stemotion.perf.WriteTransactionsTest.txt\n?? .build-p3/test-classes/application-stem-p3-test.properties\n?? .build-p3/test-classes/db/auth-v2-e2e/V9000__auth_v2_isolated_fixture.sql\n?? .build-p3/test-classes/db/auth-v2-e2e/V9001__roles_and_notifications_isolated_fixture.sql\n?? .build-p3/test-classes/db/stem-p3/V91000__stem_p3_test_only.sql\n?? docs/stem/phases/phase-03/CASE_COVERAGE.json\n?? docs/stem/phases/phase-03/CASE_COVERAGE.md\n?? docs/stem/phases/phase-03/CLEANUP_VERIFICATION.json\n?? docs/stem/phases/phase-03/CONTRACT_DELTA.md\n?? docs/stem/phases/phase-03/FINAL_REVIEW.json\n?? docs/stem/phases/phase-03/FULL_REGRESSION_SUMMARY.json\n?? docs/stem/phases/phase-03/HANDOFF_REGRESSION_SUMMARY.json\n?? docs/stem/phases/phase-03/INPUT_BASELINE.json\n?? docs/stem/phases/phase-03/MIGRATION_INVENTORY.json\n?? docs/stem/phases/phase-03/MIGRATION_TEST_LEDGER.md\n?? docs/stem/phases/phase-03/OUTPUT_MANIFEST.json\n?? docs/stem/phases/phase-03/OWNED_PG_DATA_DIRS.json\n?? docs/stem/phases/phase-03/P3_HANDOFF.md\n?? docs/stem/phases/phase-03/PATCH_P3.diff\n?? docs/stem/phases/phase-03/PRESERVATION_REVIEW.json\n?? docs/stem/phases/phase-03/SCENE_TYPE_INVENTORY.md\n?? docs/stem/phases/phase-03/SCHEMA_TEST_MANIFEST.json\n?? docs/stem/phases/phase-03/SOURCE_MANIFEST.json\n?? docs/stem/phases/phase-03/TEST_BASELINE.md\n?? docs/stem/phases/phase-03/environment-preflight-native.json\n?? docs/stem/phases/phase-03/environment-preflight.json\n?? docs/stem/phases/phase-03/p3-final-native.json\n?? docs/stem/phases/phase-03/p3-final-regression-native.json\n?? docs/stem/phases/phase-03/p3-handoff-regression-native.json\n?? docs/stem/phases/phase-03/p3-regression-native.json\n?? docs/stem/phases/phase-03/p3-required-cases-final-native.json\n?? docs/stem/phases/phase-03/p3-required-cases-native.json\n?? docs/stem/phases/phase-03/p3-tests-native-r2.json\n?? docs/stem/phases/phase-03/p3-tests-native.json\n?? docs/stem/phases/phase-03/run_tests.py\n?? src/main/java/com/stemotion/domain/stem/StemController.java\n?? src/main/java/com/stemotion/domain/stem/StemDtos.java\n?? src/main/java/com/stemotion/domain/stem/StemModels.java\n?? src/main/java/com/stemotion/domain/stem/StemRepository.java\n?? src/main/java/com/stemotion/domain/stem/StemRequestLimitFilter.java\n?? src/main/java/com/stemotion/domain/stem/StemService.java\n?? src/main/java/com/stemotion/domain/stem/StemValidator.java\n?? src/test/java/com/stemotion/domain/stem/StemPostgresTest.java\n?? src/test/java/com/stemotion/domain/stem/StemValidatorTest.java\n?? src/test/resources/application-stem-p3-test.properties\n?? src/test/resources/db/stem-p3/V91000__stem_p3_test_only.sql\n"
+  },
+  "antigravity_scripts": [
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_app.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_auth.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_drm.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_producer.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_pv.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_rev.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_roles.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_writer.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_writer2.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_writer3.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_writer4.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_writer5.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\inspect_ws.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\read_rev_decide.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\read_rev_head.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\read_rev_tb.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\read_stem_types.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\read_stem_types2.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\read_stem_types3.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\read_writer_imports.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\read_writer_state.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\update_fe.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\update_reviewer.py",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\update_writer.py",
+      "unchanged": true
+    }
+  ],
+  "corrected_original_producer_view": {
+    "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\STEMotion_FE\\src\\components\\ProducerView.tsx",
+    "sha256": "ed21a52ebd5b5edb88217e47bb923d20856acf21f24f513be8b4d1ec335eed88",
+    "matches_initial_full_file_inventory": true,
+    "p4_specific_initial_check_note": "Initial targeted inventory used a wrong views/ProducerView path; full initial inventory contained the correct path and hash."
+  }
+}

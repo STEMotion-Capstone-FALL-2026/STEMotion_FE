@@ -18,11 +18,18 @@ import {
   Trash2,
   RefreshCw,
   ListOrdered,
+  Layers,
   X,
   Loader2,
   Reply,
 } from 'lucide-react';
-import { STEMScript, SceneData, FeedbackComment } from '../../../types/stem';
+import { STEMScript, SceneData, FeedbackComment, StemAssessment, StemChangeTarget } from '../../../types/stem';
+import { useStemTarget } from '../../stem/useStemTarget';
+import { StemErrorNotice } from '../../stem/StemErrorNotice';
+import { stemMutationKey, hasActiveReviewerSeat } from '../../../services/stemClient';
+import { StemRubricPanel } from '../../stem/StemRubricPanel';
+import { scriptService } from '../../../services/scriptService';
+import { authService } from '../../../services';
 import {
   AppView,
   reviewService,
@@ -540,6 +547,23 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
     }
   }, [reviewerMode, isVideoReadyForReview, setReviewerMode]);
 
+  const [isStemRubricOpen, setIsStemRubricOpen] = useState(false);
+  const [stemAssessment, setStemAssessment] = useState<StemAssessment | null>(null);
+  const [isReviewerActive,setIsReviewerActive]=useState(false);
+  const {target:stemTarget,error:stemTargetError}=useStemTarget(script.id,script.currentVersionNo??script.version);
+  const [stemDecisionError,setStemDecisionError]=useState<unknown>(null);
+  const [attachAssessment,setAttachAssessment]=useState(false);
+  const reviewRetry=useRef<{payload:string;target:StemChangeTarget}|null>(null);
+  const approvalRetry=useRef<{payload:string;key:string}|null>(null);
+  useEffect(()=>{
+    let current=true;setIsReviewerActive(false);setStemAssessment(null);setAttachAssessment(false);setStemDecisionError(null);
+    const user=authService.getCurrentUser();
+    if(stemTarget?.workspaceId&&user.id)hasActiveReviewerSeat(stemTarget.workspaceId,user.id).then(active=>{
+      if(current)setIsReviewerActive(active);
+    }).catch(()=>{if(current)setIsReviewerActive(false);});
+    return()=>{current=false;};
+  },[script.id,stemTarget?.versionId,stemTarget?.workspaceId,reviewerMode]);
+
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const rejectDialog = useDialog(rejectModalOpen, 'Lý do yêu cầu chỉnh sửa', () => setRejectModalOpen(false), decisionPending);
   const [rejectTarget, setRejectTarget] = useState<'SCRIPT' | 'VIDEO' | null>(null);
@@ -569,7 +593,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
 
   const decide = async (
     decision: 'APPROVED' | 'CHANGE_REQUESTED' | 'VIDEO_APPROVED' | 'VIDEO_RETURNED',
-    overrideNote?: string
+    overrideNote?: string,
+    overrideChangeTarget?: StemChangeTarget
   ) => {
     if (decisionPendingRef.current) return;
     if (decision === 'VIDEO_APPROVED' && videoApprovalBlocked) {
@@ -581,13 +606,27 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
     decisionPendingRef.current = true;
     setDecisionPending(true);
     try {
-      if (decision === 'VIDEO_APPROVED') {
-        await reviewService.approveVideo(script.id);
-      } else if (decision === 'VIDEO_RETURNED') {
-        await reviewService.sendBackVideo(script.id, noteToSubmit);
-      } else {
-        await reviewService.submitReviewDecision(script.id, decision, noteToSubmit);
+      let assessment=attachAssessment&&isReviewerActive?stemAssessment??undefined:undefined;
+      if((decision==='APPROVED'||decision==='VIDEO_APPROVED')&&attachAssessment&&(!isReviewerActive||!assessment||assessment.criteria.some(c=>!c.rationale.trim())))throw new Error('Assessment cần ghế Reviewer active, dữ liệu và lý do cho mọi tiêu chí.');
+      let changeTarget=overrideChangeTarget;
+      if(decision==='CHANGE_REQUESTED'&&!changeTarget){
+        if(!stemTarget)throw new Error('Chưa xác định được đúng UUID phiên bản.');
+        const payload=JSON.stringify([noteToSubmit,stemTarget.versionId,script.draftRevision??stemTarget.scriptRevision]);
+        if(reviewRetry.current?.payload!==payload){
+          const brief=await scriptService.getStemBrief(script.id,stemTarget.versionId);
+          reviewRetry.current={payload,target:{expectedVersionId:stemTarget.versionId,expectedScriptRevision:script.draftRevision??stemTarget.scriptRevision,expectedBriefRevision:brief.revision,idempotencyKey:stemMutationKey()}};
+        }
+        changeTarget=reviewRetry.current.target;
       }
+      if(assessment&&(decision==='APPROVED'||decision==='VIDEO_APPROVED')){
+        const {idempotencyKey:_,...content}=assessment;
+        const payload=JSON.stringify([decision,noteToSubmit,content]);
+        if(approvalRetry.current?.payload!==payload)approvalRetry.current={payload,key:stemMutationKey()};
+        assessment={...assessment,idempotencyKey:approvalRetry.current.key};
+      }
+      if(decision==='VIDEO_APPROVED')await reviewService.approveVideo(script.id,noteToSubmit,assessment);
+      else if(decision==='VIDEO_RETURNED')await reviewService.sendBackVideo(script.id,noteToSubmit);
+      else await reviewService.submitReviewDecision(script.id,decision,noteToSubmit,decision==='APPROVED'?assessment:undefined,changeTarget);
       const updated = await projectService.getProjectById(script.id);
       if (activeProject.current !== projectId) return false;
       setScript(updated);
@@ -599,6 +638,7 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
       }
       return true;
     } catch (error: any) {
+      setStemDecisionError(error);
       showToast(error.message || 'Chưa xác nhận được quyết định. Hãy tải lại trạng thái trước khi thử lại.', 'warn');
       return false;
     } finally {
@@ -608,6 +648,14 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
   };
   return (
     <section className="studio-workspace flex-1 min-h-0 flex flex-col overflow-hidden">
+      <StemErrorNotice error={stemDecisionError??stemTargetError} onReload={()=>window.location.reload()} onRetryReady={()=>setStemDecisionError(null)}/>
+      {isReviewerActive&&<label className="px-6 py-2"><input type="checkbox" checked={attachAssessment} onChange={e=>{setAttachAssessment(e.target.checked);if(e.target.checked)setIsStemRubricOpen(true);}}/>Gửi kèm assessment STEM (DRAFT UI)</label>}
+      {stemTarget&&<StemRubricPanel key={`${script.id}:${stemTarget.versionId}:${reviewerMode}`} isOpen={isStemRubricOpen} onClose={()=>setIsStemRubricOpen(false)}
+        scriptId={script.id} versionId={stemTarget.versionId} scriptRevision={script.draftRevision??stemTarget.scriptRevision}
+        phase={reviewerMode==='video'?'VIDEO':'SCRIPT'} compositionRevision={composition?.revision}
+        isReviewerActive={isReviewerActive} assessment={stemAssessment} onAssessmentChange={setStemAssessment}
+        decisionPending={decisionPending}
+        onRequestChangesWithTarget={reviewerMode==='script'?async(target,note)=>Boolean(await decide('CHANGE_REQUESTED',note,target)):undefined}/>}
       {/* Top Bar Reviewer với Bộ Chuyển Chế Độ Duyệt */}
       <div className="studio-toolbar bg-white border-b px-6 py-2.5 flex justify-between items-center text-xs shrink-0 z-10 shadow-2xs">
         <div className="flex items-center space-x-3">
@@ -623,6 +671,19 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
           >
             <ListOrdered className="w-3.5 h-3.5 text-amber-600" />
             <span>Hàng đợi chờ duyệt</span>
+          </button>
+          <button
+            onClick={() => setIsStemRubricOpen((prev) => !prev)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border ${
+              isStemRubricOpen
+                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                : 'bg-slate-100 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 border-slate-200 text-slate-700'
+            }`}
+            title="Mở bảng thẩm định Rubric STEM (Drawer)"
+          >
+            <Layers className="w-3.5 h-3.5 text-amber-600" />
+            <span>Rubric STEM</span>
+            <span className="text-[10px] px-1 py-0.2 rounded bg-amber-200 text-amber-900 font-bold">DRAFT</span>
           </button>
         </div>
 

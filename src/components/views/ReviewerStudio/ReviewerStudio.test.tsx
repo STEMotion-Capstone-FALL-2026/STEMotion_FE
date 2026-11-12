@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { compositionService, reviewService } from '../../../services';
 import type { Composition } from '../../../services';
+import { scriptService } from '../../../services/scriptService';
 import { ReviewerStudio } from './ReviewerStudio';
 
 vi.mock('../../RemotionPlayerWrapper', () => ({
@@ -27,6 +28,7 @@ const composition = (id = 'p'): Composition => ({
 });
 
 beforeEach(() => {
+  vi.spyOn(scriptService,'getStemTarget').mockResolvedValue({versionId:'TEST_ONLY_version',scriptRevision:0,workspaceId:'TEST_ONLY_workspace',versionNo:1});
   vi.spyOn(reviewService, 'getQaReport').mockResolvedValue({ passed: true, findings: [], failCount: 0, warnCount: 0 } as any);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });

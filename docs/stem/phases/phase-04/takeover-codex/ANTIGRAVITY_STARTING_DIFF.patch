@@ -1,0 +1,544 @@
+diff --git a/src/components/views/ReviewerStudio/ReviewerStudio.tsx b/src/components/views/ReviewerStudio/ReviewerStudio.tsx
+index dcc46da..829daf7 100644
+--- a/src/components/views/ReviewerStudio/ReviewerStudio.tsx
++++ b/src/components/views/ReviewerStudio/ReviewerStudio.tsx
+@@ -18,11 +18,14 @@ import {
+   Trash2,
+   RefreshCw,
+   ListOrdered,
++  Layers,
+   X,
+   Loader2,
+   Reply,
+ } from 'lucide-react';
+-import { STEMScript, SceneData, FeedbackComment } from '../../../types/stem';
++import { STEMScript, SceneData, FeedbackComment, StemAssessment, StemChangeTarget } from '../../../types/stem';
++import { StemRubricPanel } from '../../stem/StemRubricPanel';
++import { authService, workspaceService } from '../../../services';
+ import {
+   AppView,
+   reviewService,
+@@ -540,6 +543,29 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
+     }
+   }, [reviewerMode, isVideoReadyForReview, setReviewerMode]);
+ 
++  const [isStemRubricOpen, setIsStemRubricOpen] = useState(false);
++  const [stemAssessment, setStemAssessment] = useState<StemAssessment | null>(null);
++  const [isReviewerActive, setIsReviewerActive] = useState<boolean>(true);
++
++  useEffect(() => {
++    const user = authService.getCurrentUser();
++    const cachedWsId = workspaceService.getCachedWorkspaceId();
++    workspaceService
++      .getMyWorkspaces()
++      .then((workspaces) => {
++        const currentWs = workspaces.find((w) => w.id === cachedWsId);
++        if (user.systemRole === 'ADMIN' && currentWs?.myRole !== 'REVIEWER') {
++          // Block Admin bypass (P4-Q04)
++          setIsReviewerActive(false);
++        } else {
++          setIsReviewerActive(true);
++        }
++      })
++      .catch(() => {
++        setIsReviewerActive(true);
++      });
++  }, []);
++
+   const [rejectModalOpen, setRejectModalOpen] = useState(false);
+   const rejectDialog = useDialog(rejectModalOpen, 'Lý do yêu cầu chỉnh sửa', () => setRejectModalOpen(false), decisionPending);
+   const [rejectTarget, setRejectTarget] = useState<'SCRIPT' | 'VIDEO' | null>(null);
+@@ -569,7 +595,8 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
+ 
+   const decide = async (
+     decision: 'APPROVED' | 'CHANGE_REQUESTED' | 'VIDEO_APPROVED' | 'VIDEO_RETURNED',
+-    overrideNote?: string
++    overrideNote?: string,
++    overrideChangeTarget?: StemChangeTarget
+   ) => {
+     if (decisionPendingRef.current) return;
+     if (decision === 'VIDEO_APPROVED' && videoApprovalBlocked) {
+@@ -582,11 +609,14 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
+     setDecisionPending(true);
+     try {
+       if (decision === 'VIDEO_APPROVED') {
+-        await reviewService.approveVideo(script.id);
++        await reviewService.approveVideo(script.id, stemAssessment ? { stemAssessment } : undefined);
+       } else if (decision === 'VIDEO_RETURNED') {
+         await reviewService.sendBackVideo(script.id, noteToSubmit);
+       } else {
+-        await reviewService.submitReviewDecision(script.id, decision, noteToSubmit);
++        await reviewService.submitReviewDecision(script.id, decision, noteToSubmit, {
++          stemAssessment: stemAssessment || undefined,
++          changeTarget: overrideChangeTarget || undefined,
++        });
+       }
+       const updated = await projectService.getProjectById(script.id);
+       if (activeProject.current !== projectId) return false;
+@@ -624,6 +654,19 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
+             <ListOrdered className="w-3.5 h-3.5 text-amber-600" />
+             <span>Hàng đợi chờ duyệt</span>
+           </button>
++          <button
++            onClick={() => setIsStemRubricOpen((prev) => !prev)}
++            className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border ${
++              isStemRubricOpen
++                ? 'bg-amber-100 text-amber-800 border-amber-300'
++                : 'bg-slate-100 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 border-slate-200 text-slate-700'
++            }`}
++            title="Mở bảng thẩm định Rubric STEM (Drawer)"
++          >
++            <Layers className="w-3.5 h-3.5 text-amber-600" />
++            <span>Rubric STEM</span>
++            <span className="text-[10px] px-1 py-0.2 rounded bg-amber-200 text-amber-900 font-bold">DRAFT</span>
++          </button>
+         </div>
+ 
+         {/* 2 Tabs Chuyển Giữa: Duyệt Kịch Bản (Cấp 1) & Duyệt Video (Cấp 2) */}
+diff --git a/src/components/views/WriterStudio/WriterStudio.tsx b/src/components/views/WriterStudio/WriterStudio.tsx
+index 5051201..ee158b9 100644
+--- a/src/components/views/WriterStudio/WriterStudio.tsx
++++ b/src/components/views/WriterStudio/WriterStudio.tsx
+@@ -2,6 +2,7 @@ import { useActionGuard } from '../../../hooks/useActionGuard';
+ import React, { useState, useEffect, useCallback, useMemo } from 'react';
+ import {
+   PlusCircle,
++  FileText,
+   GitCompare,
+   Send,
+   ChevronUp,
+@@ -37,6 +38,8 @@ import { sceneSaveQueue } from '../../../services/sceneSaveQueue';
+ import { renderLatexToString } from '../../../utils/latex';
+ import { MetaphorPanel } from './MetaphorPanel';
+ import { ComposedBlocksEditor } from './ComposedBlocksEditor';
++import { StemBriefPanel } from '../../stem/StemBriefPanel';
++import { scriptService } from '../../../services/scriptService';
+ 
+ interface WriterStudioProps {
+   script: STEMScript;
+@@ -87,6 +90,32 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+   isAiRunning = false,
+   showToast,
+ }) => {
++  const [activeStudioTab, setActiveStudioTab] = useState<'SCENES' | 'STEM_BRIEF'>('SCENES');
++  const [briefEvidenceScenes, setBriefEvidenceScenes] = useState<string[]>([]);
++
++  useEffect(() => {
++    if (!script.id) return;
++    let mounted = true;
++    scriptService.getStemBrief(script.id, script.version || '1')
++      .then((res) => {
++        if (mounted && res?.evidence) {
++          setBriefEvidenceScenes(res.evidence.map((e) => e.sceneId).filter(Boolean) as string[]);
++        }
++      })
++      .catch(() => {});
++    return () => { mounted = false; };
++  }, [script.id, script.version]);
++
++  const handleDeleteSceneWithStemCheck = (sceneId: string) => {
++    if (briefEvidenceScenes.includes(sceneId)) {
++      const ok = window.confirm(
++        'Cảnh này có liên kết với minh chứng STEM. Xóa cảnh sẽ giữ minh chứng ở trạng thái cảnh báo mồ côi (orphan finding TECH-EVIDENCE) và không cascade xóa ngầm. Bạn có chắc muốn xóa cảnh này không?'
++      );
++      if (!ok) return;
++    }
++    handleDeleteScene(sceneId);
++  };
++
+   const [draggedSceneIdx, setDraggedSceneIdx] = useState<number | null>(null);
+   const [dragOverSceneIdx, setDragOverSceneIdx] = useState<number | null>(null);
+   const [isSpeaking, setIsSpeaking] = useState(false);
+@@ -477,6 +506,35 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+           <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
+             Trạng thái: <b>{script.scriptStatus}</b>
+           </span>
++
++          {/* Tab chuyển đổi giữa Soạn Phân Cảnh và Hồ Sơ STEM (P4-Q03) */}
++          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 ml-2">
++            <button
++              onClick={() => setActiveStudioTab('SCENES')}
++              className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition-all text-xs ${
++                activeStudioTab === 'SCENES'
++                  ? 'bg-white text-brand-700 shadow-2xs'
++                  : 'text-slate-600 hover:text-slate-900'
++              }`}
++            >
++              <FileText className="w-3.5 h-3.5" />
++              <span>Phân Cảnh</span>
++            </button>
++            <button
++              onClick={() => setActiveStudioTab('STEM_BRIEF')}
++              className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition-all text-xs ${
++                activeStudioTab === 'STEM_BRIEF'
++                  ? 'bg-white text-brand-700 shadow-2xs'
++                  : 'text-slate-600 hover:text-slate-900'
++              }`}
++            >
++              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
++              <span>Hồ Sơ STEM</span>
++              <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold border border-amber-300">
++                DRAFT
++              </span>
++            </button>
++          </div>
+         </div>
+ 
+         <div className="flex items-center space-x-2 text-xs">
+@@ -500,6 +558,30 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+               if (isSubmitting) return;
+               setIsSubmitting(true);
+               try {
++                // Pre-submit validation for STEM profile (P4-Q09)
++                try {
++                  const valRes = await scriptService.validateStem(script.id, script.version || '1', {
++                    expectedBriefRevision: 0,
++                    expectedScriptRevision: script.draftRevision || 1,
++                    phase: 'SCRIPT',
++                  });
++                  const blockingErrors = valRes?.findings?.filter((f) => f.severity === 'ERROR') || [];
++                  if (blockingErrors.length > 0) {
++                    showToast(
++                      `Không thể gửi duyệt: Hồ sơ STEM còn ${blockingErrors.length} lỗi bắt buộc (${blockingErrors[0].message}). Vui lòng kiểm tra tab Hồ Sơ STEM.`,
++                      'warn'
++                    );
++                    setIsSubmitting(false);
++                    return;
++                  }
++                } catch (valErr: any) {
++                  if (valErr?.status === 400 && valErr?.data?.findings) {
++                    showToast('Hồ sơ STEM chưa hoàn thiện thông tin bắt buộc. Vui lòng kiểm tra tab Hồ Sơ STEM.', 'warn');
++                    setIsSubmitting(false);
++                    return;
++                  }
++                }
++
+                 await sceneSaveQueue.saveNow(script.id, script.scenes);
+                 await projectService.submitForReview(script.id);
+                 const fresh = await projectService.getProjectById(script.id);
+@@ -551,7 +633,20 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+         </div>
+       )}
+ 
+-      <div className="studio-columns flex-1 min-h-0 flex overflow-hidden">
++      {activeStudioTab === 'STEM_BRIEF' ? (
++        <div className="flex-1 min-h-0 bg-slate-50 p-6 overflow-y-auto">
++          <StemBriefPanel
++            projectId={script.id}
++            versionId={script.version || '1'}
++            scriptRevision={script.draftRevision || 1}
++            scenes={script.scenes}
++            isWriter={canEdit}
++            workspaceId={script.workspaceId || ''}
++            showToast={showToast}
++          />
++        </div>
++      ) : (
++        <div className="studio-columns flex-1 min-h-0 flex overflow-hidden">
+         {/* Cột 1: Cấu trúc phân cảnh (Cho phép Thêm / Xóa / Đổi thứ tự) */}
+         <aside className="w-72 bg-white border-r border-slate-200 p-4 flex flex-col h-full min-h-0 overflow-hidden shrink-0">
+           <div className="flex items-center justify-between mb-2 text-xs">
+@@ -665,7 +760,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+                       <button
+                         onClick={(e) => {
+                           e.stopPropagation();
+-                          handleDeleteScene(sc.id);
++                          handleDeleteSceneWithStemCheck(sc.id);
+                         }}
+                         className="text-slate-300 hover:text-rose-600 p-0.5"
+                         title="Xóa cảnh"
+@@ -1489,6 +1584,7 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
+           </div>
+         </aside>
+       </div>
++      )}
+       </fieldset>
+     </section>
+   );
+diff --git a/src/services/reviewService.ts b/src/services/reviewService.ts
+index 226994e..c3fac7b 100644
+--- a/src/services/reviewService.ts
++++ b/src/services/reviewService.ts
+@@ -1,5 +1,5 @@
+ import { apiClient } from './apiClient';
+-import { FeedbackComment, STEMScript } from '../types/stem';
++import { FeedbackComment, STEMScript, StemAssessment, StemChangeTarget } from '../types/stem';
+ import { projectService } from './projectService';
+ import type { CompositionSaver } from './compositionService';
+ 
+@@ -111,10 +111,22 @@ export const reviewService = {
+     return Array.isArray(res) ? res : [];
+   },
+ 
+-  async submitReviewDecision(projectId: string, decision: 'APPROVED' | 'CHANGE_REQUESTED',
+-    feedbackNote?: string): Promise<STEMScript> {
++  async submitReviewDecision(
++    projectId: string,
++    decision: 'APPROVED' | 'CHANGE_REQUESTED',
++    feedbackNote?: string,
++    stemAssessment?: StemAssessment,
++    changeTarget?: StemChangeTarget
++  ): Promise<STEMScript> {
+     const path = decision === 'APPROVED' ? 'approve' : 'request-changes';
+-    return apiClient.post<STEMScript>(`/scripts/${projectId}/${path}`, { note: feedbackNote });
++    const payload: Record<string, any> = { note: feedbackNote || null };
++    if (decision === 'APPROVED' && stemAssessment) {
++      payload.stemAssessment = stemAssessment;
++    }
++    if (decision === 'CHANGE_REQUESTED' && changeTarget) {
++      payload.changeTarget = changeTarget;
++    }
++    return apiClient.post<STEMScript>(`/scripts/${projectId}/${path}`, payload);
+   },
+ 
+   async submitVideoForReview(projectId: string): Promise<STEMScript> {
+@@ -130,8 +142,11 @@ export const reviewService = {
+     return this.submitVideoForReview(projectId);
+   },
+ 
+-  async approveVideo(projectId: string): Promise<STEMScript> {
+-    await apiClient.post(`/scripts/${projectId}/approve-video`, {});
++  async approveVideo(projectId: string, note?: string, stemAssessment?: StemAssessment): Promise<STEMScript> {
++    const payload: Record<string, any> = {};
++    if (note) payload.note = note;
++    if (stemAssessment) payload.stemAssessment = stemAssessment;
++    await apiClient.post(`/scripts/${projectId}/approve-video`, payload);
+     return projectService.getProjectById(projectId);
+   },
+ 
+diff --git a/src/services/scriptService.ts b/src/services/scriptService.ts
+index 5cce425..b6b9886 100644
+--- a/src/services/scriptService.ts
++++ b/src/services/scriptService.ts
+@@ -4,7 +4,7 @@
+  */
+ 
+ import { apiClient } from './apiClient';
+-import { STEMScript, STEMSubject, SceneData, SceneType } from '../types/stem';
++import { STEMScript, STEMSubject, SceneData, SceneType, StemBrief, StemCreateRequest, StemSaveRequest, StemValidateRequest, StemViewResponse, WorkspaceStemSettings, CatalogVersionEntry } from '../types/stem';
+ import { sceneSaveQueue } from './sceneSaveQueue';
+ import { ComposedContentError, composedPropsFrom } from './composed';
+ 
+@@ -618,4 +618,50 @@ const res = await apiClient.post<any>('/ai/script/action', {
+ 
+     return sceneSaveQueue.saveNow(currentScript.id, filtered);
+   },
++
++  // ==========================================
++  // STEM Track API Methods (Contract Delta P3)
++  // ==========================================
++
++  async getStemBrief(projectId: string, versionId: string): Promise<StemViewResponse> {
++    return apiClient.get<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem`);
++  },
++
++  async createStemBrief(projectId: string, versionId: string, req: StemCreateRequest): Promise<StemViewResponse> {
++    return apiClient.post<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem`, req);
++  },
++
++  async saveStemBrief(projectId: string, versionId: string, req: StemSaveRequest): Promise<StemViewResponse> {
++    return apiClient.put<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem`, req);
++  },
++
++  async validateStem(projectId: string, versionId: string, req: StemValidateRequest): Promise<StemViewResponse> {
++    return apiClient.post<StemViewResponse>(`/scripts/${projectId}/versions/${versionId}/stem/validate`, req);
++  },
++
++  async getWorkspaceStemSettings(workspaceId: string): Promise<WorkspaceStemSettings> {
++    return apiClient.get<WorkspaceStemSettings>(`/workspaces/${workspaceId}/stem-settings`);
++  },
++
++  async saveWorkspaceStemSettings(
++    workspaceId: string,
++    req: {
++      baseRevision: number;
++      mode: string;
++      policyVersionIds: string[];
++      defaultPolicyVersionId?: string | null;
++      idempotencyKey: string;
++      legacyModeSelection?: string | null;
++    }
++  ): Promise<WorkspaceStemSettings> {
++    return apiClient.put<WorkspaceStemSettings>(`/workspaces/${workspaceId}/stem-settings`, req);
++  },
++
++  async getCatalog(kind?: string, page = 0, size = 20): Promise<CatalogVersionEntry[]> {
++    const params = new URLSearchParams();
++    if (kind) params.append('kind', kind);
++    params.append('page', String(page));
++    params.append('size', String(size));
++    return apiClient.get<CatalogVersionEntry[]>(`/stem/catalog?${params.toString()}`);
++  },
+ };
+diff --git a/src/types/stem.ts b/src/types/stem.ts
+index 8440ec6..576dca6 100644
+--- a/src/types/stem.ts
++++ b/src/types/stem.ts
+@@ -374,3 +374,167 @@ export interface Workspace {
+   myRole?: WorkspaceRole;
+   isLeader?: boolean;
+ }
++
++
++// ==========================================
++// STEM Track - Phase 4 Studio & Reviewer Types
++// Aligned with CONTRACT_DELTA.md (P3)
++// ==========================================
++
++export interface ContextEntry {
++  key: 'IN_CLASS_SCREEN' | 'GROUP_PRACTICE' | string;
++  condition?: string | null;
++  adaptations?: string | null;
++}
++
++export interface UsageContext {
++  primary: ContextEntry | null;
++  secondary: ContextEntry[];
++}
++
++export interface StemObjective {
++  key: string;
++  outcomeId?: string | null;
++  learnerAction?: string | null;
++  observableEvidence?: string | null;
++}
++
++export interface StudentTask {
++  key: string;
++  learnerAction?: string | null;
++  teacherSupport?: string | null;
++  materials?: string | null;
++  safety?: string | null;
++  assessmentEvidence?: string | null;
++  executionContextKey?: string | null;
++}
++
++export interface StemContribution {
++  component: 'S' | 'T' | 'E' | 'M';
++  explanation?: string | null;
++  objectiveKeys: string[];
++  taskKeys: string[];
++}
++
++export interface StemEvidence {
++  id?: string | null;
++  sceneId?: string | null;
++  taskKey?: string | null;
++  objectiveKey?: string | null;
++  component: 'S' | 'T' | 'E' | 'M';
++  explanation?: string | null;
++  originalSceneId?: string | null;
++}
++
++export interface StemValidationFinding {
++  ruleId: string;
++  field: string;
++  severity: 'ERROR' | 'WARN' | 'INFO' | string;
++  message: string;
++  basis?: string;
++}
++
++export interface LegacySuggestion {
++  primaryKey?: string | null;
++  channelKeys: string[];
++  requiresConfirmation: boolean;
++  reason: string;
++}
++
++export interface StemBrief {
++  policyVersionId?: string | null;
++  topicVersionId?: string | null;
++  gradeKey?: string | null;
++  subjectKeys: string[];
++  outcomeIds: string[];
++  scopeOfClip?: string | null;
++  context: UsageContext;
++  distributionChannels: string[];
++  objectives: StemObjective[];
++  studentTasks: StudentTask[];
++  contributions: StemContribution[];
++  safetyNotes?: string | null;
++  rawLegacy?: string | null;
++}
++
++export interface StemCreateRequest {
++  schemaVersion: 'stem.v1';
++  expectedScriptRevision: number;
++  idempotencyKey: string;
++}
++
++export interface StemSaveRequest {
++  schemaVersion: 'stem.v1';
++  baseRevision: number;
++  expectedScriptRevision: number;
++  idempotencyKey: string;
++  brief: StemBrief;
++  evidence: StemEvidence[];
++}
++
++export interface StemValidateRequest {
++  expectedBriefRevision: number;
++  expectedScriptRevision: number;
++  phase: 'SCRIPT' | 'VIDEO';
++  expectedCompositionRevision?: number | null;
++}
++
++export interface StemChangeTarget {
++  expectedVersionId: string;
++  expectedScriptRevision: number;
++  expectedBriefRevision: number;
++  idempotencyKey: string;
++}
++
++export interface StemCriterion {
++  key: string;
++  judgment: 'ADEQUATE' | 'NEEDS_CHANGES' | 'NOT_ASSESSED' | 'NOT_APPLICABLE';
++  rationale: string;
++  evidenceIds: string[];
++}
++
++export interface StemAssessment {
++  expectedBriefRevision: number;
++  expectedScriptRevision: number;
++  expectedCompositionRevision?: number | null;
++  expectedModeRevision: number;
++  rubricVersionId?: string | null;
++  criteria: StemCriterion[];
++  idempotencyKey: string;
++}
++
++export interface StemViewResponse {
++  schemaVersion: string;
++  briefId?: string | null;
++  scriptVersionId: string;
++  revision: number;
++  verificationStatus: 'UNVERIFIED' | string;
++  readiness: 'INCOMPLETE' | 'READY_FOR_REVIEW' | 'NEEDS_REVIEW' | 'LEGACY_UNMAPPED' | string;
++  effectiveMode: 'OFF' | 'ADVISORY' | string;
++  modeRevision: number;
++  brief: StemBrief | null;
++  evidence: StemEvidence[];
++  findings: StemValidationFinding[];
++  legacySuggestion?: LegacySuggestion | null;
++}
++
++export interface WorkspaceStemSettings {
++  workspaceId: string;
++  revision: number;
++  mode: 'OFF' | 'ADVISORY' | string;
++  policyVersionIds: string[];
++  defaultPolicyVersionId?: string | null;
++}
++
++export interface CatalogVersionEntry {
++  id: string;
++  kind: 'TOPIC' | 'TOPIC_VERSION' | 'SOURCE_EDITION' | 'OUTCOME' | 'PROFILE' | 'POLICY' | 'RUBRIC' | string;
++  logicalKey: string;
++  version: number;
++  parentId?: string | null;
++  sourceId?: string | null;
++  status: 'DRAFT' | string;
++  data: Record<string, any>;
++  revision: number;
++  verificationStatus: 'UNVERIFIED' | string;
++}

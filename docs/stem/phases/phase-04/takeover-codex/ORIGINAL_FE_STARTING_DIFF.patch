@@ -1,0 +1,37 @@
+diff --git a/src/remotion/director/CinematicScene.tsx b/src/remotion/director/CinematicScene.tsx
+index be7108c..c88c638 100644
+--- a/src/remotion/director/CinematicScene.tsx
++++ b/src/remotion/director/CinematicScene.tsx
+@@ -4,11 +4,8 @@ import type {AssetId, ScenePlan} from './plan';
+ import {validateScenePlan} from './plan';
+ import {springLoop} from './motion';
+ import {tokens} from './tokens';
+-import {Arrow,Callout,GlowBody,KineticNumber,Label,Mascot,ParticleField,SpaceBackground,ZoomCamera} from './assets/general';
+-import type {AssetProps} from './assets/general';
+-import {ForceVector,OrbitPath,Pendulum,Lens,Wave} from './assets/physics';
+-import {Atom,Molecule,Flask,ElementTile} from './assets/chemistry';
+-const components: Record<AssetId, React.FC<AssetProps>> = {glow_body:GlowBody,mascot:Mascot,callout:Callout,arrow:Arrow,label:Label,kinetic_number:KineticNumber,force_vector:ForceVector,orbit_path:OrbitPath,pendulum:Pendulum,lens:Lens,wave:Wave,atom:Atom,molecule:Molecule,flask:Flask,element_tile:ElementTile};
++import {ParticleField,SpaceBackground,ZoomCamera} from './assets/general';
++import {DIRECTOR_ASSET_COMPONENTS as components} from './assetComponents';
+ const positions: Record<string,[number,number]> = {main:[960,520],guide:[420,745],note_1:[1430,440],pointer:[1260,540],label:[960,140],quantity:[960,900]};
+ export function scenePositions(plan: ScenePlan): Record<string,[number,number]> {
+   const variant=plan.layout_variant ?? 'center';
+diff --git a/src/remotion/lego/catalog.ts b/src/remotion/lego/catalog.ts
+index b2bf1f1..2b2ff39 100644
+--- a/src/remotion/lego/catalog.ts
++++ b/src/remotion/lego/catalog.ts
+@@ -1,4 +1,5 @@
+ import type { ComposedBlock, SceneData } from '../../types/stem';
++import type { LegoPresetId } from './presets';
+ import { layoutBlocks, timeBlocks } from '../composed/layout';
+ 
+ export interface LegoPieceDescriptor {
+@@ -1251,7 +1252,7 @@ export function applyBlockEditableText(
+  * Factory to create a new freeform `ComposedBlock` when the user clicks "+ Thêm Khối Lego".
+  */
+ export function createLegoBlockPreset(
+-  preset: 'text' | 'formula' | 'number' | 'icon' | 'list' | 'guide',
++  preset: LegoPresetId,
+   indexSeed: number,
+ ): ComposedBlock {
+   const id = `lego_${preset}_${Date.now().toString(36).slice(-4)}_${indexSeed}`;

@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient';
+import { ApiError, apiClient } from './apiClient';
 import { SceneData, STEMScript } from '../types/stem';
 
 /**
@@ -35,6 +35,11 @@ const listeners = new Set<(event: SaveEvent) => void>();
 const resolveId = (scriptId: string, id: string): string => identities.get(scriptId)?.get(id) ?? id;
 const notify = (event: SaveEvent) => listeners.forEach(listener => listener(event));
 
+const cooldownUntil=new Map<string,number>();
+const rateLimitError=(scriptId:string):ApiError|undefined=>{
+  const seconds=Math.ceil(((cooldownUntil.get(scriptId)??0)-Date.now())/1000);
+  return seconds>0?new ApiError('Autosave tạm dừng do giới hạn tần suất.','FE_AUTOSAVE_PAUSED',429,undefined,seconds):undefined;
+};
 const chains = new Map<string, Promise<unknown>>();
 
 /** Runs the PUT after every earlier save for the same script has settled. */
@@ -47,6 +52,7 @@ const enqueue = (scriptId: string, scenes: SceneData[]): Promise<STEMScript> => 
   const next = previous
     .catch(() => undefined)
     .then(async () => {
+      const paused=rateLimitError(scriptId);if(paused)throw paused;
       const submitted = scenes.map(scene => ({ ...scene, id: resolveId(scriptId, scene.id) }));
       const baseRevision = draftRevisions.get(scriptId);
       const payload: { scenes: SceneData[]; baseRevision?: number } = { scenes: submitted };
@@ -78,6 +84,7 @@ const enqueue = (scriptId: string, scenes: SceneData[]): Promise<STEMScript> => 
       });
       return saved;
     }).catch(error => {
+      if((error as ApiError)?.status===429)cooldownUntil.set(scriptId,Date.now()+1000*((error as ApiError).retryAfterSeconds??(error as ApiError).details?.retryAfterSeconds??60));
       if (generations.get(scriptId) === generation) lastErrors.set(scriptId, error);
       notify({ scriptId, error });
       throw error;
@@ -140,7 +147,7 @@ export const sceneSaveQueue = {
             console.warn('[sceneSaveQueue] Save failed, keeping the local edit:', error)
           );
         }
-      }, SAVE_DEBOUNCE_MS)
+      }, Math.max(SAVE_DEBOUNCE_MS,(cooldownUntil.get(scriptId)??0)-Date.now()))
     );
   },
 

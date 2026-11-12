@@ -1,0 +1,113 @@
+{
+  "head": "9fe67cf7801b3e971b3c852c80f68214fd13bba7",
+  "branch": "feat/stem-p4-isolated-20261105",
+  "commits_created": 0,
+  "source_files": [
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\components\\modals\\PublishModal.tsx",
+      "relative": "src/components/modals/PublishModal.tsx",
+      "change": "MODIFIED",
+      "before_sha256": "4316b50ef9cb22774703ff6d1b9156dc854e44b7ac7292446a86a4880c01c370",
+      "sha256": "a568c91b897a526fffd7623b3a26a44c44e9e78c9042345f4ed9de819260eaeb"
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\components\\stem\\StemArtifact.p5.test.tsx",
+      "relative": "src/components/stem/StemArtifact.p5.test.tsx",
+      "change": "NEW",
+      "before_sha256": null,
+      "sha256": "b46c8ca3caf55214e59bee0a29c1a38905c1176c44b02d55a4a55dc10387d8df"
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\components\\stem\\StemReadOnlySummary.tsx",
+      "relative": "src/components/stem/StemReadOnlySummary.tsx",
+      "change": "MODIFIED",
+      "before_sha256": "25140ed1d258f6ab326a928620534bdb71faf6dba8a2a1114488fd7bb18f7dc3",
+      "sha256": "50fcf9c8834392fd344db4bba9fd6a6f9f7c41f8301e865faf9c0a2fa56004db"
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\components\\views\\ProducerStudio\\ProducerStudio.tsx",
+      "relative": "src/components/views/ProducerStudio/ProducerStudio.tsx",
+      "change": "MODIFIED",
+      "before_sha256": "8963b561b414da1326c430a22f3335884b1ebf071c087f01ea0849e700bccab4",
+      "sha256": "cb4ff689c19bd3b46f68923790eb8dfd098f5c17b408185868b0fbee02841c93"
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\services\\libraryService.ts",
+      "relative": "src/services/libraryService.ts",
+      "change": "MODIFIED",
+      "before_sha256": "f7d0208a182c5c4d029d8313b8a1b3d4451abed4c9a32c6ad8f9ae440a700407",
+      "sha256": "ded3b1638a5f3545ae1e4a752658e55c7a8217ff063197ca380a44689dcec8c8"
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\services\\publicationService.ts",
+      "relative": "src/services/publicationService.ts",
+      "change": "MODIFIED",
+      "before_sha256": "ab026c6d9d4a6bc2f3628029ef455bf29b296fe3bc5ba085ccb50d985975950b",
+      "sha256": "7036c1d74d9e99abafc111e7177ccee6c2d0e172d537ff25b712fe96c4537031"
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\services\\reviewService.ts",
+      "relative": "src/services/reviewService.ts",
+      "change": "MODIFIED",
+      "before_sha256": "c852225db4ac49abb6eaa26db8905a1f3339e88ccba472be6ab164e2a046e086",
+      "sha256": "7e4b7ff1d63b1576bc44ee0d2bcf406572a62454e3ab8ffce56b1390d7bc2172"
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\services\\stemClient.ts",
+      "relative": "src/services/stemClient.ts",
+      "change": "MODIFIED",
+      "before_sha256": "9d9d186b13c549d7aa9b32bcc582eafcd92f28dbf9a81ae8c9257d43043363a9",
+      "sha256": "6977322ad04bcba00be2049e8da34c3012fff346fd5044676941ac97b11c21ba"
+    },
+    {
+      "path": "C:\\Users\\LeTran\\FPT University\\2026_FALL\\STEMotion\\.audit\\stem-phase-2026-11-05\\phase-04\\STEMotion_FE\\src\\types\\stem.ts",
+      "relative": "src/types/stem.ts",
+      "change": "MODIFIED",
+      "before_sha256": "3d4ca8dbae91d073341c3ecf33797915a3f2558cdd1fbf4a6e5977a9c372b7bf",
+      "sha256": "5be236a657b7c0d4aa4160d79448d21c4b3662055e876d1bfdd3687e18bc94c0"
+    }
+  ],
+  "actual_tests": {
+    "tests": 227,
+    "passed": 227,
+    "failed": 0,
+    "pending": 0,
+    "files": 40,
+    "pre_existing": 216,
+    "new_p5": 11,
+    "static": [
+      {
+        "name": "typecheck",
+        "exit_code": 0,
+        "seconds": 12.88,
+        "owned_pid": 22368
+      },
+      {
+        "name": "unit",
+        "exit_code": 0,
+        "seconds": 190.17,
+        "owned_pid": 33164
+      },
+      {
+        "name": "build",
+        "exit_code": 0,
+        "seconds": 2.84,
+        "owned_pid": 20772
+      }
+    ]
+  },
+  "backend_live": {
+    "tests": 2,
+    "passed": 2,
+    "failed": 0,
+    "runtime": {
+      "ready": true,
+      "test_exit_code": 0,
+      "server_closed": true,
+      "original_p4_source_config_runner_modified": false,
+      "owned_server_pid": 34204,
+      "owned_port": 52601,
+      "server_exit_code": 0
+    }
+  }
+}
