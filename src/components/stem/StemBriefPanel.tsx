@@ -133,7 +133,19 @@ export const StemBriefPanel = forwardRef<StemBriefHandle, StemBriefPanelProps>((
         exists.current=true;baseRevision=created.revision;latest.current.revision=baseRevision;
         if(alive.current&&requestEpoch===epoch.current)setRevision(baseRevision);
       }
-      const payload={schemaVersion:'stem.v1' as const,baseRevision,expectedScriptRevision,brief:state.brief,evidence:state.evidence.map(e=>({...e,sceneId:e.sceneId?sceneSaveQueue.resolveId(projectId,e.sceneId):null}))};
+      const payload={
+        schemaVersion:'stem.v1' as const,
+        baseRevision,
+        expectedScriptRevision,
+        brief:{
+          ...state.brief,
+          steps:(state.brief.steps??[]).map(s=>({
+            ...s,
+            sceneIds:(s.sceneIds??[]).map(id=>sceneSaveQueue.resolveId(projectId,id))
+          }))
+        },
+        evidence:state.evidence.map(e=>({...e,sceneId:e.sceneId?sceneSaveQueue.resolveId(projectId,e.sceneId):null}))
+      };
       const result=await scriptService.saveStemBrief(projectId,versionId,{...payload,idempotencyKey:keyFor(payload)});
       if(!alive.current||requestEpoch!==epoch.current)return result;
       latest.current.revision=result.revision;setRevision(result.revision);setFindings(result.findings);setReadiness(result.readiness);setCurrentMode(result.effectiveMode);
@@ -277,6 +289,8 @@ export const StemBriefPanel = forwardRef<StemBriefHandle, StemBriefPanelProps>((
         ...patch,
       });
     }
+    const stdOrder = STANDARD_STEM_STEPS.map(s => s.key as string);
+    steps.sort((a, b) => stdOrder.indexOf(a.stepKey) - stdOrder.indexOf(b.stepKey));
     setBrief({ ...brief, steps });
     setDirty(true);
   };
