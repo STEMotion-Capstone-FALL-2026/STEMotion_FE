@@ -120,6 +120,7 @@ export const StemRubricPanel: React.FC<StemRubricPanelProps> = ({
   const [apiError,setApiError]=useState<unknown>(null);
   const [reload,setReload]=useState(0);
   const callback=useRef(onAssessmentChange);callback.current=onAssessmentChange;
+  const assessmentRef=useRef(assessment);assessmentRef.current=assessment;
   const requestKey=useRef<{payload:string;key:string}|null>(null);
   const targetDialog=useDialog(showTargetModal,'Chỉ định đích sửa đổi',()=>setShowTargetModal(false),decisionPending);
   useEffect(()=>{
@@ -135,14 +136,19 @@ export const StemRubricPanel: React.FC<StemRubricPanelProps> = ({
         (rubrics.find(r => r.id === data.brief?.policyVersionId || r.parentId === data.brief?.policyVersionId)?.id ?? rubrics[0]?.id ?? null)
         : (rubrics[0]?.id ?? null);
       const currentFp = phase === 'VIDEO' ? (data.compositionFingerprint ?? null) : (data.scriptFingerprint ?? null);
+      const existingCriteria = assessmentRef.current?.criteria;
+      const initialCriteria = (existingCriteria && existingCriteria.length > 0)
+        ? existingCriteria
+        : DEFAULT_CRITERIA_KEYS.map(c=>({key:c.key,judgment:'NOT_ASSESSED',rationale:'',evidenceIds:[]}));
+      const chosenRubricId = assessmentRef.current?.rubricVersionId ?? defaultRubricId;
       if(isReviewerActive)callback.current({
         expectedBriefRevision:data.revision,
         expectedScriptRevision:scriptRevision,
         expectedModeRevision:data.modeRevision,
         expectedCompositionRevision:phase==='VIDEO'?compositionRevision:null,
-        rubricVersionId:defaultRubricId,
+        rubricVersionId:chosenRubricId,
         expectedFingerprint:currentFp,
-        criteria:DEFAULT_CRITERIA_KEYS.map(c=>({key:c.key,judgment:'NOT_ASSESSED',rationale:'',evidenceIds:[]})),
+        criteria:initialCriteria,
         idempotencyKey:stemMutationKey()
       });
     }).catch(err=>{if(current){setApiError(err);setStemError(err.message);setLoadingStem(false);}});

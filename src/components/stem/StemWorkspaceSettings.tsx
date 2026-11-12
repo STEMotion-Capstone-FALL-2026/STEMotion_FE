@@ -13,7 +13,7 @@ export function StemWorkspaceSettings({workspaceId}:{workspaceId:string}) {
   const [busy,setBusy]=useState(false);
   const [reload,setReload]=useState(0);
   const retry=useRef<{payload:string;key:string}|null>(null);
-  const admin=authService.getCurrentUser().systemRole==='ADMIN';
+  const admin=authService.getCurrentUser()?.systemRole==='ADMIN';
   useEffect(()=>{
     let current=true;setSettings(null);setError(null);
     const load=async()=>{
