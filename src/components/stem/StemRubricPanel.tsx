@@ -130,16 +130,26 @@ export const StemRubricPanel: React.FC<StemRubricPanelProps> = ({
       if(!current)return;setStemData(data);setLoadingStem(false);
       let rubrics: import('../../types/stem').CatalogVersionEntry[] = [];
       try { rubrics = await scriptService.getCatalog('RUBRIC', 0, 50); } catch { /* ignore */ }
+      let policyRubricId: string | null = null;
+      if (data.brief?.policyVersionId) {
+        try {
+          const policies = await scriptService.getCatalog('POLICY', 0, 50);
+          const matchedPolicy = policies.find(p => p.id === data.brief?.policyVersionId);
+          if (typeof matchedPolicy?.data?.rubricVersionId === 'string') {
+            policyRubricId = matchedPolicy.data.rubricVersionId;
+          }
+        } catch { /* ignore */ }
+      }
       if(!current)return;
       setRubricCatalog(rubrics);
       const defaultRubricId = data.brief?.policyVersionId ?
-        (rubrics.find(r => r.id === data.brief?.policyVersionId || r.parentId === data.brief?.policyVersionId)?.id ?? rubrics[0]?.id ?? null)
+        (policyRubricId ?? rubrics.find(r => r.id === data.brief?.policyVersionId || r.parentId === data.brief?.policyVersionId)?.id ?? rubrics[0]?.id ?? null)
         : (rubrics[0]?.id ?? null);
       const currentFp = phase === 'VIDEO' ? (data.compositionFingerprint ?? null) : (data.scriptFingerprint ?? null);
       const existingCriteria = assessmentRef.current?.criteria;
-      const initialCriteria = (existingCriteria && existingCriteria.length > 0)
+      const initialCriteria: StemCriterion[] = (existingCriteria && existingCriteria.length > 0)
         ? existingCriteria
-        : DEFAULT_CRITERIA_KEYS.map(c=>({key:c.key,judgment:'NOT_ASSESSED',rationale:'',evidenceIds:[]}));
+        : DEFAULT_CRITERIA_KEYS.map(c=>({key:c.key,judgment:'NOT_ASSESSED' as const,rationale:'',evidenceIds:[]}));
       const chosenRubricId = assessmentRef.current?.rubricVersionId ?? defaultRubricId;
       if(isReviewerActive)callback.current({
         expectedBriefRevision:data.revision,
