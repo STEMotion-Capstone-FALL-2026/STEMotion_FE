@@ -633,9 +633,9 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
         const payload=JSON.stringify([noteToSubmit,stemTarget.versionId,script.draftRevision??stemTarget.scriptRevision]);
         if(reviewRetry.current?.payload!==payload){
           const brief=await scriptService.getStemBrief(script.id,stemTarget.versionId);
-          reviewRetry.current={payload,target:{expectedVersionId:stemTarget.versionId,expectedScriptRevision:script.draftRevision??stemTarget.scriptRevision,expectedBriefRevision:brief.revision,idempotencyKey:stemMutationKey()}};
+          reviewRetry.current=brief.briefId?{payload,target:{expectedVersionId:stemTarget.versionId,expectedScriptRevision:script.draftRevision??stemTarget.scriptRevision,expectedBriefRevision:brief.revision,idempotencyKey:stemMutationKey()}}:null;
         }
-        changeTarget=reviewRetry.current.target;
+        changeTarget=reviewRetry.current?.target;
       }
       if(assessment&&(decision==='APPROVED'||decision==='VIDEO_APPROVED')){
         const {idempotencyKey:_,...content}=assessment;
