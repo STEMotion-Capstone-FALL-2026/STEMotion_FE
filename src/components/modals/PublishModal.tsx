@@ -32,9 +32,21 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
   const [publicationError,setPublicationError]=useState<unknown>(null);
   const publishRetry=useRef<{payload:string;key:string}|null>(null);
   useEffect(()=>{
-    let current=true;setArtifact(null);setAcknowledged(false);setPublicationError(null);publishRetry.current=null;
-    if(isOpen&&canPublish&&script.videoStatus==='APPROVED')void getArtifactStatus(script.id).then(value=>{if(current)setArtifact(value);}).catch(()=>{});
-    return()=>{current=false;};
+    let current=true;let timer:ReturnType<typeof setTimeout>|null=null;
+    setArtifact(null);setAcknowledged(false);setPublicationError(null);publishRetry.current=null;
+    const poll=()=>{
+      void getArtifactStatus(script.id).then(value=>{
+        if(!current)return;
+        setArtifact(value);
+        const isOffMode=value.snapshotOrigin?.capturedMode==='OFF'&&value.snapshotOrigin?.effectiveMode==='OFF';
+        if(isOffMode)setAcknowledged(true);
+        if(!value.publishEligibility.allowed&&isOffMode){
+          timer=setTimeout(poll,1000);
+        }
+      }).catch(()=>{});
+    };
+    if(isOpen&&canPublish&&script.videoStatus==='APPROVED')poll();
+    return()=>{current=false;if(timer)clearTimeout(timer);};
   },[isOpen,canPublish,script.id,script.videoUrl,script.videoStatus]);
   const activeProject = useRef(script.id);
   activeProject.current = script.id;
@@ -55,9 +67,28 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
       const expectation=artifact?artifactExpectation(artifact):undefined;
       const payload=JSON.stringify([script.id,script.title,acknowledged,expectation]);
       if(publishRetry.current?.payload!==payload)publishRetry.current={payload,key:stemMutationKey()};
-      const result = artifact
-        ? await publicationService.publishInternal(script.id,script.title,{legacyUnverifiedAcknowledged:acknowledged,artifactExpectation:expectation,idempotencyKey:publishRetry.current.key})
-        : await publicationService.publishInternal(script.id, script.title);
+      let result;
+      if (artifact) {
+        result = await publicationService.publishInternal(script.id,script.title,{legacyUnverifiedAcknowledged:acknowledged,artifactExpectation:expectation,idempotencyKey:publishRetry.current.key});
+      } else {
+        try {
+          result = await publicationService.publishInternal(script.id, script.title);
+        } catch (err: any) {
+          if (err instanceof ApiError && err.code === 'STEM_STALE_TARGET' && (err.details as any)?.reason === 'LEGACY_ACK_REQUIRED') {
+            const loaded = await getArtifactStatus(script.id);
+            setArtifact(loaded);
+            if (loaded.snapshotOrigin?.capturedMode === 'OFF' && loaded.snapshotOrigin?.effectiveMode === 'OFF') {
+              setAcknowledged(true);
+              const exp = artifactExpectation(loaded);
+              result = await publicationService.publishInternal(script.id, script.title, { legacyUnverifiedAcknowledged: true, artifactExpectation: exp, idempotencyKey: stemMutationKey() });
+            } else {
+              throw err;
+            }
+          } else {
+            throw err;
+          }
+        }
+      }
       if (activeProject.current === projectId) {
         setEmbedCode(result.lmsEmbedCode);
         setPublished(true);
