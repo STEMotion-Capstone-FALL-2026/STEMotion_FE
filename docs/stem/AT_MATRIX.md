@@ -54,11 +54,11 @@ Trong kế hoạch ban đầu (trước khi hợp nhất các фа STEM P3–P6 
 | Tầng kiểm thử | Công cụ | Lệnh thực thi | Số lượng cam kết cũ | Số lượng thực tế sau khi merge | Chạy trên CI |
 | :--- | :--- | :--- | :---: | :---: | :---: |
 | **Backend Unit, DB & HTTP Acceptance** (`STEMotion_BE`) | JUnit 5 + Embedded PostgreSQL + MockMvc | `mvn test` / `mvn verify` | ~45 | **626 tests** *(606 sau PR #2 + 6 test `AT16` ở PR #4 + 14 test YouTube ở PR #5)* | ✅ Có (`ci.yml`) |
-| **Frontend Unit & Component** (`STEMotion_FE`) | Vitest + React Testing Library | `npm test` (`vitest run`) | ~25 | **270 tests** *(trên 43 test files, bao gồm `StemPanels.test.tsx`, `StemP6.test.tsx`, `StemStrictRubric.test.tsx`)* | ✅ Có (`ci.yml`) |
-| **Frontend Browser E2E** (`STEMotion_FE/e2e`) | Playwright (Chromium) + `E2eServer` thật | `npm run e2e` | 12 | **30 tests** *(trên 8 spec files: `wf01`, `wf01b`, `wf02`, `wf03`, `wf04`, `wf05-stem`, `roles-mail`, `whitelist-ui`)* | ✅ Có (`e2e.yml`) |
+| **Frontend Unit & Component** (`STEMotion_FE`) | Vitest + React Testing Library | `npm test` (`vitest run`) | ~25 | **215 tests** *(trên 26 test files, bao gồm `StemPanels.test.tsx`, `StemP6.test.tsx`, `StemArtifact.p5.test.tsx`, `StemStrictRubric.test.tsx`)* | ✅ Có (`ci.yml`) |
+| **Frontend Browser E2E** (`STEMotion_FE/e2e`) | Playwright (Chromium) + `E2eServer` thật | `npm run e2e` | 12 | **34 tests** *(trên 8 spec files: `wf01`, `wf01b`, `wf02`, `wf03`, `wf04`, `wf05-stem` [7 tests], `roles-mail`, `whitelist-ui`)* | ✅ Có (`e2e.yml`) |
 | **Render Worker Unit & Contract** (`STEMotion_RENDER`) | Vitest | `npm test` | — | **36 tests** *(bao gồm kiểm thử gỡ bỏ Google TTS miễn phí `RF-05`)* | ✅ Có (`ci.yml`) |
 | **Load & Performance Baseline** (`STEMotion_BE/load-tests/k6`) | Grafana k6 | `k6 run` (`RF-02`) | 4 (`NFR-01..04`) | **4 kịch bản k6** *(21,671 requests, 0.00% lỗi, p95 = 7.45 ms)* | Báo cáo thực nghiệm (`BASELINE_REPORT_2026-11-12.md`) |
-| **TỔNG CỘNG TOÀN HỆ THỐNG** | | | **82 tests** | **962 bài kiểm thử tự động** | **100% xanh** |
+| **TỔNG CỘNG TOÀN HỆ THỐNG** | | | **82 tests** | **911 bài kiểm thử tự động (+ 4 kịch bản k6)** | **100% xanh** |
 
 ---
 
