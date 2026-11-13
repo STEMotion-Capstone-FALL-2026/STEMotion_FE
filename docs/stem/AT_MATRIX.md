@@ -47,18 +47,52 @@
 
 ---
 
-## 2. Thống Kê Số Liệu Kiểm Thử Thực Tế Cho Buổi Bảo Vệ (Viva Metrics)
+## 2. Thống Kê Số Liệu Kiểm Thử Thực Tế Cho Buổi Bảo Vệ (Viva Metrics — Đối Chiếu `BM01` & `BM04`)
 
-Trong kế hoạch ban đầu (trước khi hợp nhất các фа STEM P3–P6 và `RF-05`..`RF-12`), nhóm cam kết tối thiểu **82 test cases (trong đó 52 chạy trên CI)**. Sau khi hoàn tất tích hợp trên cả 3 repository, số lượng bài kiểm thử tự động thực tế đang chạy như sau:
+Trong hồ sơ **Review 2 (`BM01 Design Brief` Bảng 11 & `BM04 Commitment` Bảng 49–52)**, nhóm đã đăng ký **82 Functional & NFR Test Cases**, trong đó tại thời điểm Review 2 có **52/82 (63.4%) chạy tự động trên CI** (do các nhánh `F-11` YouTube `RF-08`, `F-14..F-17` STEM `RF-10..RF-12` và `RF-02` k6 lúc đó chưa hợp nhất vào `main`).
 
-| Tầng kiểm thử | Công cụ | Lệnh thực thi | Số lượng cam kết cũ | Số lượng thực tế sau khi merge | Chạy trên CI |
-| :--- | :--- | :--- | :---: | :---: | :---: |
-| **Backend Unit, DB & HTTP Acceptance** (`STEMotion_BE`) | JUnit 5 + Embedded PostgreSQL + MockMvc | `mvn test` / `mvn verify` | ~45 | **626 tests** *(606 sau PR #2 + 6 test `AT16` ở PR #4 + 14 test YouTube ở PR #5)* | ✅ Có (`ci.yml`) |
-| **Frontend Unit & Component** (`STEMotion_FE`) | Vitest + React Testing Library | `npm test` (`vitest run`) | ~25 | **215 tests** *(trên 26 test files, bao gồm `StemPanels.test.tsx`, `StemP6.test.tsx`, `StemArtifact.p5.test.tsx`, `StemStrictRubric.test.tsx`)* | ✅ Có (`ci.yml`) |
-| **Frontend Browser E2E** (`STEMotion_FE/e2e`) | Playwright (Chromium) + `E2eServer` thật | `npm run e2e` | 12 | **34 tests** *(trên 8 spec files: `wf01`, `wf01b`, `wf02`, `wf03`, `wf04`, `wf05-stem` [7 tests], `roles-mail`, `whitelist-ui`)* | ✅ Có (`e2e.yml`) |
-| **Render Worker Unit & Contract** (`STEMotion_RENDER`) | Vitest | `npm test` | — | **36 tests** *(bao gồm kiểm thử gỡ bỏ Google TTS miễn phí `RF-05`)* | ✅ Có (`ci.yml`) |
-| **Load & Performance Baseline** (`STEMotion_BE/load-tests/k6`) | Grafana k6 | `k6 run` (`RF-02`) | 4 (`NFR-01..04`) | **4 kịch bản k6** *(21,671 requests, 0.00% lỗi, p95 = 7.45 ms)* | Báo cáo thực nghiệm (`BASELINE_REPORT_2026-11-12.md`) |
-| **TỔNG CỘNG TOÀN HỆ THỐNG** | | | **82 tests** | **911 bài kiểm thử tự động (+ 4 kịch bản k6)** | **100% xanh** |
+Sau khi hoàn tất merge toàn bộ các gói `RF-01`..`RF-12` và bổ sung `e2e/wf05-stem.spec.ts` (`T13a`), số liệu cập nhật chính xác cho buổi bảo vệ (Viva) theo đúng cấu trúc bảng của `BM01` và `BM04` như sau:
+
+### 2.1. Bảng cập nhật theo loại kiểm thử (Đối chiếu `BM01` Table 11 & `BM04` Table 51–52)
+
+| Nguồn kiểm thử (Theo `BM01` Table 11) | Số lượng hạng mục | Tổng TC cam kết (`BM01`/`BM04`) | Chạy CI lúc Review 2 (Trước merge) | Chạy tự động sau khi merge (Viva thực tế) | Dẫn chứng thực thi sau khi merge |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **1. Mandatory Features (`F-01`..`F-17`)** | 17 features (× 3 TC) | **51** (`TC-F01-01`..`TC-F17-03`) | **29 / 51** | **51 / 51 chạy CI (100%)** | Đã hợp nhất đầy đủ test cho `F-11` YouTube (`YouTubePublishIntegrationTest` — 14 JUnit tests) và `F-14..F-17` STEM (`StemPostgresTest`, `StemRf11AcceptanceTest`, `StemDemoCatalogAcceptanceTest`, `StemP6HttpTest`, `StemStrictRubric.test.tsx`, `StemArtifact.p5.test.tsx`). |
+| **2. Main Workflows (End-to-End)** | 4 workflows (`WF-01`..`WF-04` + `WF-05` STEM) | **4** (`DS-01`..`DS-04`) | **4 / 4** | **4 / 4 chạy CI (+1 luồng `WF-05` STEM = 5 luồng E2E)** | Chạy tự động trong `.github/workflows/e2e.yml` với `E2E_STEM=1` (**34 kịch bản Playwright** trên 8 spec files, bao gồm `e2e/wf05-stem.spec.ts`). |
+| **3. State Transitions of Main Entities** (`ClipProject` script & video, `RenderJob`, `WorkspaceMember`) | 22 bước chuyển trạng thái | **22** | **17 / 22** | **22 / 22 chạy CI (100%)** | Bao phủ toàn bộ chuyển trạng thái của Script (`DRAFT` $\rightarrow$ `IN_REVIEW` $\rightarrow$ `CHANGE_REQUESTED` $\rightarrow$ `APPROVED`), Video (`NOT_RENDERED` $\rightarrow$ `RENDERING` $\rightarrow$ `IN_QA` $\rightarrow$ `APPROVED` $\rightarrow$ `PUBLISHED`), `RenderJob` và `WorkspaceMember` trong JUnit + Playwright E2E. |
+| **4. Agreed NFRs (`NFR-01`..`NFR-05`)** | 5 NFRs | **5** | **2 / 5** | **5 / 5 tự động hóa (2 chạy CI mỗi commit + 4 kịch bản k6 baseline)** | `NFR-01`, `NFR-05` chạy trực tiếp trong CI; `NFR-01`..`NFR-04` được tự động hóa bằng 4 kịch bản Grafana k6 (`21,671 requests`, `0.00%` lỗi, `p95 = 7.45 ms` — `BASELINE_REPORT_2026-11-12.md`). |
+| **TỔNG CỘNG CAM KẾT (`Committed Total`)** | **17 features / 4 WFs** | **82 TC** | **52 / 82 (63.4%)** | **79 / 82 chạy trực tiếp trên CI (96.3%) — 82 / 82 tự động hóa (100%)** | Vượt xa ngưỡng cam kết tối thiểu `≥ 52/82 (63%)` trong `BM04` Table 52. |
+
+### 2.2. Bảng cập nhật theo từng Workflow (Đối chiếu `BM04` Table 8, 14, 20, 26 & Table 49)
+
+| Workflow | Thành viên phụ trách chính | Features thuộc Workflow | Tổng TC cam kết (`BM04`) | Chạy CI lúc Review 2 | Chạy CI / Tự động sau khi merge | Các bộ test tự động đã bổ sung sau Review 2 |
+| :--- | :--- | :--- | :---: | :---: | :---: | :--- |
+| **`WF-01`** (Set up a workspace team) | Phan Phước Long Trì | `F-01`, `F-02` (+ `NFR-05`) | **12** | **9** | **12 / 12 chạy CI (100%)** | `wf01-team-setup.spec.ts` (4), `wf01b-auth.spec.ts` (5), `roles-mail.spec.ts` (3), `whitelist-ui.spec.ts` (1). |
+| **`WF-02`** (Write and approve a STEM script) | Nguyễn Việt Hoàng | `F-03`, `F-04`, `F-05`, `F-14`, `F-15`, `F-16` (+ `NFR-01`, `NFR-04`) | **25** | **21** | **24 chạy CI + 1 k6 = 25 / 25 (100%)** | Hợp nhất `RF-10`, `RF-11`, `RF-12`: `StemRf11AcceptanceTest`, `StemDemoCatalogAcceptanceTest` (`AT16`), `StemStrictRubric.test.tsx`, `wf02-script.spec.ts` (5), `wf05-stem.spec.ts` (7). |
+| **`WF-03`** (Produce and render a clip) | Trần Nguyễn Hoàng Lê | `F-06`, `F-07`, `F-08`, `F-13` (+ `NFR-02`) | **23** | **11** | **22 chạy CI + 1 k6 = 23 / 23 (100%)** | Hợp nhất `RF-05` (`STEMotion_RENDER` 36 Vitest tests), `StemArtifactP5Test`, `StemFingerprintP5Test`, `wf03-production.spec.ts` (4). |
+| **`WF-04`** (Review and publish a clip) | Phan Thế Trung | `F-09`, `F-10`, `F-11`, `F-12`, `F-17` (+ `NFR-03`) | **22** | **11** | **21 chạy CI + 1 k6 = 22 / 22 (100%)** | Hợp nhất `RF-08` (`YouTubePublishIntegrationTest` — 14 tests), `StemP6HttpTest`, `StemP6.test.tsx`, `StemArtifact.p5.test.tsx`, `wf04-review-publish.spec.ts` (5), `wf05-stem.spec.ts` (7). |
+| **TỔNG CỘNG (`Total`)** | **4 thành viên** | **17 features** | **82 TC** | **52 CI (63.4%)** | **79 CI + 3 k6 = 82 / 82 (100%)** | **100% kịch bản demo (`DS-01`..`DS-05`) chạy E2E tự động.** |
+
+### 2.3. Bảng cập nhật theo từng Thành viên (Đối chiếu `BM04` Table 50)
+
+| Thành viên | Workflow sở hữu | Số Features sở hữu | TC cam kết (`BM04`) | Chạy CI lúc Review 2 | Chạy CI / Tự động sau khi merge |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Nguyễn Việt Hoàng** | `WF-02` | 3 (`F-03`..`F-05`) | **15** | **12** | **14 chạy CI + 1 k6 (`NFR-04`) = 15 / 15 (100%)** |
+| **Trần Nguyễn Hoàng Lê** | `WF-03` | 7 (`F-06`..`F-08`, `F-14`..`F-17`) | **33** | **24** | **32 chạy CI + 1 k6 (`NFR-02`) = 33 / 33 (100%)** |
+| **Phan Phước Long Trì** | `WF-01` | 3 (`F-01`, `F-02`, `F-13`) | **15** | **8** | **15 / 15 chạy CI (100%)** |
+| **Phan Thế Trung** | `WF-04` | 4 (`F-09`..`F-12`) | **19** | **8** | **18 chạy CI + 1 k6 (`NFR-03`) = 19 / 19 (100%)** |
+| **TỔNG CỘNG (`Total`)** | **4** | **17** | **82** | **52 (63.4%)** | **79 chạy CI (96.3%) + 3 k6 = 82 / 82 (100%)** |
+
+### 2.4. Tổng số bài kiểm thử tự động thực tế trên toàn bộ 3 Repository (Bảo chứng cho 82 TC cam kết)
+
+| Tầng kiểm thử | Công cụ | Lệnh thực thi | Số bài test tự động thực tế đang chạy | Chạy trên CI |
+| :--- | :--- | :--- | :---: | :---: |
+| **Backend Unit, DB & HTTP Acceptance** (`STEMotion_BE`) | JUnit 5 + Embedded PostgreSQL + MockMvc | `mvn test` / `mvn verify` | **626 tests** *(606 sau PR #2 + 6 test `AT16` ở PR #4 + 14 test YouTube ở PR #5)* | ✅ Có (`ci.yml`) |
+| **Frontend Unit & Component** (`STEMotion_FE`) | Vitest + React Testing Library | `npm test` (`vitest run`) | **215 tests** *(trên 26 test files, bao gồm `StemPanels.test.tsx`, `StemP6.test.tsx`, `StemArtifact.p5.test.tsx`, `StemStrictRubric.test.tsx`)* | ✅ Có (`ci.yml`) |
+| **Frontend Browser E2E** (`STEMotion_FE/e2e`) | Playwright (Chromium) + `E2eServer` thật | `npm run e2e` | **34 tests** *(trên 8 spec files: `wf01`, `wf01b`, `wf02`, `wf03`, `wf04`, `wf05-stem` [7 tests], `roles-mail`, `whitelist-ui`)* | ✅ Có (`e2e.yml`) |
+| **Render Worker Unit & Contract** (`STEMotion_RENDER`) | Vitest | `npm test` | **36 tests** *(bao gồm kiểm thử gỡ bỏ Google TTS miễn phí `RF-05`)* | ✅ Có (`ci.yml`) |
+| **Load & Performance Baseline** (`STEMotion_BE/load-tests/k6`) | Grafana k6 | `k6 run` (`RF-02`) | **4 kịch bản k6** *(21,671 requests, 0.00% lỗi, p95 = 7.45 ms)* | Báo cáo thực nghiệm (`BASELINE_REPORT_2026-11-12.md`) |
+| **TỔNG CỘNG TOÀN HỆ THỐNG** | | | **911 bài kiểm thử tự động (+ 4 kịch bản k6)** | **100% xanh** |
 
 ---
 
