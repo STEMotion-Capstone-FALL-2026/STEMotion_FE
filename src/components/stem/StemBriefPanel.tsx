@@ -82,6 +82,8 @@ export const StemBriefPanel = forwardRef<StemBriefHandle, StemBriefPanelProps>((
   const [legacyPending,setLegacyPending]=useState(false);
   const root=useRef<HTMLDivElement>(null);
   const loaded=useRef(false);
+  const unavailable=useRef(false);
+  const loadingPromise=useRef<Promise<void>|null>(null);
   const exists=useRef(false);
   const saving=useRef<Promise<StemViewResponse>|null>(null);
   const snapshot=useRef('');
@@ -99,16 +101,31 @@ export const StemBriefPanel = forwardRef<StemBriefHandle, StemBriefPanelProps>((
     if(parsed.status===400)setFieldErrors({[parsed.field??'request']:parsed.message});
   };
   const loadBrief=useCallback(async()=>{
-    const request=++epoch.current;loaded.current=false;setIsLoading(true);setError(null);setDirty(false);
-    try {
-      const view=await scriptService.getStemBrief(projectId,versionId);
-      if(!alive.current||request!==epoch.current)return;
-      const next=view.brief??emptyStemBrief();exists.current=Boolean(view.briefId);
-      snapshot.current=JSON.stringify([next,view.evidence]);
-      setBrief(next);setEvidence(view.evidence);setRevision(view.revision);setReadiness(view.readiness);
-      setFindings(view.findings);setCurrentMode(view.effectiveMode);setLegacySuggestion(view.legacySuggestion??null);
-      setFieldErrors({});mutation.current=null;setRateLimitCountdown(null);loaded.current=true;
-    }catch(err){if(request===epoch.current)fail(err);}finally{if(alive.current&&request===epoch.current)setIsLoading(false);}
+    const request=++epoch.current;loaded.current=false;unavailable.current=false;setIsLoading(true);setError(null);setDirty(false);
+    const task=(async()=>{
+      try {
+        const view=await scriptService.getStemBrief(projectId,versionId);
+        if(!alive.current||request!==epoch.current)return;
+        const next=view.brief??emptyStemBrief();exists.current=Boolean(view.briefId);
+        snapshot.current=JSON.stringify([next,view.evidence]);
+        setBrief(next);setEvidence(view.evidence);setRevision(view.revision);setReadiness(view.readiness);
+        setFindings(view.findings);setCurrentMode(view.effectiveMode);setLegacySuggestion(view.legacySuggestion??null);
+        setFieldErrors({});mutation.current=null;setRateLimitCountdown(null);loaded.current=true;
+      }catch(err){
+        if(request===epoch.current){
+          if((err as any)?.status===404){
+            unavailable.current=true;exists.current=false;loaded.current=true;setCurrentMode('OFF');setError(null);
+          }else{
+            fail(err);
+          }
+        }
+      }finally{
+        if(request===epoch.current)loadingPromise.current=null;
+        if(alive.current&&request===epoch.current)setIsLoading(false);
+      }
+    })();
+    loadingPromise.current=task;
+    return task;
   },[projectId,versionId]);
   useEffect(()=>{void loadBrief();},[loadBrief]);
   useEffect(()=>{onEvidenceChange?.(evidence);},[evidence,onEvidenceChange]);
@@ -161,12 +178,15 @@ export const StemBriefPanel = forwardRef<StemBriefHandle, StemBriefPanelProps>((
     try{return await task;}catch(err){fail(err);throw err;}finally{saving.current=null;if(alive.current)setIsSaving(false);}
   };
   const assertSubmitReady=()=>{
-    if(!loaded.current)throw new Error('Hồ sơ STEM chưa tải xong.');
+    if(!loaded.current&&!loadingPromise.current)throw new Error('Hồ sơ STEM chưa tải xong.');
     if(legacyPending)throw new Error('Gợi ý legacy mới ở form; hãy bấm Lưu hồ sơ để xác nhận.');
     if(error||rateLimitCountdown!==null)throw new Error('Hồ sơ STEM đang có lỗi chưa xử lý.');
   };
   useImperativeHandle(ref,()=>({assertSubmitReady,saveForSubmit:async()=>{
+    if(!loaded.current&&loadingPromise.current)await loadingPromise.current;
+    if(!loaded.current)throw new Error('Hồ sơ STEM chưa tải xong.');
     assertSubmitReady();
+    if(unavailable.current)return {schemaVersion:'stem.v1',scriptVersionId:versionId,brief:null,revision:0,modeRevision:0,verificationStatus:'UNVERIFIED',readiness:'LEGACY_UNMAPPED',effectiveMode:'OFF',evidence:[],findings:[]};
     // OFF legacy without a brief is never silently converted just by submitting.
     if(!dirty&&!exists.current&&currentMode==='OFF')return scriptService.getStemBrief(projectId,versionId);
     let saved:StemViewResponse;
