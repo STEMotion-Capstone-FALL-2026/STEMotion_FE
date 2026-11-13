@@ -556,6 +556,10 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
               if (isSubmitting) return;
               setIsSubmitting(true);
               try {
+                if(isStemUnavailable && (stemPanel.current as any)?.currentMode === 'STRICT'){
+                  showToast('Chế độ STRICT yêu cầu hệ thống kiểm định STEM hoạt động. Không thể gửi duyệt khi dịch vụ kiểm định ngoại tuyến.', 'warn');
+                  return;
+                }
                 await sceneSaveQueue.saveNow(script.id,script.scenes);
                 if(!isStemUnavailable&&stemTarget&&stemPanel.current){
                   stemPanel.current.assertSubmitReady();

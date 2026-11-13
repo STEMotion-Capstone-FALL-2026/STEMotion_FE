@@ -137,9 +137,9 @@ export const StemRubricPanel: React.FC<StemRubricPanelProps> = ({
         : (rubrics[0]?.id ?? null);
       const currentFp = phase === 'VIDEO' ? (data.compositionFingerprint ?? null) : (data.scriptFingerprint ?? null);
       const existingCriteria = assessmentRef.current?.criteria;
-      const initialCriteria = (existingCriteria && existingCriteria.length > 0)
+      const initialCriteria: StemCriterion[] = (existingCriteria && existingCriteria.length > 0)
         ? existingCriteria
-        : DEFAULT_CRITERIA_KEYS.map(c=>({key:c.key,judgment:'NOT_ASSESSED',rationale:'',evidenceIds:[]}));
+        : DEFAULT_CRITERIA_KEYS.map(c=>({key:c.key,judgment:'NOT_ASSESSED' as const,rationale:'',evidenceIds:[]}));
       const chosenRubricId = assessmentRef.current?.rubricVersionId ?? defaultRubricId;
       if(isReviewerActive)callback.current({
         expectedBriefRevision:data.revision,

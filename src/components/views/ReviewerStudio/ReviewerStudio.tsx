@@ -617,6 +617,10 @@ export const ReviewerStudio: React.FC<ReviewerStudioProps> = ({
     decisionPendingRef.current = true;
     setDecisionPending(true);
     try {
+      if (isStrictMode && isStemUnavailable && (decision === 'APPROVED' || decision === 'VIDEO_APPROVED')) {
+        showToast('Chế độ STRICT yêu cầu hệ thống thẩm định STEM hoạt động. Không thể phê duyệt khi dịch vụ kiểm định ngoại tuyến.', 'warn');
+        return false;
+      }
       let assessment=(isStrictMode||attachAssessment)&&isReviewerActive&&!isStemUnavailable?stemAssessment??undefined:undefined;
       if(isStrictMode&&(decision==='APPROVED'||decision==='VIDEO_APPROVED')){
         if(!isReviewerActive)throw new Error('Chế độ STRICT yêu cầu ghế Reviewer active trong workspace.');

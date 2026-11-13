@@ -613,12 +613,27 @@ export const StemBriefPanel = forwardRef<StemBriefHandle, StemBriefPanelProps>((
                 <button
                   type="button"
                   onClick={handleApplyDefaultSteps}
-                  className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded font-semibold text-[10px]"
+                  disabled={scenes.length === 0}
+                  className={`px-2.5 py-1 rounded font-semibold text-[10px] border ${
+                    scenes.length === 0
+                      ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                      : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                  }`}
+                  title={scenes.length === 0 ? 'Cần tạo ít nhất 1 phân cảnh trước khi áp dụng mẫu' : 'Áp dụng mẫu 6 bước'}
                 >
                   Áp dụng mẫu 6 bước
                 </button>
               )}
             </div>
+
+            {scenes.length === 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded text-xs flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  Kịch bản hiện chưa có phân cảnh nào. Hãy tạo các phân cảnh ở màn hình kịch bản trước khi phân bổ vào các bước tiến trình bài học.
+                </span>
+              </div>
+            )}
 
             {/* Findings cảnh báo chung */}
             {findings.filter(f => f.ruleId === 'TECH-LESSON-ORDER').map((f, i) => (
