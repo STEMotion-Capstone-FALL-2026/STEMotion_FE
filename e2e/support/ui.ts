@@ -4,7 +4,7 @@ export async function signIn(page: Page, username: string, password: string) {
   // Password workflow tests never load Google's external SDK. The dedicated auth spec
   // installs a test-side GIS implementation to exercise the real component callback.
   await page.route('https://accounts.google.com/gsi/client', route => route.abort());
-  await page.goto('/');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.getByLabel('Tài khoản').fill(username);
   await page.getByLabel('Mật khẩu').fill(password);
   await page.getByRole('button', { name: 'Đăng nhập' }).click();

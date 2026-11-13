@@ -136,3 +136,191 @@ export async function approvedProject(request: APIRequestContext, ws: Awaited<Re
   await post(request, ws.tokens.REVIEWER, `/scripts/${projectId}/approve`, { note: 'E2E: đạt' });
   return projectId;
 }
+
+/** Seeded STEM demo-pack.v1 IDs from STEMotion_BE E2eServer (when E2E_STEM=1). */
+export const STEM_PRIMARY_POLICY_ID = '00000000-0000-0000-0000-000000000005';
+export const STEM_PRIMARY_RUBRIC_ID = '00000000-0000-0000-0000-000000000004';
+export const STEM_PRIMARY_MATH_OUTCOME_ID = '00000000-0000-0000-0000-000000000003';
+export const STEM_PRIMARY_SCI_OUTCOME_ID = '00000000-0000-0000-0000-000000000013';
+export const STEM_PRIMARY_TOPIC_VERSION_ID = '00000000-0000-0000-0000-000000000018';
+
+/** Admin switches a workspace to STRICT (or ADVISORY/OFF) and pins the primary STEM policy. */
+export async function setWorkspaceStemMode(
+  request: APIRequestContext,
+  adminToken: string,
+  workspaceId: string,
+  mode: 'OFF' | 'ADVISORY' | 'STRICT',
+  policyId: string = STEM_PRIMARY_POLICY_ID,
+) {
+  const currentRes = await request.get(`${API_URL}/workspaces/${workspaceId}/stem-settings`, {
+    headers: bearer(adminToken),
+  });
+  expect(currentRes.ok(), `GET stem-settings for ${workspaceId}`).toBeTruthy();
+  const current = await currentRes.json();
+  const baseRevision = current.revision ?? current.modeRevision ?? 0;
+
+  const updateRes = await request.put(`${API_URL}/workspaces/${workspaceId}/stem-settings`, {
+    headers: bearer(adminToken),
+    data: {
+      baseRevision,
+      mode,
+      policyVersionIds: [policyId],
+      defaultPolicyVersionId: policyId,
+      idempotencyKey: `e2e-mode-${mode.toLowerCase()}-${workspaceId}-${baseRevision}-${Date.now()}`,
+    },
+  });
+  expect(updateRes.ok(), `PUT stem-settings ${mode} -> ${updateRes.status()} ${await updateRes.text()}`).toBeTruthy();
+  return updateRes.json();
+}
+
+/** Creates and saves a complete, valid 6-step STEM brief for the current script version of a project. */
+export async function seedStemBrief(
+  request: APIRequestContext,
+  writerToken: string,
+  projectId: string,
+  policyId: string = STEM_PRIMARY_POLICY_ID,
+) {
+  const project = await getProject(request, writerToken, projectId);
+  const versionsRes = await request.get(`${API_URL}/scripts/${projectId}/versions`, {
+    headers: bearer(writerToken),
+  });
+  expect(versionsRes.ok(), 'get versions').toBeTruthy();
+  const versions = await versionsRes.json();
+  const currentVersion =
+    versions.find((v: any) => v.versionNo === (project.currentVersionNo ?? 1)) ?? versions[0];
+  expect(currentVersion?.id, 'current version UUID').toBeTruthy();
+  const versionId = currentVersion.id as string;
+  const expectedScriptRevision = project.draftRevision ?? currentVersion.draftRevision ?? 0;
+
+  const sceneIds: string[] = (project.scenes ?? []).map((s: any) => s.id).filter(Boolean);
+  const firstSceneId = sceneIds[0];
+  const lastSceneId = sceneIds[sceneIds.length - 1] ?? firstSceneId;
+
+  const getViewRes = await request.get(`${API_URL}/scripts/${projectId}/versions/${versionId}/stem`, {
+    headers: bearer(writerToken),
+  });
+  expect(getViewRes.ok(), 'GET stem brief view').toBeTruthy();
+  let view = await getViewRes.json();
+
+  if (!view.briefId) {
+    const createRes = await request.post(`${API_URL}/scripts/${projectId}/versions/${versionId}/stem`, {
+      headers: bearer(writerToken),
+      data: {
+        schemaVersion: 'stem.v1',
+        expectedScriptRevision,
+        idempotencyKey: `e2e-create-brief-${versionId}-${Date.now()}`,
+      },
+    });
+    expect(createRes.ok(), `POST create stem brief -> ${createRes.status()}`).toBeTruthy();
+    view = await createRes.json();
+  }
+
+  const briefPayload = {
+    schemaVersion: 'stem.v1',
+    baseRevision: view.revision ?? 0,
+    expectedScriptRevision,
+    idempotencyKey: `e2e-save-brief-${versionId}-${view.revision ?? 0}-${Date.now()}`,
+    brief: {
+      topicVersionId: null,
+      policyVersionId: policyId,
+      gradeKey: 'GRADE_4',
+      subjectKeys: ['Math', 'Science'],
+      outcomeIds: [STEM_PRIMARY_MATH_OUTCOME_ID, STEM_PRIMARY_SCI_OUTCOME_ID],
+      rawLegacy: null,
+      context: {
+        primary: {
+          key: 'IN_CLASS_SCREEN',
+          condition: 'Chiếu chung trên màn hình lớp học kết hợp thảo luận nhóm (TEST_ONLY)',
+        },
+        secondary: [],
+      },
+      distributionChannels: ['DEPARTMENT_LIBRARY'],
+      objectives: [
+        {
+          key: 'obj-1',
+          outcomeId: STEM_PRIMARY_MATH_OUTCOME_ID,
+          learnerAction: 'Đo và ghi nhận thể tích nước lọc được bằng cốc chia vạch (TEST_ONLY)',
+          observableEvidence: 'Bảng ghi số liệu đo thể tích của nhóm (TEST_ONLY)',
+        },
+        {
+          key: 'obj-2',
+          outcomeId: STEM_PRIMARY_SCI_OUTCOME_ID,
+          learnerAction: 'Quan sát độ trong của nước qua từng lớp vật liệu lọc (TEST_ONLY)',
+          observableEvidence: 'Phiếu so sánh mẫu nước trước và sau khi lọc (TEST_ONLY)',
+        },
+      ],
+      studentTasks: [
+        {
+          key: 'task-1',
+          learnerAction: 'Thiết kế, lắp ghép mô hình bình lọc nước mini và đo thể tích nước (TEST_ONLY)',
+          teacherSupport: 'Hướng dẫn thứ tự sắp xếp sỏi, cát sạch và bông gòn (TEST_ONLY)',
+          materials: 'Vỏ chai nhựa, sỏi, cát sạch, bông gòn, cốc đong chia vạch (TEST_ONLY)',
+          safety: 'Không uống nước sau lọc; rửa tay sạch bằng xà phòng sau thí nghiệm (TEST_ONLY)',
+          assessmentEvidence: 'Mô hình bình lọc hoàn chỉnh và phiếu kết quả đo (TEST_ONLY)',
+          executionContextKey: 'IN_CLASS_SCREEN',
+        },
+      ],
+      contributions: [
+        {
+          component: 'S',
+          explanation: 'Khám phá tính chất giữ cặn của các lớp vật liệu tự nhiên (TEST_ONLY)',
+          objectiveKeys: ['obj-2'],
+          taskKeys: ['task-1'],
+        },
+        {
+          component: 'T',
+          explanation: 'Sử dụng video mô phỏng trực quan và dụng cụ đo thể tích (TEST_ONLY)',
+          objectiveKeys: ['obj-1'],
+          taskKeys: ['task-1'],
+        },
+        {
+          component: 'E',
+          explanation: 'Thiết kế cấu trúc phân tầng và thử nghiệm tối ưu tốc độ lọc (TEST_ONLY)',
+          objectiveKeys: ['obj-2'],
+          taskKeys: ['task-1'],
+        },
+        {
+          component: 'M',
+          explanation: 'Đo lường thể tích ml và thời gian chảy để tính tốc độ lọc (TEST_ONLY)',
+          objectiveKeys: ['obj-1'],
+          taskKeys: ['task-1'],
+        },
+      ],
+      scopeOfClip: 'Video hướng dẫn quy trình 6 bước thiết kế bình lọc nước mini lớp 4 (TEST_ONLY)',
+      safetyNotes: 'Không dùng vật sắc nhọn; giáo viên chuẩn bị sẵn vỏ chai nhựa đã cắt đáy (TEST_ONLY)',
+      steps: [
+        { stepKey: 'OPENING_PROBLEM', sceneIds: [firstSceneId], activityKey: 'task-1', objectiveKeys: ['obj-1'] },
+        { stepKey: 'BACKGROUND_KNOWLEDGE', sceneIds: [firstSceneId], activityKey: 'task-1', objectiveKeys: ['obj-2'] },
+        { stepKey: 'PROPOSE_SOLUTION', sceneIds: [firstSceneId], activityKey: 'task-1', objectiveKeys: ['obj-2'] },
+        { stepKey: 'SELECT_SOLUTION', sceneIds: [lastSceneId], activityKey: 'task-1', objectiveKeys: ['obj-1'] },
+        { stepKey: 'BUILD_TEST', sceneIds: [lastSceneId], activityKey: 'task-1', objectiveKeys: ['obj-1'] },
+        { stepKey: 'CLOSING_SHARE_REFLECT', sceneIds: [lastSceneId], activityKey: 'task-1', objectiveKeys: ['obj-1', 'obj-2'] },
+      ],
+    },
+    evidence: [
+      {
+        sceneId: firstSceneId,
+        taskKey: 'task-1',
+        objectiveKey: 'obj-2',
+        component: 'S',
+        explanation: 'Minh chứng khoa học ở phân cảnh mở đầu bài học (TEST_ONLY)',
+      },
+      {
+        sceneId: lastSceneId,
+        taskKey: 'task-1',
+        objectiveKey: 'obj-1',
+        component: 'M',
+        explanation: 'Minh chứng toán học đo lường ở phân cảnh kết thúc (TEST_ONLY)',
+      },
+    ],
+  };
+
+  const saveRes = await request.put(`${API_URL}/scripts/${projectId}/versions/${versionId}/stem`, {
+    headers: bearer(writerToken),
+    data: briefPayload,
+  });
+  expect(saveRes.ok(), `PUT save stem brief -> ${saveRes.status()} ${await saveRes.text()}`).toBeTruthy();
+  const savedView = await saveRes.json();
+  expect(savedView.findings.filter((f: any) => f.severity === 'ERROR')).toEqual([]);
+  return { versionId, view: savedView };
+}

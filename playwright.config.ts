@@ -43,6 +43,7 @@ export default defineConfig({
       timeout: 240_000,
       stdout: 'ignore',
       stderr: 'pipe',
+      env: { ...process.env, E2E_STEM: process.env.E2E_STEM ?? '1' },
     },
     {
       command: `npx vite --port ${WEB_PORT} --strictPort --host 127.0.0.1`,

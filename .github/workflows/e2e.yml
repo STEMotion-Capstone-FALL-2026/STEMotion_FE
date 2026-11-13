@@ -58,6 +58,7 @@ jobs:
         run: npm run e2e
         env:
           E2E_BE_DIR: be
+          E2E_STEM: '1'
 
       - name: Keep the report
         if: ${{ !cancelled() }}
