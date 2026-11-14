@@ -60,4 +60,4 @@ export function assertPresentationIdentity(before: SceneData,after: SceneData): 
  return after;
 }
 /** P2 classifies these layout fields as conditional; no timing/semantic invariance is claimed. */
-export const PRESENTATION_REVIEW_NOTICE='Thay đổi bố cục cần rà soát ý nghĩa (NEEDS_REVIEW). Projector/AT21 được kiểm chứng ở P5.';
+export const PRESENTATION_REVIEW_NOTICE='Đổi bố cục có thể làm đổi ý nghĩa nội dung; người duyệt cần rà soát lại trước khi duyệt.';

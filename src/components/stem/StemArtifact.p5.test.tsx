@@ -24,7 +24,7 @@ it('requires explicit unverified acknowledgement and sends exact artifact precon
 });
 it('known mismatch remains blocked and cannot be acknowledged around',async()=>{
  vi.mocked(client.getArtifactStatus).mockResolvedValue(status({integrity:'MISMATCH',freshness:'NEEDS_REVIEW',publishEligibility:{allowed:false,route:'BLOCKED',requiresLegacyAcknowledgement:false},reasons:['ARTIFACT_BINDING_MISMATCH']}));
- const publish=vi.spyOn(publicationService,'publishInternal');modal();await screen.findByText('ARTIFACT_BINDING_MISMATCH');
+ const publish=vi.spyOn(publicationService,'publishInternal');modal();await screen.findByText(/Video không khớp nội dung đã duyệt/);
  expect(screen.queryByRole('checkbox')).toBeNull();expect(screen.getByRole('button',{name:/Xuất bản vào thư viện/}).hasAttribute('disabled')).toBe(true);expect(publish).not.toHaveBeenCalled();
 });
 it('uncertain publication failure keeps the same retry key and never claims success',async()=>{
@@ -41,13 +41,13 @@ it('summary separates artifact origin, mode rollback and media QA from scientifi
  vi.spyOn(scriptService,'getStemTarget').mockResolvedValue({versionId:'version',versionNo:1,scriptRevision:0,workspaceId:'workspace'});
  vi.spyOn(scriptService,'getStemBrief').mockResolvedValue({schemaVersion:'stem.v1',scriptVersionId:'version',brief:null,revision:0,verificationStatus:'UNVERIFIED',readiness:'LEGACY_UNMAPPED',effectiveMode:'OFF',modeRevision:2,evidence:[],findings:[]});
  vi.spyOn(reviewService,'getQaReport').mockResolvedValue({projectId:script.id,passed:false,failCount:1,warnCount:2,findings:[]});
- render(<StemReadOnlySummary script={script}/>);expect(await screen.findByText(/Snapshot: snapshot/)).toBeTruthy();expect(await screen.findByText(/Media QA: FAIL/)).toBeTruthy();expect(screen.getByText(/mode lúc chụp ADVISORY.*hiện tại OFF/)).toBeTruthy();
+ render(<StemReadOnlySummary script={script}/>);expect(await screen.findByText(/Mã snapshot: snapshot/)).toBeTruthy();expect(await screen.findByText(/Kiểm tra kỹ thuật video: Chưa đạt/)).toBeTruthy();expect(screen.getByText(/Chế độ STEM đã đổi từ Gợi ý \(lúc tạo video\) sang Tắt/)).toBeTruthy();
 });
 it('switching project ignores the prior asynchronous artifact status',async()=>{
  let resolve!:(value:StemArtifactStatus)=>void;
- vi.mocked(client.getArtifactStatus).mockReturnValueOnce(new Promise(r=>{resolve=r;})).mockResolvedValueOnce(status({reasons:['TEST_ONLY_current']}));
+ vi.mocked(client.getArtifactStatus).mockReturnValueOnce(new Promise(r=>{resolve=r;})).mockResolvedValueOnce(status({reasons:['ARTIFACT_BINDING_MISMATCH']}));
  const view=modal();view.rerender(<PublishModal isOpen canPublish script={{...script,id:'other'}} onClose={()=>{}} onNotify={()=>{}}/>);
- await screen.findByText('TEST_ONLY_current');resolve(status({reasons:['TEST_ONLY_old']}));await waitFor(()=>expect(screen.queryByText('TEST_ONLY_old')).toBeNull());
+ await screen.findByText(/Video không khớp nội dung đã duyệt/);resolve(status({reasons:['LEGACY_ACK_REQUIRED']}));await waitFor(()=>expect(screen.queryByText(/Video được tạo trước khi có hồ sơ STEM/)).toBeNull());
 });
 
 it.each([400,403,404,409,429])('publication %s keeps acknowledgement and requires explicit recovery',async(code)=>{
