@@ -44,6 +44,10 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
   const [ytUnavailable,setYtUnavailable]=useState(false);
   const [ytResult,setYtResult]=useState<PublicationResponse|null>(null);
   const [ytRetrying,setYtRetrying]=useState(false);
+  // A retry happens after the clip is PUBLISHED, when the modal no longer holds the artifact status:
+  // it is read again, and an UNVERIFIED clip asks for the acknowledgement again.
+  const [retryArtifact,setRetryArtifact]=useState<StemArtifactStatus|null>(null);
+  const [retryAck,setRetryAck]=useState(false);
   useEffect(()=>{
     let current=true;let timer:ReturnType<typeof setTimeout>|null=null;
     setArtifact(null);setAcknowledged(false);setPublicationError(null);publishRetry.current=null;
@@ -150,9 +154,10 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
     const projectId = script.id;
     setBusy(true); setYtError(null);
     try {
+      if (retryArtifact?.publishEligibility.requiresLegacyAcknowledgement && !retryAck) throw new Error('Cần xác nhận đăng lại nội dung chưa thẩm định.');
       const result = await publicationService.publishYoutube(script.id, toMetadata(ytForm), {
         retryFailedUpload: true, idempotencyKey: stemMutationKey(),
-        ...(artifact ? { legacyUnverifiedAcknowledged: acknowledged, artifactExpectation: artifactExpectation(artifact) } : {}),
+        ...(retryArtifact ? { legacyUnverifiedAcknowledged: retryAck, artifactExpectation: artifactExpectation(retryArtifact) } : {}),
       });
       if (activeProject.current !== projectId) return;
       setYtResult(result); setYtRetrying(false);
@@ -192,7 +197,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
-      <div ref={dialog} className="bg-white rounded-2xl shadow-xl max-w-xl w-full p-6 space-y-5">
+      <div ref={dialog} className="bg-white rounded-2xl shadow-xl max-w-xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="font-bold text-xl">Video: {script.title}</h2>
           <button onClick={onClose} disabled={busy} aria-label="Đóng"><X size={20} /></button>
@@ -235,11 +240,18 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
               </div>)}
           {ytError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-800">{ytError}</p>}
           {(published || script.videoStatus === 'PUBLISHED') && <YouTubeUploadStatus projectId={script.id} initial={ytResult}
-            onRetry={canPublish ? () => { setYtRetrying(true); setYtError(null); } : undefined} retryDisabled={busy || ytRetrying} />}
+            onRetry={canPublish ? () => {
+              setYtRetrying(true); setYtError(null); setRetryAck(false); setRetryArtifact(null);
+              void getArtifactStatus(script.id).then(setRetryArtifact).catch(() => setRetryArtifact(null));
+            } : undefined} retryDisabled={busy || ytRetrying} />}
           {ytRetrying && <div className="space-y-2 rounded-lg border border-slate-200 p-3">
             <YouTubeMetadataForm value={ytForm} onChange={setYtForm} disabled={busy} />
+            {retryArtifact?.publishEligibility.requiresLegacyAcknowledgement && <label className="flex items-center gap-2">
+              <input type="checkbox" checked={retryAck} onChange={event => setRetryAck(event.target.checked)} />
+              Tôi xác nhận đăng lại nội dung chưa được thẩm định STEM.
+            </label>}
             <div className="flex gap-2">
-              <button type="button" onClick={retryYoutube} disabled={busy} className="rounded-lg bg-rose-600 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Gửi lại lên YouTube</button>
+              <button type="button" onClick={retryYoutube} disabled={busy || Boolean(retryArtifact?.publishEligibility.requiresLegacyAcknowledgement && !retryAck)} className="rounded-lg bg-rose-600 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Gửi lại lên YouTube</button>
               <button type="button" onClick={() => setYtRetrying(false)} disabled={busy} className="rounded-lg border px-3 py-1.5">Hủy</button>
             </div>
           </div>}

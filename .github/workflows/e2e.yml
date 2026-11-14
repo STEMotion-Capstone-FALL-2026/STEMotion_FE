@@ -60,12 +60,31 @@ jobs:
           E2E_BE_DIR: be
           E2E_STEM: '1'
 
+      # RF-08: a separate back end with fake Google endpoints (E2E_YOUTUBE=1). WF-04 keeps checking
+      # that YouTube answers 503 when it is switched off, so the two cannot share one server.
+      - name: Run YouTube end-to-end test (fake Google)
+        if: ${{ !cancelled() }}
+        run: npx playwright test e2e/wf06-youtube.spec.ts
+        env:
+          E2E_BE_DIR: be
+          E2E_STEM: '1'
+          E2E_YOUTUBE: '1'
+          PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report-youtube
+
       - name: Keep the report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: playwright-report
+          retention-days: 14
+
+      - name: Keep the YouTube report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-youtube
+          path: playwright-report-youtube
           retention-days: 14
 
       - name: Package the report for Pages

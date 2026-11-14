@@ -29,6 +29,10 @@ describe('services', () => {
     expect(del).toHaveBeenCalledWith('/workspaces/ws/youtube');
     post.mockResolvedValue({ authorizationUrl: 'javascript:alert(1)' });
     await expect(youtubeService.startConnect('ws')).rejects.toThrow();
+    post.mockResolvedValue({ authorizationUrl: 'http://accounts.example.com/auth' });
+    await expect(youtubeService.startConnect('ws')).rejects.toThrow();
+    post.mockResolvedValue({ authorizationUrl: 'http://127.0.0.1:18090/o/oauth2/v2/auth?state=x' });
+    expect(await youtubeService.startConnect('ws')).toBe('http://127.0.0.1:18090/o/oauth2/v2/auth?state=x');
   });
 
   it('reads the Google return path once per page load until handled', () => {
@@ -199,6 +203,22 @@ describe('PublishModal with YouTube', () => {
     fireEvent.click(publishButton());
     await waitFor(() => expect(publishButton().hasAttribute('disabled')).toBe(true));
     expect(screen.queryByText('Video này đã được gửi lên YouTube.')).toBeNull();
+  });
+
+  it('a retry of an UNVERIFIED clip asks for the acknowledgement again and sends it', async () => {
+    vi.mocked(publicationService.listPublications).mockResolvedValue([publication({ uploadStatus: 'FAILED', uploadError: 'quota' })]);
+    vi.mocked(stemClient.getArtifactStatus).mockResolvedValue({ schemaVersion: 'stem-artifact.v1', target: { projectId: script.id, versionId: 'v', clipId: 'clip', jobId: 'job', snapshotId: 'snap', inputHash: 'h' },
+      freshness: 'CURRENT', classification: 'UNKNOWN', integrity: 'MATCH', publishEligibility: { allowed: false, route: 'LEGACY_UNVERIFIED', requiresLegacyAcknowledgement: true },
+      snapshotOrigin: { snapshotId: 'snap' }, verificationStatus: 'UNVERIFIED', reasons: ['LEGACY_ACK_REQUIRED'] });
+    const youtube = vi.spyOn(publicationService, 'publishYoutube').mockResolvedValue(publication());
+    render(<PublishModal isOpen canPublish script={{ ...script, videoStatus: 'PUBLISHED' }} onClose={() => {}} onNotify={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Đăng lại lên YouTube' }));
+    const ack = await screen.findByRole('checkbox', { name: /Tôi xác nhận đăng lại/ });
+    expect(screen.getByRole('button', { name: 'Gửi lại lên YouTube' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.click(ack);
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi lại lên YouTube' }));
+    await waitFor(() => expect(youtube).toHaveBeenCalledWith(script.id, expect.anything(), expect.objectContaining({
+      retryFailedUpload: true, legacyUnverifiedAcknowledged: true, artifactExpectation: { clipId: 'clip', jobId: 'job', snapshotId: 'snap', inputHash: 'h' } })));
   });
 
   it('a published project with a failed upload can be sent again with YOUTUBE alone', async () => {

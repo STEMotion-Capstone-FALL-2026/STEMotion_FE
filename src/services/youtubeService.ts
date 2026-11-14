@@ -20,7 +20,9 @@ export const youtubeService = {
   async startConnect(workspaceId: string): Promise<string> {
     const response = await apiClient.post<{ authorizationUrl: string }>(`${base(workspaceId)}/connect`);
     const url = new URL(response.authorizationUrl);
-    if (url.protocol !== 'https:') throw new Error('Địa chỉ kết nối YouTube không hợp lệ.');
+    // Google's consent page is HTTPS; plain HTTP is accepted only on this machine (the E2E fake Google).
+    const local = url.protocol === 'http:' && (url.hostname === '127.0.0.1' || url.hostname === 'localhost');
+    if (url.protocol !== 'https:' && !local) throw new Error('Địa chỉ kết nối YouTube không hợp lệ.');
     return url.href;
   },
 
