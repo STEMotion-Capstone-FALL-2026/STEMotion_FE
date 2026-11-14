@@ -9,6 +9,7 @@ import { getArtifactStatus, artifactExpectation, stemMutationKey } from '../../s
 import type { StemArtifactStatus } from '../../types/stem';
 import { ApiError } from '../../services/apiClient';
 import { StemErrorNotice } from '../stem/StemErrorNotice';
+import { freshnessLabel, integrityLabel, reasonLabel } from '../stem/stemLabels';
 
 interface PublishModalProps {
   isOpen: boolean;
@@ -140,9 +141,9 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
           <button onClick={onClose} disabled={busy} aria-label="Đóng"><X size={20} /></button>
         </div>
         <p className="text-sm text-slate-600">Trạng thái: {script.videoStatus}. File tải xuống là video đã kết xuất trên máy chủ.</p>
-        {artifact&&<div><p>Artifact: {artifact.freshness} · {artifact.integrity} · UNVERIFIED</p>
-          {artifact.reasons.map(reason=><p key={reason}>{reason}</p>)}
-          {artifact.publishEligibility.requiresLegacyAcknowledgement&&artifact.integrity!=='MISMATCH'&&<label><input type="checkbox" checked={acknowledged} onChange={event=>setAcknowledged(event.target.checked)}/>Tôi xác nhận xuất bản nội dung chưa được thẩm định STEM (UNVERIFIED).</label>}
+        {artifact&&<div className="text-sm space-y-1"><p>Trạng thái video: {integrityLabel(artifact.integrity)} · {freshnessLabel(artifact.freshness)} · nội dung chưa thẩm định</p>
+          {artifact.reasons.map(reason=><p key={reason}>{reasonLabel(reason)}</p>)}
+          {artifact.publishEligibility.requiresLegacyAcknowledgement&&artifact.integrity!=='MISMATCH'&&<label><input type="checkbox" checked={acknowledged} onChange={event=>setAcknowledged(event.target.checked)}/>Tôi xác nhận xuất bản nội dung chưa được thẩm định STEM.</label>}
         </div>}
 
         {/* Inline error banner — shown directly inside the modal on failure */}
