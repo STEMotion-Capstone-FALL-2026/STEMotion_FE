@@ -10,6 +10,12 @@ import type { StemArtifactStatus } from '../../types/stem';
 import { ApiError } from '../../services/apiClient';
 import { StemErrorNotice } from '../stem/StemErrorNotice';
 import { freshnessLabel, integrityLabel, reasonLabel } from '../stem/stemLabels';
+import { workspaceService } from '../../services/workspaceService';
+import type { PublicationResponse } from '../../services/publicationService';
+import { YouTubeChannelPanel } from '../youtube/YouTubeChannelPanel';
+import { YouTubeMetadataForm, initialYouTubeForm, toMetadata, youtubeFormProblem, type YouTubeFormState } from '../youtube/YouTubeMetadataForm';
+import { YouTubeUploadStatus } from '../youtube/YouTubeUploadStatus';
+import { isYoutubeUnavailable, youtubeErrorMessage } from '../youtube/youtubeErrors';
 
 interface PublishModalProps {
   isOpen: boolean;
@@ -32,6 +38,12 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
   const [acknowledged,setAcknowledged]=useState(false);
   const [publicationError,setPublicationError]=useState<unknown>(null);
   const publishRetry=useRef<{payload:string;key:string}|null>(null);
+  const [youtubeOn,setYoutubeOn]=useState(false);
+  const [ytForm,setYtForm]=useState<YouTubeFormState>(()=>initialYouTubeForm(script.title));
+  const [ytError,setYtError]=useState<string|null>(null);
+  const [ytUnavailable,setYtUnavailable]=useState(false);
+  const [ytResult,setYtResult]=useState<PublicationResponse|null>(null);
+  const [ytRetrying,setYtRetrying]=useState(false);
   useEffect(()=>{
     let current=true;let timer:ReturnType<typeof setTimeout>|null=null;
     setArtifact(null);setAcknowledged(false);setPublicationError(null);publishRetry.current=null;
@@ -51,7 +63,11 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
   },[isOpen,canPublish,script.id,script.videoUrl,script.videoStatus]);
   const activeProject = useRef(script.id);
   activeProject.current = script.id;
-  useEffect(() => { setEmbedCode(null); setPublished(false); setInlineError(null); }, [script.id]);
+  useEffect(() => {
+    setEmbedCode(null); setPublished(false); setInlineError(null);
+    setYoutubeOn(false); setYtForm(initialYouTubeForm(script.title)); setYtError(null); setYtResult(null); setYtRetrying(false);
+  }, [script.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const workspaceId = script.workspaceId || workspaceService.getCachedWorkspaceId() || '';
   const dialog = useDialog(isOpen, 'Xuất bản video', onClose, busy);
 
   if (!isOpen) return null;
@@ -66,14 +82,23 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
       if(artifact?.integrity==='MISMATCH'||artifact?.publishEligibility.route==='BLOCKED')throw new Error('Artifact không khớp nội dung đã duyệt; cần tải lại và duyệt đúng phiên bản.');
       if(artifact?.publishEligibility.requiresLegacyAcknowledgement&&!acknowledged)throw new Error('Cần xác nhận xuất bản nội dung chưa thẩm định.');
       const expectation=artifact?artifactExpectation(artifact):undefined;
-      const payload=JSON.stringify([script.id,script.title,acknowledged,expectation]);
+      const withYoutube=youtubeOn&&!ytUnavailable;
+      if(withYoutube){const problem=youtubeFormProblem(ytForm);if(problem)throw new Error(problem);}
+      setYtError(null);
+      const payload=JSON.stringify([script.id,script.title,acknowledged,expectation,withYoutube?ytForm:null]);
       if(publishRetry.current?.payload!==payload)publishRetry.current={payload,key:stemMutationKey()};
+      type Options={legacyUnverifiedAcknowledged:boolean;artifactExpectation?:import('../../types/stem').StemArtifactExpectation;idempotencyKey:string};
+      const retryKey=publishRetry.current.key;
+      // With YouTube the same request also publishes to the library: the API only publishes an APPROVED clip once.
+      const send=(options?:Options)=>withYoutube
+        ?publicationService.publishYoutube(script.id,toMetadata(ytForm),{retryFailedUpload:false,idempotencyKey:options?.idempotencyKey??retryKey,legacyUnverifiedAcknowledged:options?.legacyUnverifiedAcknowledged,artifactExpectation:options?.artifactExpectation})
+        :options?publicationService.publishInternal(script.id,script.title,options):publicationService.publishInternal(script.id,script.title);
       let result;
       if (artifact) {
-        result = await publicationService.publishInternal(script.id,script.title,{legacyUnverifiedAcknowledged:acknowledged,artifactExpectation:expectation,idempotencyKey:publishRetry.current.key});
+        result = await send({legacyUnverifiedAcknowledged:acknowledged,artifactExpectation:expectation,idempotencyKey:retryKey});
       } else {
         try {
-          result = await publicationService.publishInternal(script.id, script.title);
+          result = await send();
         } catch (err: any) {
           if (err instanceof ApiError && err.code === 'STEM_STALE_TARGET' && (err.details as any)?.reason === 'LEGACY_ACK_REQUIRED') {
             const loaded = await getArtifactStatus(script.id);
@@ -81,7 +106,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
             if (loaded.snapshotOrigin?.capturedMode === 'OFF' && loaded.snapshotOrigin?.effectiveMode === 'OFF') {
               setAcknowledged(true);
               const exp = artifactExpectation(loaded);
-              result = await publicationService.publishInternal(script.id, script.title, { legacyUnverifiedAcknowledged: true, artifactExpectation: exp, idempotencyKey: stemMutationKey() });
+              result = await send({ legacyUnverifiedAcknowledged: true, artifactExpectation: exp, idempotencyKey: stemMutationKey() });
             } else {
               throw err;
             }
@@ -93,16 +118,48 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
       if (activeProject.current === projectId) {
         setEmbedCode(result.lmsEmbedCode);
         setPublished(true);
+        if (withYoutube) setYtResult(result);
       }
       if (activeProject.current !== projectId) return;
-      onNotify('Đã xuất bản video vào thư viện nội bộ.', 'success');
+      onNotify(withYoutube ? 'Đã xuất bản vào thư viện; video đang được gửi lên YouTube.' : 'Đã xuất bản video vào thư viện nội bộ.', 'success');
       try { await onPublished?.(); }
       catch { onNotify('Đã xuất bản; hãy tải lại trang để cập nhật trạng thái.', 'info'); }
     } catch (error: any) {
+      const youtubeMsg = youtubeOn ? youtubeErrorMessage(error) : null;
+      if (youtubeMsg) {
+        // Nothing was published: the API checks YouTube before anything else. The library-only path stays open.
+        if (activeProject.current === projectId) {
+          setYtError(youtubeMsg);
+          if (isYoutubeUnavailable(error)) { setYtUnavailable(true); setYoutubeOn(false); }
+        }
+        onNotify(youtubeMsg, 'warn');
+        return;
+      }
       const msg = error.message || 'Không xuất bản được video.';
       if (activeProject.current === projectId) {
         if(error instanceof ApiError)setPublicationError(error);else setInlineError(msg);
       }
+      onNotify(msg, 'warn');
+    } finally { setBusy(false); }
+  });
+
+  const retryYoutube = actions.wrap(async () => {
+    if (busy) return;
+    const problem = youtubeFormProblem(ytForm);
+    if (problem) { setYtError(problem); return; }
+    const projectId = script.id;
+    setBusy(true); setYtError(null);
+    try {
+      const result = await publicationService.publishYoutube(script.id, toMetadata(ytForm), {
+        retryFailedUpload: true, idempotencyKey: stemMutationKey(),
+        ...(artifact ? { legacyUnverifiedAcknowledged: acknowledged, artifactExpectation: artifactExpectation(artifact) } : {}),
+      });
+      if (activeProject.current !== projectId) return;
+      setYtResult(result); setYtRetrying(false);
+      onNotify('Đã gửi lại video lên YouTube.', 'info');
+    } catch (error: any) {
+      const msg = youtubeErrorMessage(error) ?? error.message ?? 'Không gửi lại được lên YouTube.';
+      if (activeProject.current === projectId) setYtError(msg);
       onNotify(msg, 'warn');
     } finally { setBusy(false); }
   });
@@ -163,8 +220,30 @@ export const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, scr
         </button>
         {!script.videoUrl && <p className="text-sm text-amber-700">Chưa có video. Dịch vụ kết xuất phải được cấu hình trước.</p>}
         <div className="border-t pt-4 text-sm text-slate-600 space-y-3">
-          <p className="flex items-center gap-2"><Youtube size={18} /> Xuất YouTube chưa khả dụng; cần kết nối kênh bằng OAuth.</p>
-          <button disabled={busy || published || !canPublish || script.videoStatus !== 'APPROVED' || Boolean(publicationError) || artifact?.integrity==='MISMATCH' || artifact?.publishEligibility.route==='BLOCKED' || Boolean(artifact?.publishEligibility.requiresLegacyAcknowledgement&&!acknowledged)} onClick={publish}
+          {canPublish && script.videoStatus === 'APPROVED' && !published && (ytUnavailable
+            ? <p className="flex items-center gap-2"><Youtube size={18} /> YouTube đang tắt trên máy chủ; chỉ xuất bản vào thư viện.</p>
+            : <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+                <button type="button" aria-pressed={youtubeOn} disabled={busy} onClick={() => { setYoutubeOn(on => !on); setYtError(null); }}
+                  className="flex items-center gap-2 font-semibold text-rose-700 disabled:opacity-50">
+                  <Youtube size={18} /> {youtubeOn ? 'Bỏ đăng kèm YouTube' : 'Đăng kèm lên YouTube'}
+                </button>
+                {youtubeOn && <>
+                  {workspaceId && <YouTubeChannelPanel workspaceId={workspaceId} canManage={canPublish} onNotify={onNotify} />}
+                  <YouTubeMetadataForm value={ytForm} onChange={setYtForm} disabled={busy} />
+                  <p className="text-xs text-slate-500">Bấm xuất bản thì video vào thư viện và được gửi lên YouTube cùng lúc.</p>
+                </>}
+              </div>)}
+          {ytError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-800">{ytError}</p>}
+          {(published || script.videoStatus === 'PUBLISHED') && <YouTubeUploadStatus projectId={script.id} initial={ytResult}
+            onRetry={canPublish ? () => { setYtRetrying(true); setYtError(null); } : undefined} retryDisabled={busy || ytRetrying} />}
+          {ytRetrying && <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+            <YouTubeMetadataForm value={ytForm} onChange={setYtForm} disabled={busy} />
+            <div className="flex gap-2">
+              <button type="button" onClick={retryYoutube} disabled={busy} className="rounded-lg bg-rose-600 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Gửi lại lên YouTube</button>
+              <button type="button" onClick={() => setYtRetrying(false)} disabled={busy} className="rounded-lg border px-3 py-1.5">Hủy</button>
+            </div>
+          </div>}
+          <button disabled={busy || published || !canPublish || script.videoStatus !== 'APPROVED' || Boolean(publicationError) || artifact?.integrity==='MISMATCH' || artifact?.publishEligibility.route==='BLOCKED' || Boolean(artifact?.publishEligibility.requiresLegacyAcknowledgement&&!acknowledged) || Boolean(youtubeOn && youtubeFormProblem(ytForm))} onClick={publish}
             className="bg-emerald-600 text-white rounded-lg px-4 py-2 disabled:opacity-50">
             {published || script.videoStatus === 'PUBLISHED' ? 'Đã xuất bản vào thư viện' : 'Xuất bản vào thư viện & lấy mã nhúng LMS'}
           </button>

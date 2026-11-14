@@ -39,6 +39,8 @@ import { DraftReviewModal, PendingDraft } from './components/modals/DraftReviewM
 import { WorkspacePickerModal } from './components/modals/WorkspacePickerModal';
 import { VersionDiffModal } from './components/modals/VersionDiffModal';
 import { CreateWorkspaceModal } from './components/modals/CreateWorkspaceModal';
+import { YouTubeChannelModal } from './components/youtube/YouTubeChannelModal';
+import { clearYouTubeReturn, peekYouTubeReturn } from './services/youtubeService';
 import { canRoleOpenProject } from './lib/pipeline';
 
 /** Shape the studio renders before the first script arrives. */
@@ -168,6 +170,12 @@ export default function App() {
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
   const [isCreateWorkspaceModalOpen, setIsCreateWorkspaceModalOpen] = useState(false);
   const [isManageMembersModalOpen, setIsManageMembersModalOpen] = useState(false);
+  const [youtubeModal, setYoutubeModal] = useState<{ workspaceId: string; announce: boolean } | null>(null);
+  // Google sends the browser back to /workspaces/{id}/settings after a channel is connected. The address
+  // goes back to "/" so a refresh does not repeat it; the panel opens once workspaces are loaded (after login).
+  useEffect(() => {
+    if (peekYouTubeReturn()) window.history.replaceState(window.history.state, '', '/');
+  }, []);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isVersionDiffModalOpen, setIsVersionDiffModalOpen] = useState(false);
   const [isSwapAssetModalOpen, setIsSwapAssetModalOpen] = useState(false);
@@ -264,7 +272,7 @@ export default function App() {
       }
 
       // Remembered before resolving, which would otherwise fall back to the first workspace.
-      const remembered = workspaceService.getCachedWorkspaceId();
+      const remembered = peekYouTubeReturn() ?? workspaceService.getCachedWorkspaceId();
       let myWorkspaces = await workspaceService.getMyWorkspaces(true);
       if (profile.systemRole === 'ADMIN') {
         try {
@@ -294,6 +302,12 @@ export default function App() {
         setActiveGroup({ name: active.name, code: active.id.slice(0, 6) });
         setIsLeader(Boolean(active.isLeader));
         setWorkspaceRole(active.myRole ?? null);
+        const returned = peekYouTubeReturn();
+        if (returned) {
+          clearYouTubeReturn();
+          if (active.id === returned) setYoutubeModal({ workspaceId: returned, announce: true });
+          else showToast('Bạn không thuộc workspace vừa kết nối kênh YouTube.', 'warn');
+        }
 
         // Only show picker modal for regular users with multiple workspaces if not remembered
         if (profile.systemRole !== 'ADMIN' && myWorkspaces.length > 1 && !remembered) {
@@ -1213,6 +1227,10 @@ export default function App() {
           void bootstrapFromApi();
         }}
         onOpenManageMembersModal={async () => { if (await saveBeforeLeave()) setIsManageMembersModalOpen(true); }}
+        onOpenYouTubeChannel={workspaces.length > 0 ? () => {
+          const id = workspaceService.getCachedWorkspaceId() || workspaces[0]?.id;
+          if (id) setYoutubeModal({ workspaceId: id, announce: false });
+        } : undefined}
         onOpenCreateProjectModal={() => setIsCreateProjectModalOpen(true)}
         onCreateWorkspace={async () => { if (await saveBeforeLeave()) setIsCreateWorkspaceModalOpen(true); }}
         onNavigateToDashboard={async () => {
@@ -1443,6 +1461,16 @@ export default function App() {
         onMembersUpdated={() => {
           void bootstrapFromApi();
         }}
+      />
+
+      <YouTubeChannelModal
+        isOpen={Boolean(youtubeModal)}
+        onClose={() => setYoutubeModal(null)}
+        workspaceId={youtubeModal?.workspaceId ?? ''}
+        workspaceName={workspaces.find((w) => w.id === youtubeModal?.workspaceId)?.name}
+        canManage={currentUser.systemRole === 'ADMIN' || workspaces.find((w) => w.id === youtubeModal?.workspaceId)?.myRole === 'producer'}
+        announceReturn={youtubeModal?.announce}
+        onNotify={showToast}
       />
 
       <CreateWorkspaceModal

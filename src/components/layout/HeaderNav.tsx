@@ -9,6 +9,7 @@ import {
   LogOut,
   Library,
   FolderKanban,
+  Youtube,
 } from 'lucide-react';
 import { AppView } from '../../services';
 
@@ -34,6 +35,7 @@ interface HeaderNavProps {
   activeGroup: { name: string; code: string };
   onSelectGroup: (workspaceId: string) => void;
   onOpenManageMembersModal?: () => void;
+  onOpenYouTubeChannel?: () => void;
   onOpenCreateProjectModal: () => void;
   onCreateWorkspace?: () => void;
   onNavigateToDashboard?: () => void;
@@ -54,6 +56,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   groups,
   activeGroup,
   onSelectGroup,
+  onOpenYouTubeChannel,
   onOpenManageMembersModal,
   onOpenCreateProjectModal,
   onCreateWorkspace,
@@ -186,6 +189,18 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                   >
                     <Users className="w-4 h-4 text-slate-500" />
                     <span>{canManageMembers ? 'Quản lý thành viên nhóm...' : 'Xem thành viên nhóm...'}</span>
+                  </button>
+                )}
+                {onOpenYouTubeChannel && (
+                  <button
+                    onClick={() => {
+                      setIsGroupDropdownOpen(false);
+                      onOpenYouTubeChannel();
+                    }}
+                    className="w-full p-2 rounded-lg hover:bg-rose-50 text-left flex items-center space-x-2 text-slate-700 font-medium cursor-pointer"
+                  >
+                    <Youtube className="w-4 h-4 text-rose-600" />
+                    <span>Kênh YouTube...</span>
                   </button>
                 )}
               </div>

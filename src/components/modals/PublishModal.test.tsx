@@ -50,7 +50,10 @@ describe('existing video export', () => {
   it('does not expose fake publication success or a fabricated YouTube link', () => {
     render(<PublishModal isOpen onClose={() => {}} script={script} onNotify={() => {}} />);
     expect(screen.queryByText(/đã được tải lên/i)).toBeNull();
-    expect(screen.getByText(/Xuất YouTube chưa khả dụng/)).toBeTruthy();
+    // A clip still in QA, opened without publish rights: no YouTube link, no "posted" claim, no YouTube option.
+    expect(screen.queryByRole('link', { name: /YouTube/ })).toBeNull();
+    expect(screen.queryByText(/YouTube: đã đăng/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Đăng kèm lên YouTube/ })).toBeNull();
   });
 
   it('reports server failure without rendering directly from the browser', async () => {
