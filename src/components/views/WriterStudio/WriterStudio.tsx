@@ -1,6 +1,7 @@
 import { StemGroundedAiPanel } from '../../stem/StemGroundedAiPanel';
 import { useActionGuard } from '../../../hooks/useActionGuard';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useEditLease } from '../../../hooks/useEditLease';
 import {
   PlusCircle,
   FileText,
@@ -481,12 +482,15 @@ export const WriterStudio: React.FC<WriterStudioProps> = ({
   const isPacingTight = wordsCount > 0 && Number(currentSceneSec) < Number(estimatedReadSec) + 0.5;
 
   const suggestedTemplate = selectedScene ? getContextualTemplateSuggestion(selectedScene.narration || '', selectedScene.type) : null;
-  const canEdit = ['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)
+  const statusAllowsEdit = ['DRAFT', 'CHANGE_REQUESTED'].includes(script.scriptStatus)
     && !['IN_QA', 'APPROVED', 'PUBLISHED'].includes(script.videoStatus || '');
+  const lease = useEditLease(script.id, 'script-draft', statusAllowsEdit && Boolean(script.id));
+  const canEdit = statusAllowsEdit && lease.canEdit;
   return (
     <section aria-busy={isSubmitting} className="studio-workspace flex-1 min-h-0 flex flex-col overflow-hidden">
       <fieldset disabled={isSubmitting || isSyncingDurations} className="min-w-0 min-h-0 flex-1 flex flex-col overflow-hidden border-0 p-0 m-0">
-      {!canEdit && <p role="status" className="bg-amber-50 p-3 text-sm text-amber-900">Kịch bản đã gửi duyệt hoặc được khóa xuất bản. Bạn vẫn có thể xem nội dung và góp ý; chỉ chỉnh sửa sau khi Reviewer yêu cầu sửa lại.</p>}
+      {statusAllowsEdit && lease.heldBy && <p role="status" className="bg-amber-50 p-3 text-sm text-amber-900">{lease.heldBy} đang chỉnh sửa kịch bản này. Bạn đang xem ở chế độ chỉ đọc; bạn sửa được khi họ đóng trình soạn (chậm nhất 90 giây sau khi họ rời đi). <button type="button" onClick={lease.retry} className="underline">Thử lại</button></p>}
+      {!statusAllowsEdit && <p role="status" className="bg-amber-50 p-3 text-sm text-amber-900">Kịch bản đã gửi duyệt hoặc được khóa xuất bản. Bạn vẫn có thể xem nội dung và góp ý; chỉ chỉnh sửa sau khi Reviewer yêu cầu sửa lại.</p>}
       {commentsError && <div role="alert" className="bg-amber-50 p-3 text-sm"><p>{commentsError}</p><button onClick={() => void fetchComments()} className="underline">Tải lại góp ý</button></div>}
       {/* Top Bar Writer */}
       <div className="studio-toolbar bg-white border-b border-slate-200 px-6 py-2.5 flex justify-between items-center text-xs shrink-0 z-10 shadow-2xs">
