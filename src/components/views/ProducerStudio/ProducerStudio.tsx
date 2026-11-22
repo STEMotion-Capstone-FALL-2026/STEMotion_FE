@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
+import { useEditLease } from '../../../hooks/useEditLease';
 import { useActionGuard } from '../../../hooks/useActionGuard';
 import { useDialog } from '../../../hooks/useDialog';
 import {
@@ -112,14 +113,19 @@ export const ProducerStudio: React.FC<ProducerStudioProps> = ({
   // sent back to production keeps its old URL but must be rendered again.
   const retryActions = useActionGuard();
   const status = script.videoStatus;
+  const statusEditable = Boolean(production) && !(status === 'IN_QA' || status === 'APPROVED' || status === 'PUBLISHED');
+  const lease = useEditLease(script.id, 'composition', statusEditable && Boolean(script.id));
   const isLocked = Boolean(
     isSyncingDurations || isSubmittingForReview ||
+    (statusEditable && !lease.canEdit) ||
     (production && !production.editable) ||
     status === 'IN_QA' ||
     status === 'APPROVED' ||
     status === 'PUBLISHED'
   );
-  const lockReason = isSubmittingForReview
+  const lockReason = statusEditable && lease.heldBy
+    ? `${lease.heldBy} đang chỉnh bản dựng này. Bạn đang xem ở chế độ chỉ đọc; bạn sửa được khi họ đóng trình dựng (chậm nhất 90 giây sau khi họ rời đi).`
+    : isSubmittingForReview
     ? 'Đang lưu và gửi bản dựng. Vui lòng chờ trước khi chỉnh sửa.'
     : isSyncingDurations
     ? 'Đang đồng bộ thời lượng. Vui lòng chờ trước khi chỉnh sửa hoặc gửi duyệt.'

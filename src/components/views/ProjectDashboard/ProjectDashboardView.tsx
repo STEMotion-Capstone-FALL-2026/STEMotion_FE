@@ -29,6 +29,12 @@ interface ProjectDashboardViewProps {
   isRefreshing?: boolean;
   scope?: 'WORKSPACE' | 'MINE';
   onScopeChange?: (scope: 'WORKSPACE' | 'MINE') => void;
+  /** UC-29: propose a project for a Leader to approve. */
+  onProposeProject?: () => void;
+  /** UC-33: the Leader inbox and board; only passed for Leaders and Admins. */
+  onOpenLeaderDashboard?: () => void;
+  /** UC-30, UC-32: members, join requests and contributions of a project. */
+  onOpenTeam?: (projectId: string, title: string) => void;
 }
 
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -79,6 +85,9 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
   isRefreshing = false,
   scope = 'WORKSPACE',
   onScopeChange,
+  onProposeProject,
+  onOpenLeaderDashboard,
+  onOpenTeam,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('ALL');
@@ -288,6 +297,20 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-brand-600' : ''}`} />
             </button>
 
+            {onOpenLeaderDashboard && (
+              <button onClick={onOpenLeaderDashboard}
+                className="px-4 py-2.5 border border-slate-300 hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold cursor-pointer">
+                Bảng điều phối
+              </button>
+            )}
+
+            {canCreate && onProposeProject && (
+              <button onClick={onProposeProject}
+                className="px-4 py-2.5 border border-brand-300 text-brand-700 hover:bg-brand-50 rounded-xl text-xs font-bold cursor-pointer">
+                Đề xuất dự án
+              </button>
+            )}
+
             {canCreate && (
               <button
                 onClick={onOpenCreateProjectModal}
@@ -399,6 +422,13 @@ export const ProjectDashboardView: React.FC<ProjectDashboardViewProps> = ({
                 >
                   {/* Top tags */}
                   <div className="flex items-center justify-between gap-2 mb-3">
+                    {onOpenTeam && (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); onOpenTeam(sc.id, sc.title); }}
+                        aria-label={`Thành viên dự án ${sc.title}`}
+                        className="order-last px-2 py-1 rounded-md text-[11px] font-bold border border-slate-200 text-slate-600 hover:bg-slate-50">
+                        Thành viên
+                      </button>
+                    )}
                     <span
                       className={`px-2.5 py-1 rounded-md text-[11px] font-bold border ${subStyle.bg} ${subStyle.text} ${subStyle.border}`}
                     >

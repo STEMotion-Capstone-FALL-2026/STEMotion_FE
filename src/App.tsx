@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ProposeProjectModal } from './components/collab/ProposeProjectModal';
+import { ProjectTeamModal } from './components/collab/ProjectTeamModal';
+import { LeaderDashboardModal } from './components/collab/LeaderDashboardModal';
 import { sceneSaveQueue } from './services/sceneSaveQueue';
 import { renderService, type RenderJobStatus } from './services/renderService';
 import { compositionService, createCompositionSaver, type Composition, type CompositionSaver } from './services/compositionService';
@@ -168,6 +171,10 @@ export default function App() {
 
   // Modals state
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  // Collaboration (UC-29 to UC-33): proposal, Leader dashboard and project team dialogs.
+  const [isProposeOpen, setIsProposeOpen] = useState(false);
+  const [isLeaderDashboardOpen, setIsLeaderDashboardOpen] = useState(false);
+  const [teamProject, setTeamProject] = useState<{ id: string; title: string } | null>(null);
   const [isCreateWorkspaceModalOpen, setIsCreateWorkspaceModalOpen] = useState(false);
   const [isManageMembersModalOpen, setIsManageMembersModalOpen] = useState(false);
   const [youtubeModal, setYoutubeModal] = useState<{ workspaceId: string; announce: boolean } | null>(null);
@@ -1279,6 +1286,9 @@ export default function App() {
           isRefreshing={isFetchingProjects}
           scope={dashboardScope}
           onScopeChange={handleScopeChange}
+          onProposeProject={() => setIsProposeOpen(true)}
+          onOpenLeaderDashboard={isLeader || currentUser.systemRole === 'ADMIN' ? () => setIsLeaderDashboardOpen(true) : undefined}
+          onOpenTeam={(id, title) => setTeamProject({ id, title })}
         />
       )}
 
@@ -1432,6 +1442,28 @@ export default function App() {
       )}
 
       {/* Modals */}
+      <ProposeProjectModal
+        isOpen={isProposeOpen}
+        workspaceId={workspaceService.getCachedWorkspaceId() || workspaces[0]?.id || ''}
+        onClose={() => setIsProposeOpen(false)}
+        onProposed={() => showToast('Đã gửi đề xuất dự án; Leader sẽ duyệt trong Bảng điều phối.', 'success')}
+      />
+      <LeaderDashboardModal
+        isOpen={isLeaderDashboardOpen}
+        onClose={() => setIsLeaderDashboardOpen(false)}
+        onChanged={() => void refreshProjectsList()}
+        onOpenProject={(projectId) => { setIsLeaderDashboardOpen(false); void openProject(projectId); }}
+      />
+      {teamProject && (
+        <ProjectTeamModal
+          isOpen
+          projectId={teamProject.id}
+          projectTitle={teamProject.title}
+          currentUserId={currentUser.id}
+          canManage={isLeader || currentUser.systemRole === 'ADMIN'}
+          onClose={() => setTeamProject(null)}
+        />
+      )}
       <CreateProjectModal
         isOpen={isCreateProjectModalOpen}
         onClose={() => setIsCreateProjectModalOpen(false)}

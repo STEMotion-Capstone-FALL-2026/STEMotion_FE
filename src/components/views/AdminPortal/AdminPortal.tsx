@@ -15,6 +15,8 @@ import {
 import { AccountProvisionForm } from './AccountProvisionForm';
 import { GoogleWhitelistPanel } from './GoogleWhitelistPanel';
 import { CreateWorkspaceForm } from './CreateWorkspaceForm';
+import { AiSettingsPanel } from './AiSettingsPanel';
+import { StemPolicyPanel } from './StemPolicyPanel';
 import { apiClient } from '../../../services/apiClient';
 import type { STEMScript } from '../../../types/stem';
 import {
@@ -57,7 +59,7 @@ interface AdminPortalProps {
   onWorkspaceCreated?: (workspace: WorkspaceSummary) => void;
 }
 
-type AdminTab = 'MONITORING' | 'USERS' | 'TEMPLATES' | 'GOOGLE_WHITELIST';
+type AdminTab = 'MONITORING' | 'USERS' | 'TEMPLATES' | 'GOOGLE_WHITELIST' | 'AI_SETTINGS' | 'STEM_POLICY';
 
 const SUBJECT_LABELS: Record<string, { label: string; pillar: string; badgeClass: string }> = {
   Physics: { label: 'Vật Lý', pillar: 'S — Science', badgeClass: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -980,12 +982,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
             <Layers className="w-4 h-4" />
             <span>FE-16: Quản Lý Kho Remotion Templates ({templates.length})</span>
           </button>
+
+          <button onClick={() => setActiveTab('AI_SETTINGS')}
+            className={`flex-1 min-w-[180px] py-2.5 px-4 rounded-xl text-xs font-bold ${activeTab === 'AI_SETTINGS' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+            AI &amp; ngân sách
+          </button>
+
+          <button onClick={() => setActiveTab('STEM_POLICY')}
+            className={`flex-1 min-w-[180px] py-2.5 px-4 rounded-xl text-xs font-bold ${activeTab === 'STEM_POLICY' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+            Chính sách STEM
+          </button>
         </div>
 
         {/* ===================================================================
             TAB 1: FE-17 — MONITOR RENDER QUEUE & STORAGE + AI COST & USAGE
            =================================================================== */}
         {activeTab === 'GOOGLE_WHITELIST' && <GoogleWhitelistPanel />}
+        {activeTab === 'AI_SETTINGS' && <AiSettingsPanel />}
+        {activeTab === 'STEM_POLICY' && <StemPolicyPanel />}
         {activeTab === 'MONITORING' && (
           <div className="space-y-6">
             {/* Row 1: Host Resource & Render Queue KPIs */}
