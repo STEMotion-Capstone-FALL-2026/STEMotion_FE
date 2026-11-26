@@ -2368,8 +2368,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
               {/* Modal chỉnh sửa template (Edit Template Modal) */}
               {editingTemplate && (
                 <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-                  <div ref={editDialog} className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                  <div ref={editDialog} className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
                       <div className="flex items-center gap-2">
                         <Edit3 className="w-4 h-4 text-indigo-600" />
                         <h2 className="text-sm font-bold text-slate-900">Sửa Mẫu Remotion Template</h2>
@@ -2382,7 +2382,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                       </button>
                     </div>
 
-                    <form onSubmit={handleUpdateTemplateSubmit} className="p-6 space-y-4 text-xs">
+                    <form onSubmit={handleUpdateTemplateSubmit} className="p-6 space-y-4 text-xs overflow-y-auto">
                       <div>
                         <label className="font-bold text-slate-700 block mb-1">Tên Mẫu</label>
                         <input

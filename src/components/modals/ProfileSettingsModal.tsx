@@ -12,7 +12,7 @@ export const ProfileSettingsModal: React.FC<{ onClose: () => void; onUpdated: (u
   const dialog = useDialog(true, 'Cài đặt hồ sơ', onClose, busy);
   useEffect(() => { let active=true; authService.profile().then(p => { if(active) {setProfile(p);setName(p.user.fullName);} }).catch(e=>active&&setError(e.message)); return()=>{active=false;}; },[]);
   return <div className="fixed inset-0 bg-slate-900/50 z-[60] flex items-center justify-center p-4">
-    <section ref={dialog} className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md space-y-4">
+    <section ref={dialog} className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto space-y-4">
       <div className="flex justify-between"><h2 className="font-bold">Cài đặt hồ sơ</h2><button type="button" disabled={busy} onClick={onClose} aria-label="Đóng cài đặt">✕</button></div>
       {error&&<p role="alert" className="text-sm text-rose-700">{error}</p>}
       {message&&<p role="status" className="text-sm text-green-700">{message}</p>}

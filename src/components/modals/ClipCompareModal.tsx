@@ -57,8 +57,8 @@ export const ClipCompareModal: React.FC<{ projectId: string; onClose: () => void
 
   return (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div ref={dialog} className="bg-white rounded-2xl w-full max-w-6xl shadow-2xl border border-slate-200 text-xs">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+      <div ref={dialog} className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 text-xs">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
             <Columns2 className="w-4 h-4 text-purple-600" /> So sánh hai bản render
           </h3>
@@ -67,7 +67,7 @@ export const ClipCompareModal: React.FC<{ projectId: string; onClose: () => void
           </button>
         </div>
 
-        <div className="p-4 space-y-3">
+        <div className="p-4 space-y-3 overflow-y-auto">
           {error && <p role="alert" className="text-rose-600">{error}</p>}
           {!renders && !error && (
             <p className="text-slate-500 flex items-center gap-2">

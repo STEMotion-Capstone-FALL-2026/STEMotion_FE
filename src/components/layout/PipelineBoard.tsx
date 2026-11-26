@@ -125,7 +125,8 @@ const PipelineBoardModal: React.FC<{
           </p>
         )}
         {projects && (
-          <div className="flex-1 overflow-auto p-4 grid grid-cols-6 gap-3 min-w-[900px]">
+          <div className="flex-1 overflow-auto p-4">
+            <div className="grid grid-cols-6 gap-3 min-w-[900px]">
             {PIPELINE_STAGES.map((stage) => {
               const inStage = projects.filter((p) => pipelineStage(p) === stage.id);
               const accessible = isStageAccessible(stage.id);
@@ -171,6 +172,7 @@ const PipelineBoardModal: React.FC<{
                 </div>
               );
             })}
+            </div>
           </div>
         )}
       </div>

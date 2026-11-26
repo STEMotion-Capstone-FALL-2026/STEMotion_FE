@@ -82,6 +82,7 @@ export const StemPolicyPanel: React.FC = () => {
             className={`px-3 py-1.5 rounded-lg font-bold ${kind === k.value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}>{k.label}</button>
         ))}
       </div>
+      <div className="overflow-x-auto">
       <table className="w-full text-left">
         <thead><tr className="text-slate-500"><th className="py-1">Khoá</th><th>Phiên bản</th><th>Trạng thái</th><th>Xác minh</th><th /></tr></thead>
         <tbody>
@@ -102,6 +103,7 @@ export const StemPolicyPanel: React.FC = () => {
           {entries.length === 0 && !error && <tr><td colSpan={5} className="py-2 text-slate-500">Chưa có mục nào.</td></tr>}
         </tbody>
       </table>
+      </div>
     </section>
   );
 };

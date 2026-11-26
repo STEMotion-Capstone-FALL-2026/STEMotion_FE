@@ -722,7 +722,7 @@ export const CanvaInteractiveOverlay: React.FC<CanvaInteractiveOverlayProps> = (
               </button>
 
               {showAddMenu && (
-                <div className="absolute right-0 mt-1.5 w-60 bg-slate-950/95 border border-slate-700 rounded-xl shadow-2xl p-1.5 z-50 backdrop-blur-md space-y-1">
+                <div className="absolute right-0 mt-1.5 w-60 max-h-[min(16rem,55vh)] overflow-y-auto bg-slate-950/95 border border-slate-700 rounded-xl shadow-2xl p-1.5 z-50 backdrop-blur-md space-y-1">
                   <div className="px-2 py-1 text-[10px] font-mono uppercase text-slate-400 border-b border-slate-800">
                     Chọn loại khối Lego mới
                   </div>

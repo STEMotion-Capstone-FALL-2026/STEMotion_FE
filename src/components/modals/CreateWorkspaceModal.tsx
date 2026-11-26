@@ -22,7 +22,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div ref={dialog} className="relative bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div ref={dialog} className="relative bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200">
         <button
           onClick={onClose}
           disabled={busy}

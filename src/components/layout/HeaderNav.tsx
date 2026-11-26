@@ -32,7 +32,7 @@ interface HeaderNavProps {
   onOpenProfile?: () => void;
   onRoleChange: (role: AppView) => void;
   groups: { id: string; name: string; department?: string }[];
-  activeGroup: { name: string; code: string };
+  activeGroup: { id?: string; name: string; code: string };
   onSelectGroup: (workspaceId: string) => void;
   onOpenManageMembersModal?: () => void;
   onOpenYouTubeChannel?: () => void;
@@ -129,12 +129,12 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 
           {/* Dropdown danh sách nhóm */}
           {isGroupDropdownOpen && (
-            <div className="absolute top-full left-0 mt-1.5 w-72 bg-white border border-slate-200 rounded-xl shadow-lg p-2 space-y-1.5 z-50 text-xs animate-fade-in">
-              <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
+            <div className="absolute top-full left-0 mt-1.5 w-72 max-h-[calc(100vh-5rem)] flex flex-col bg-white border border-slate-200 rounded-xl shadow-lg p-2 space-y-1.5 z-50 text-xs animate-fade-in">
+              <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center shrink-0">
                 <span>Không gian làm việc:</span>
                 <span className="text-brand-600 font-semibold">Multi-Workspace</span>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 overflow-y-auto max-h-64 pr-1 min-h-0">
                 {groups.map((group) => (
                   <button
                     key={group.id}
@@ -142,19 +142,19 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                       onSelectGroup(group.id);
                       setIsGroupDropdownOpen(false);
                     }}
-                    className="w-full p-2 rounded-lg hover:bg-blue-50 text-left flex items-center justify-between"
+                    className="w-full p-2 rounded-lg hover:bg-blue-50 text-left flex items-center justify-between gap-2"
                   >
-                    <div>
-                      <div className="font-bold text-slate-900">{group.name}</div>
-                      <div className="text-[10px] text-slate-500">{group.department}</div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-slate-900 truncate">{group.name}</div>
+                      <div className="text-[10px] text-slate-500 truncate">{group.department}</div>
                     </div>
-                    {activeGroup.code === group.id.slice(0, 6) && (
-                      <Check className="w-3.5 h-3.5 text-brand-600" />
+                    {(activeGroup.id ? activeGroup.id === group.id : activeGroup.code === group.id.slice(0, 6)) && (
+                      <Check className="w-3.5 h-3.5 text-brand-600 shrink-0" />
                     )}
                   </button>
                 ))}
               </div>
-              <div className="pt-1.5 border-t border-slate-100 space-y-1">
+              <div className="pt-1.5 border-t border-slate-100 space-y-1 shrink-0">
                 {accountRole === 'ADMIN' && onCreateWorkspace && (
                   <button
                     onClick={() => {

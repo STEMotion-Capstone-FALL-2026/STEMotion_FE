@@ -30,5 +30,5 @@ export function StemErrorNotice({error,onReload,onDashboard,onRetryReady}: {erro
     {(e.status===400||e.status===0)&&onRetryReady&&<button onClick={onRetryReady} className="mt-2 text-xs text-indigo-600 underline">Đã sửa dữ liệu / thử lại thủ công</button>}
     {e.status===404&&<button onClick={onDashboard??(()=>{window.location.hash='';window.location.assign('/');})} className="mt-2 text-xs underline">Về Dashboard</button>}
     {e.status===429&&<p role="status">Autosave tạm dừng. {seconds>0?`Đợi ${seconds}s`:<button onClick={onRetryReady}>Tiếp tục sửa / thử lưu thủ công</button>}</p>}</>;
-  return e.status===409?<div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center"><div ref={dialog} className="bg-white p-5 rounded max-w-lg shadow-xl">{content}</div></div>:<div role="alert" className="p-3 bg-amber-50 border border-amber-300 rounded text-xs">{content}</div>;
+  return e.status===409?<div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4"><div ref={dialog} className="bg-white p-5 rounded max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl">{content}</div></div>:<div role="alert" className="p-3 bg-amber-50 border border-amber-300 rounded text-xs">{content}</div>;
 }

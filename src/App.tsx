@@ -125,7 +125,7 @@ export default function App() {
 
   // Multi-workspace state
   const [workspaces, setWorkspaces] = useState<any[]>([]);
-  const [activeGroup, setActiveGroup] = useState({ name: 'Đang tải nhóm…', code: '' });
+  const [activeGroup, setActiveGroup] = useState<{ id?: string; name: string; code: string }>({ name: 'Đang tải nhóm…', code: '' });
   const [isLeader, setIsLeader] = useState(false);
   const [hasNoWorkspace, setHasNoWorkspace] = useState(false);
 
@@ -306,7 +306,7 @@ export default function App() {
           isLeader: w.isLeader,
         }));
         setWorkspaces(wsList);
-        setActiveGroup({ name: active.name, code: active.id.slice(0, 6) });
+        setActiveGroup({ id: active.id, name: active.name, code: active.id.slice(0, 6) });
         setIsLeader(Boolean(active.isLeader));
         setWorkspaceRole(active.myRole ?? null);
         const returned = peekYouTubeReturn();
@@ -1486,7 +1486,7 @@ export default function App() {
           workspaceService.setActiveWorkspaceId(newWsId);
           const found = workspaces.find((w) => w.id === newWsId);
           if (found) {
-            setActiveGroup({ name: found.name, code: found.id.slice(0, 6) });
+            setActiveGroup({ id: found.id, name: found.name, code: found.id.slice(0, 6) });
           }
           void bootstrapFromApi();
         }}

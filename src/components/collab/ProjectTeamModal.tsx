@@ -97,6 +97,7 @@ export const ProjectTeamModal: React.FC<Props> = ({ isOpen, projectId, projectTi
                 <p className="bg-amber-50 p-3 rounded text-amber-900">Cần thêm {team.missingRoles.map(r => ROLE_LABELS[r] ?? r).join(' và ')} trước khi nộp kịch bản.</p>
               )}
               {team?.usesProjectRoles && (
+                <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead><tr className="text-slate-500"><th className="py-1">Thành viên</th><th>Vai trò</th><th>Trạng thái</th>{canManage && <th />}</tr></thead>
                   <tbody>
@@ -112,6 +113,7 @@ export const ProjectTeamModal: React.FC<Props> = ({ isOpen, projectId, projectTi
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
 
               {!team && (
@@ -151,6 +153,7 @@ export const ProjectTeamModal: React.FC<Props> = ({ isOpen, projectId, projectTi
           {tab === 'CONTRIBUTIONS' && contributions && (
             <>
               <p className="text-slate-600">Đóng góp chỉ dùng để ghi công và truy vết, không dùng để đánh giá thành viên.</p>
+              <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead><tr className="text-slate-500"><th className="py-1">Thành viên</th><th>Tổng</th><th>Chi tiết</th></tr></thead>
                 <tbody>
@@ -164,6 +167,7 @@ export const ProjectTeamModal: React.FC<Props> = ({ isOpen, projectId, projectTi
                   {contributions.byMember.length === 0 && <tr><td colSpan={3} className="py-2 text-slate-500">Chưa có đóng góp nào.</td></tr>}
                 </tbody>
               </table>
+              </div>
               <ul className="space-y-1">
                 {contributions.events.slice(0, 30).map(e => (
                   <li key={e.id} className="text-slate-700">{new Date(e.occurredAt).toLocaleString('vi-VN')} · {e.actorName ?? e.actorId} ({ROLE_LABELS[e.projectRole] ?? e.projectRole}) · {CONTRIBUTION_LABELS[e.eventType] ?? e.eventType}</li>
