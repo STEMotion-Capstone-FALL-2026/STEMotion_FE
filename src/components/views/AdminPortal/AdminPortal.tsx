@@ -18,6 +18,7 @@ import { CreateWorkspaceForm } from './CreateWorkspaceForm';
 import { AiSettingsPanel } from './AiSettingsPanel';
 import { StemPolicyPanel } from './StemPolicyPanel';
 import { apiClient } from '../../../services/apiClient';
+import { projectService } from '../../../services/projectService';
 import type { STEMScript } from '../../../types/stem';
 import {
   UserPlus,
@@ -345,6 +346,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
   const [loadingWsVideos, setLoadingWsVideos] = useState(false);
   const [videoFilterTab, setVideoFilterTab] = useState<'completed' | 'all'>('completed');
   const [previewVideo, setPreviewVideo] = useState<STEMScript | null>(null);
+  const [loadingPreviewUrl, setLoadingPreviewUrl] = useState(false);
+  const previewRequest = useRef(0);
+  // Closing the player drops any detail request still in flight.
+  useEffect(() => {
+    if (!previewVideo) {
+      previewRequest.current += 1;
+      setLoadingPreviewUrl(false);
+    }
+  }, [previewVideo]);
 
   const wsVideosDialog = useDialog(
     Boolean(selectedWsForVideos),
@@ -372,6 +382,33 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
       } finally {
         setLoadingWsVideos(false);
       }
+    }
+  };
+
+  // The workspace list (GET /workspaces/{id}/scripts) is a summary without videoUrl;
+  // the MP4 link comes from the script detail (GET /scripts/{id}).
+  const handlePreviewVideo = async (script: STEMScript) => {
+    const request = ++previewRequest.current;
+    setPreviewVideo(script);
+    if (script.videoUrl) {
+      setLoadingPreviewUrl(false);
+      return;
+    }
+    setLoadingPreviewUrl(true);
+    try {
+      const detail = await projectService.getProjectById(script.id);
+      if (request !== previewRequest.current) return;
+      const videoUrl = detail?.videoUrl ?? null;
+      setPreviewVideo({ ...script, videoUrl });
+      if (videoUrl) {
+        setWsVideosList((list) => list.map((s) => (s.id === script.id ? { ...s, videoUrl } : s)));
+      }
+    } catch (err: any) {
+      if (request === previewRequest.current) {
+        notify('Không thể tải liên kết video: ' + (err?.message || 'lỗi máy chủ'));
+      }
+    } finally {
+      if (request === previewRequest.current) setLoadingPreviewUrl(false);
     }
   };
 
@@ -2773,6 +2810,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                       className="w-full h-full object-contain"
                     />
                   </div>
+                ) : loadingPreviewUrl ? (
+                  <div role="status" className="py-8 bg-slate-800/80 rounded-xl text-center text-slate-300 text-xs flex flex-col items-center justify-center gap-2 border border-slate-700">
+                    <span>Đang tải liên kết video...</span>
+                  </div>
                 ) : (
                   <div className="py-8 bg-slate-800/80 rounded-xl text-center text-slate-300 text-xs flex flex-col items-center justify-center gap-2 border border-slate-700">
                     <AlertTriangle className="w-6 h-6 text-amber-400" />
@@ -2899,7 +2940,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                               <>
                                 <button
                                   type="button"
-                                  onClick={() => setPreviewVideo(script)}
+                                  onClick={() => void handlePreviewVideo(script)}
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-xs cursor-pointer"
                                   title="Phát video này"
                                 >
@@ -2920,7 +2961,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onOpenManageMembersMod
                             ) : isCompleted ? (
                               <button
                                 type="button"
-                                onClick={() => setPreviewVideo(script)}
+                                onClick={() => void handlePreviewVideo(script)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition cursor-pointer"
                               >
                                 <span>Xem chi tiết</span>
